@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import path from 'path';
 import {
   LINK_PATTERN,
   extractLinks,
@@ -128,24 +129,24 @@ describe('resolveLinkPath', () => {
   const basePath = '/project/.devstories';
 
   it('should resolve story ID to stories folder', () => {
-    const path = resolveLinkPath('DS-001', basePath);
-    expect(path).toBe('/project/.devstories/stories/DS-001.md');
+    const result = resolveLinkPath('DS-001', basePath);
+    expect(result).toBe(path.join(basePath, 'stories', 'DS-001.md'));
   });
 
   it('should resolve epic ID to epics folder', () => {
-    const path = resolveLinkPath('EPIC-001', basePath);
-    expect(path).toBe('/project/.devstories/epics/EPIC-001.md');
+    const result = resolveLinkPath('EPIC-001', basePath);
+    expect(result).toBe(path.join(basePath, 'epics', 'EPIC-001.md'));
   });
 
   it('should handle EPIC-INBOX', () => {
-    const path = resolveLinkPath('EPIC-INBOX', basePath);
-    expect(path).toBe('/project/.devstories/epics/EPIC-INBOX.md');
+    const result = resolveLinkPath('EPIC-INBOX', basePath);
+    expect(result).toBe(path.join(basePath, 'epics', 'EPIC-INBOX.md'));
   });
 
   it('should handle various story prefixes', () => {
-    expect(resolveLinkPath('STORY-001', basePath)).toBe('/project/.devstories/stories/STORY-001.md');
-    expect(resolveLinkPath('FEAT-001', basePath)).toBe('/project/.devstories/stories/FEAT-001.md');
-    expect(resolveLinkPath('BUG-001', basePath)).toBe('/project/.devstories/stories/BUG-001.md');
+    expect(resolveLinkPath('STORY-001', basePath)).toBe(path.join(basePath, 'stories', 'STORY-001.md'));
+    expect(resolveLinkPath('FEAT-001', basePath)).toBe(path.join(basePath, 'stories', 'FEAT-001.md'));
+    expect(resolveLinkPath('BUG-001', basePath)).toBe(path.join(basePath, 'stories', 'BUG-001.md'));
   });
 });
 

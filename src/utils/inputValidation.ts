@@ -59,6 +59,36 @@ export function validateStoryTitle(title: string): ValidationResult {
 }
 
 /**
+ * Validate theme name/title
+ * - Required (non-empty)
+ * - Max 100 characters
+ * - No control characters (allows UTF-8)
+ */
+export function validateThemeName(name: string): ValidationResult {
+  const trimmed = name.trim();
+
+  if (!trimmed) {
+    return { valid: false, error: 'Theme name is required' };
+  }
+
+  if (trimmed.length > MAX_EPIC_NAME_LENGTH) {
+    return {
+      valid: false,
+      error: `Theme name must be 100 characters or less (got ${trimmed.length})`,
+    };
+  }
+
+  if (CONTROL_CHAR_REGEX.test(name)) {
+    return {
+      valid: false,
+      error: 'Theme name contains invalid control character',
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
  * Validate epic name/title
  * - Required (non-empty)
  * - Max 100 characters

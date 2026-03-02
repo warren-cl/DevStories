@@ -199,6 +199,74 @@ updated: 2025-01-15
       expect(result).toContain('status: in_progress');
       expect(result).toContain('priority: 100');
     });
+
+    // --- date_done lifecycle tests ---
+
+    it('should set date_done when status changes to completion status', () => {
+      const statuses = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'done', label: 'Done', isCompletion: true },
+      ];
+      const result = updateStoryStatus(storyContent, 'done', statuses);
+      const today = new Date().toISOString().split('T')[0];
+      expect(result).toMatch(new RegExp(`date_done: ['"]?${today}['"]?`));
+    });
+
+    it('should not set date_done when status is not completion', () => {
+      const statuses = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'in_progress', label: 'In Progress' },
+        { id: 'done', label: 'Done', isCompletion: true },
+      ];
+      const result = updateStoryStatus(storyContent, 'in_progress', statuses);
+      expect(result).not.toContain('date_done');
+    });
+
+    it('should remove date_done when moving away from completion status', () => {
+      const storyWithDateDone = `---
+id: DS-005
+title: "Done Story"
+type: feature
+epic: EPIC-001
+status: done
+sprint: sprint-1
+size: M
+priority: 500
+assignee: ""
+dependencies:
+created: 2025-01-15
+updated: 2025-01-20
+date_done: 2025-01-20
+---
+
+# Done Story
+`;
+      const statuses = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'in_progress', label: 'In Progress' },
+        { id: 'done', label: 'Done', isCompletion: true },
+      ];
+      const result = updateStoryStatus(storyWithDateDone, 'in_progress', statuses);
+      expect(result).toContain('status: in_progress');
+      expect(result).not.toContain('date_done');
+    });
+
+    it('should not set date_done when statuses are not provided (backward compat)', () => {
+      const result = updateStoryStatus(storyContent, 'done');
+      expect(result).not.toContain('date_done');
+    });
+
+    it('should use fallback completion for last status when no isCompletion flag', () => {
+      const statuses = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'in_progress', label: 'In Progress' },
+        { id: 'done', label: 'Done' }, // no isCompletion flag
+      ];
+      // Last status in array is treated as completion
+      const result = updateStoryStatus(storyContent, 'done', statuses);
+      const today = new Date().toISOString().split('T')[0];
+      expect(result).toMatch(new RegExp(`date_done: ['"]?${today}['"]?`));
+    });
   });
 
   describe('updateEpicStatus', () => {

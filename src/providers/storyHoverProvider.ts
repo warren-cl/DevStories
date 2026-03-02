@@ -36,7 +36,14 @@ export class StoryHoverProvider implements vscode.HoverProvider {
       if (fieldMatch) {
         // Determine file type from path
         const fsPath = document.uri.fsPath;
-        const fileType = fsPath.includes('/stories/') ? 'story' : 'epic';
+        let fileType: 'story' | 'epic' | 'theme';
+        if (fsPath.includes('/stories/') || fsPath.includes('\\stories\\')) {
+          fileType = 'story';
+        } else if (fsPath.includes('/themes/') || fsPath.includes('\\themes\\')) {
+          fileType = 'theme';
+        } else {
+          fileType = 'epic';
+        }
 
         const description = getFieldDescription(fieldMatch.fieldName, fileType);
         if (description) {
@@ -69,10 +76,11 @@ export class StoryHoverProvider implements vscode.HoverProvider {
       return null;
     }
 
-    // Look up the story or epic
+    // Look up the story, epic, or theme
     const story = this.store.getStory(match.id);
     const epic = this.store.getEpic(match.id);
-    const item = story || epic;
+    const theme = this.store.getTheme(match.id);
+    const item = story || epic || theme;
 
     if (!item) {
       // Return a "not found" hover
@@ -95,9 +103,13 @@ export class StoryHoverProvider implements vscode.HoverProvider {
       const done = stories.filter(s => isCompletedStatus(s.status, statuses)).length;
       progress = { done, total: stories.length };
     }
+    if (theme) {
+      const epics = this.store.getEpicsByTheme(theme.id);
+      progress = { done: 0, total: epics.length };
+    }
 
     // Format the hover card
-    const type = story ? 'story' : 'epic';
+    const type = story ? 'story' : (epic ? 'epic' : 'theme');
     const cardContent = formatHoverCard(item, type, progress);
 
     const md = new vscode.MarkdownString(cardContent);

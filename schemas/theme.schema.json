@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DevStories Theme Frontmatter",
+  "description": "Schema for theme markdown frontmatter",
+  "type": "object",
+  "required": ["id", "title", "status", "created"],
+  "properties": {
+    "id": {
+      "$ref": "defs/common.schema.json#/$defs/themeId",
+      "description": "Unique theme identifier (e.g., THEME-001)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "Theme title - top-level strategic grouping of related epics"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Current workflow status (validated against config.yaml statuses)"
+    },
+    "created": {
+      "$ref": "defs/common.schema.json#/$defs/dateString",
+      "description": "Date theme was created (YYYY-MM-DD)"
+    },
+    "updated": {
+      "$ref": "defs/common.schema.json#/$defs/dateString",
+      "description": "Date theme was last modified (auto-updated on save)"
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Sort priority — lower values appear first (default: 500)"
+    }
+  },
+  "additionalProperties": false
+}

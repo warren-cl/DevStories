@@ -1,6 +1,5 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://devstories.dev/schemas/config.json",
   "title": "DevStories Configuration",
   "description": "Configuration for DevStories VS Code extension",
   "type": "object",
@@ -26,6 +25,11 @@
       "type": "object",
       "required": ["epic", "story"],
       "properties": {
+        "theme": {
+          "type": "string",
+          "pattern": "^[A-Z]+$",
+          "description": "Prefix for theme IDs (e.g., THEME)"
+        },
         "epic": {
           "type": "string",
           "pattern": "^[A-Z]+$",
@@ -56,6 +60,14 @@
             "type": "string",
             "minLength": 1,
             "description": "Display label for the status"
+          },
+          "isCompletion": {
+            "type": "boolean",
+            "description": "When true, stories with this status count as completed in progress calculations. If no status has this flag, the last status in the array is used."
+          },
+          "isExcluded": {
+            "type": "boolean",
+            "description": "When true, stories with this status are excluded from burndown calculations (e.g., cancelled, deferred)."
           }
         },
         "additionalProperties": false
@@ -76,6 +88,15 @@
           },
           "uniqueItems": true,
           "description": "Ordered list of sprint names"
+        },
+        "length": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of days in each sprint (used for burndown charts)"
+        },
+        "firstSprintStartDate": {
+          "$ref": "defs/common.schema.json#/$defs/dateString",
+          "description": "Start date (YYYY-MM-DD) of the first sprint in the sequence (used to derive all sprint date ranges)"
         }
       },
       "additionalProperties": false,
@@ -84,12 +105,20 @@
     "sizes": {
       "type": "array",
       "items": {
-        "type": "string",
-        "enum": ["XS", "S", "M", "L", "XL"]
+        "type": "string"
       },
       "minItems": 1,
       "uniqueItems": true,
-      "description": "Available story size options"
+      "description": "Available story size options (e.g., ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'])"
+    },
+    "storypoints": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 1,
+      "description": "Story point values parallel to sizes array (index-aligned). Used for progress calculation in the status bar."
     },
     "quickCapture": {
       "type": "object",

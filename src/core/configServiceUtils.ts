@@ -14,6 +14,12 @@ const matter = require('gray-matter');
 export interface StatusDef {
   id: string;
   label: string;
+  /** When true, stories with this status count as completed in progress calculations.
+   *  If no status has this flag, the last status in the array is used as the completion status. */
+  isCompletion?: boolean;
+  /** When true, stories with this status are excluded from burndown calculations
+   *  (e.g., cancelled, deferred). They don't count in ideal or actual lines. */
+  isExcluded?: boolean;
 }
 
 /**
@@ -37,8 +43,13 @@ export interface ConfigData {
   sprintSequence: string[];
   statuses: StatusDef[];
   sizes: StorySize[];
+  storypoints: number[];
   quickCaptureDefaultToCurrentSprint: boolean;
   autoFilterCurrentSprint: boolean;
+  /** Number of days in each sprint (for burndown charts) */
+  sprintLength?: number;
+  /** ISO date (YYYY-MM-DD) of the first day of the first sprint (for burndown charts) */
+  firstSprintStartDate?: string;
 }
 
 /**
@@ -54,7 +65,8 @@ export const DEFAULT_CONFIG: ConfigData = {
     { id: 'review', label: 'Review' },
     { id: 'done', label: 'Done' },
   ],
-  sizes: ['XS', 'S', 'M', 'L', 'XL'] as StorySize[],
+  sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'] as StorySize[],
+  storypoints: [1, 2, 4, 8, 16, 32, 64],
   quickCaptureDefaultToCurrentSprint: false,
   autoFilterCurrentSprint: true,
 };
@@ -127,15 +139,22 @@ export function parseConfigJsonContent(content: string): Partial<ConfigData> {
 
     // Statuses
     if (Array.isArray(parsed.statuses)) {
-      result.statuses = parsed.statuses.map((s: { id: string; label?: string }) => ({
+      result.statuses = parsed.statuses.map((s: { id: string; label?: string; isCompletion?: boolean; isExcluded?: boolean }) => ({
         id: s.id,
         label: s.label ?? s.id,
+        ...(s.isCompletion === true ? { isCompletion: true } : {}),
+        ...(s.isExcluded === true ? { isExcluded: true } : {}),
       }));
     }
 
     // Sizes
     if (Array.isArray(parsed.sizes)) {
       result.sizes = parsed.sizes;
+    }
+
+    // Story points (parallel array to sizes, index-aligned)
+    if (Array.isArray(parsed.storypoints)) {
+      result.storypoints = parsed.storypoints;
     }
 
     // Quick capture options
@@ -146,6 +165,14 @@ export function parseConfigJsonContent(content: string): Partial<ConfigData> {
     // Auto-filter current sprint (DS-153)
     if (typeof parsed.autoFilterCurrentSprint === 'boolean') {
       result.autoFilterCurrentSprint = parsed.autoFilterCurrentSprint;
+    }
+
+    // Sprint date config for burndown charts
+    if (typeof parsed.sprints?.length === 'number') {
+      result.sprintLength = parsed.sprints.length;
+    }
+    if (typeof parsed.sprints?.firstSprintStartDate === 'string') {
+      result.firstSprintStartDate = parsed.sprints.firstSprintStartDate;
     }
 
     return result;
@@ -182,9 +209,25 @@ export function mergeConfigWithDefaults(parsed: Partial<ConfigData>): ConfigData
     sprintSequence: parsed.sprintSequence ?? DEFAULT_CONFIG.sprintSequence,
     statuses: parsed.statuses ?? DEFAULT_CONFIG.statuses,
     sizes: parsed.sizes ?? DEFAULT_CONFIG.sizes,
+    storypoints: parsed.storypoints ?? DEFAULT_CONFIG.storypoints,
     quickCaptureDefaultToCurrentSprint: parsed.quickCaptureDefaultToCurrentSprint ?? DEFAULT_CONFIG.quickCaptureDefaultToCurrentSprint,
     autoFilterCurrentSprint: parsed.autoFilterCurrentSprint ?? DEFAULT_CONFIG.autoFilterCurrentSprint,
+    sprintLength: parsed.sprintLength,
+    firstSprintStartDate: parsed.firstSprintStartDate,
   };
+}
+
+/**
+ * Get the story points value for a given size.
+ * Looks up the size's index in the sizes array and returns the corresponding storypoints value.
+ * Falls back to 1 if the size is not found (avoids silently zeroing out stories).
+ */
+export function getSizePoints(size: string, sizes: string[], storypoints: number[]): number {
+  const index = sizes.indexOf(size);
+  if (index === -1) {
+    return 1;
+  }
+  return storypoints[index] ?? 1;
 }
 
 /**
@@ -224,15 +267,28 @@ export function sortSprintsBySequence(sprints: string[], sprintSequence: string[
 }
 
 /**
- * Check if a status is the completion status (last in workflow).
- * Used for progress calculations instead of hardcoded 'done'.
+ * Check if a status is the completion status.
+ * If any status has isCompletion: true, those statuses define completion.
+ * Otherwise falls back to last status in workflow.
  * Falls back to literal 'done' check if statuses array is empty.
  */
 export function isCompletedStatus(status: string, statuses: StatusDef[]): boolean {
   if (statuses.length === 0) {
     return status === 'done';
   }
+  const hasExplicitCompletion = statuses.some(s => s.isCompletion === true);
+  if (hasExplicitCompletion) {
+    return statuses.some(s => s.id === status && s.isCompletion === true);
+  }
   return status === statuses[statuses.length - 1].id;
+}
+
+/**
+ * Check if a status is excluded from burndown calculations.
+ * Stories with excluded statuses don't count in ideal or actual burndown lines.
+ */
+export function isExcludedStatus(status: string, statuses: StatusDef[]): boolean {
+  return statuses.some(s => s.id === status && s.isExcluded === true);
 }
 
 /**

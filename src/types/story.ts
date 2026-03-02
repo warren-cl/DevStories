@@ -15,6 +15,7 @@ export interface Story {
   dependencies?: string[];
   created: Date;
   updated?: Date;
+  dateDone?: Date; // Auto-set when status becomes isCompletion, cleared otherwise
   content: string; // The markdown body
   filePath?: string; // Path to the file
 }

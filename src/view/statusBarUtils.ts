@@ -3,36 +3,46 @@
  * These can be unit tested with Vitest
  */
 
-import { sortSprintsBySequence, isCompletedStatus, StatusDef } from '../core/configServiceUtils';
+import { sortSprintsBySequence, isCompletedStatus, StatusDef, getSizePoints } from '../core/configServiceUtils';
 import { Story } from '../types/story';
 
 export interface StatusBarStats {
-  total: number;
-  done: number;
+  totalPoints: number;
+  donePoints: number;
 }
 
 /**
- * Get stats from stories array, optionally filtered by sprint
+ * Get stats from stories array, optionally filtered by sprint.
+ * Returns totals in story points (not story count).
  * @param stories - All stories
  * @param sprint - Sprint to filter by (null = all sprints, 'backlog' = empty/undefined/backlog)
  * @param statuses - Status workflow from config (completion = last status)
+ * @param sizes - Ordered size labels from config (index-aligned with storypoints)
+ * @param storypoints - Point values parallel to sizes array
  */
-export function getStatsFromStories(stories: Story[], sprint: string | null, statuses: StatusDef[] = []): StatusBarStats {
+export function getStatsFromStories(
+  stories: Story[],
+  sprint: string | null,
+  statuses: StatusDef[] = [],
+  sizes: string[] = [],
+  storypoints: number[] = []
+): StatusBarStats {
   let filtered = stories;
 
   if (sprint !== null) {
     if (sprint === 'backlog') {
-      // Backlog includes empty, undefined, and 'backlog' sprint values
       filtered = stories.filter(s => !s.sprint || s.sprint === '' || s.sprint === 'backlog');
     } else {
       filtered = stories.filter(s => s.sprint === sprint);
     }
   }
 
-  const total = filtered.length;
-  const done = filtered.filter(s => isCompletedStatus(s.status, statuses)).length;
+  const totalPoints = filtered.reduce((sum, s) => sum + getSizePoints(s.size, sizes, storypoints), 0);
+  const donePoints = filtered
+    .filter(s => isCompletedStatus(s.status, statuses))
+    .reduce((sum, s) => sum + getSizePoints(s.size, sizes, storypoints), 0);
 
-  return { total, done };
+  return { totalPoints, donePoints };
 }
 
 /**
@@ -73,7 +83,7 @@ export function getFormattedStatusBarText(done: number, total: number, sprint: s
   }
 
   const progressBar = buildProgressBar(done, total);
-  return `$(checklist) ${sprintLabel}: ${progressBar} ${done}/${total}`;
+  return `$(checklist) ${sprintLabel}: ${progressBar} ${done}/${total} pts`;
 }
 
 /**
@@ -100,9 +110,9 @@ export function formatTooltipLines(done: number, total: number, sprint: string |
   }
 
   lines.push('');
-  lines.push(`✅ Done: ${done}`);
-  lines.push(`📝 Remaining: ${remaining}`);
-  lines.push(`📦 Total: ${total}`);
+  lines.push(`✅ Done: ${done} pts`);
+  lines.push(`📝 Remaining: ${remaining} pts`);
+  lines.push(`📦 Total: ${total} pts`);
 
   return lines;
 }

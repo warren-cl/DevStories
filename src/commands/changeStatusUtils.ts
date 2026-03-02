@@ -6,6 +6,8 @@
  
 const matter = require('gray-matter');
 
+import { StatusDef, isCompletedStatus } from '../core/configServiceUtils';
+
 const DEFAULT_STATUSES = ['todo', 'in_progress', 'review', 'done'];
 
 /**
@@ -48,10 +50,38 @@ export function getNextWorkflowStatus(currentStatus: string, statuses: string[])
 }
 
 /**
- * Update the status field in a story's frontmatter
+ * Update the status field in a story's frontmatter.
+ * When statuses are provided, also manages the date_done field:
+ *   - Sets date_done when transitioning to a completion status
+ *   - Removes date_done when transitioning away from a completion status
  * Returns the updated markdown content
  */
-export function updateStoryStatus(content: string, newStatus: string): string {
+export function updateStoryStatus(content: string, newStatus: string, statuses?: StatusDef[]): string {
+  const parsed = matter(content);
+  const today = new Date().toISOString().split('T')[0];
+
+  // Update status and timestamp
+  parsed.data.status = newStatus;
+  parsed.data.updated = today;
+
+  // Manage date_done field based on completion status
+  if (statuses) {
+    if (isCompletedStatus(newStatus, statuses)) {
+      parsed.data.date_done = today;
+    } else {
+      delete parsed.data.date_done;
+    }
+  }
+
+  // Stringify back to markdown
+  return matter.stringify(parsed.content, parsed.data);
+}
+
+/**
+ * Update the status field in a theme's frontmatter
+ * Returns the updated markdown content
+ */
+export function updateThemeStatus(content: string, newStatus: string): string {
   const parsed = matter(content);
   const today = new Date().toISOString().split('T')[0];
 

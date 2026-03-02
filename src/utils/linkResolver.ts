@@ -25,10 +25,17 @@ export function extractLinks(text: string): string[] {
 }
 
 /**
- * Check if an ID is a story ID (not EPIC prefix)
+ * Check if an ID is a theme ID (THEME prefix)
+ */
+export function isThemeId(id: string): boolean {
+  return id.startsWith('THEME-');
+}
+
+/**
+ * Check if an ID is a story ID (not EPIC or THEME prefix)
  */
 export function isStoryId(id: string): boolean {
-  return !id.startsWith('EPIC-');
+  return !id.startsWith('EPIC-') && !id.startsWith('THEME-');
 }
 
 /**
@@ -39,20 +46,28 @@ export function isEpicId(id: string): boolean {
 }
 
 /**
- * Get the type of ID (epic or story)
+ * Get the type of ID (theme, epic or story)
  */
-export function getIdType(id: string): 'epic' | 'story' {
+export function getIdType(id: string): 'theme' | 'epic' | 'story' {
+  if (isThemeId(id)) { return 'theme'; }
   return isEpicId(id) ? 'epic' : 'story';
 }
 
 /**
  * Resolve an ID to its file path
- * @param id The story or epic ID
+ * @param id The story, epic, or theme ID
  * @param basePath The .devstories directory path
  * @returns Absolute path to the markdown file
  */
 export function resolveLinkPath(id: string, basePath: string): string {
-  const folder = isEpicId(id) ? 'epics' : 'stories';
+  let folder: string;
+  if (isThemeId(id)) {
+    folder = 'themes';
+  } else if (isEpicId(id)) {
+    folder = 'epics';
+  } else {
+    folder = 'stories';
+  }
   return path.join(basePath, folder, `${id}.md`);
 }
 

@@ -10,6 +10,7 @@ import {
   debounce,
   getSprintIndex,
   isCompletedStatus,
+  isExcludedStatus,
   StatusDef,
 } from '../../core/configServiceUtils';
 
@@ -158,6 +159,27 @@ describe('ConfigService Utils', () => {
       const result = parseConfigJsonContent(json);
 
       expect(result.sprintSequence).toEqual([]);
+    });
+
+    it('should preserve isCompletion flag when parsing statuses', () => {
+      const json = JSON.stringify({
+        version: 1,
+        statuses: [
+          { id: 'todo', label: 'To Do' },
+          { id: 'in_progress', label: 'In Progress' },
+          { id: 'done', label: 'Done', isCompletion: true },
+          { id: 'blocked', label: 'Blocked' },
+          { id: 'cancelled', label: 'Cancelled' },
+        ],
+      });
+      const result = parseConfigJsonContent(json);
+      expect(result.statuses).toEqual([
+        { id: 'todo', label: 'To Do' },
+        { id: 'in_progress', label: 'In Progress' },
+        { id: 'done', label: 'Done', isCompletion: true },
+        { id: 'blocked', label: 'Blocked' },
+        { id: 'cancelled', label: 'Cancelled' },
+      ]);
     });
   });
 
@@ -335,7 +357,8 @@ Some content`;
       expect(DEFAULT_CONFIG.epicPrefix).toBe('EPIC');
       expect(DEFAULT_CONFIG.storyPrefix).toBe('STORY');
       expect(DEFAULT_CONFIG.statuses.length).toBeGreaterThan(0);
-      expect(DEFAULT_CONFIG.sizes.length).toBe(5);
+      expect(DEFAULT_CONFIG.sizes.length).toBe(7);
+      expect(DEFAULT_CONFIG.storypoints.length).toBe(7);
     });
 
     it('should have required status workflow', () => {
@@ -413,6 +436,114 @@ Some content`;
       const singleStatus: StatusDef[] = [{ id: 'complete', label: 'Complete' }];
       expect(isCompletedStatus('complete', singleStatus)).toBe(true);
       expect(isCompletedStatus('done', singleStatus)).toBe(false);
+    });
+
+    it('should use isCompletion flag when statuses extend beyond done', () => {
+      const statuses: StatusDef[] = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'in_progress', label: 'In Progress' },
+        { id: 'review', label: 'Review' },
+        { id: 'done', label: 'Done', isCompletion: true },
+        { id: 'blocked', label: 'Blocked' },
+        { id: 'deferred', label: 'Deferred' },
+        { id: 'cancelled', label: 'Cancelled' },
+      ];
+      expect(isCompletedStatus('done', statuses)).toBe(true);
+      expect(isCompletedStatus('cancelled', statuses)).toBe(false);
+      expect(isCompletedStatus('blocked', statuses)).toBe(false);
+      expect(isCompletedStatus('todo', statuses)).toBe(false);
+    });
+
+    it('should support multiple isCompletion statuses', () => {
+      const statuses: StatusDef[] = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'done', label: 'Done', isCompletion: true },
+        { id: 'deployed', label: 'Deployed', isCompletion: true },
+        { id: 'cancelled', label: 'Cancelled' },
+      ];
+      expect(isCompletedStatus('done', statuses)).toBe(true);
+      expect(isCompletedStatus('deployed', statuses)).toBe(true);
+      expect(isCompletedStatus('cancelled', statuses)).toBe(false);
+    });
+  });
+
+  describe('isExcludedStatus', () => {
+    it('returns true for statuses with isExcluded flag', () => {
+      const statuses: StatusDef[] = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'cancelled', label: 'Cancelled', isExcluded: true },
+        { id: 'deferred', label: 'Deferred', isExcluded: true },
+      ];
+      expect(isExcludedStatus('cancelled', statuses)).toBe(true);
+      expect(isExcludedStatus('deferred', statuses)).toBe(true);
+    });
+
+    it('returns false for statuses without isExcluded flag', () => {
+      const statuses: StatusDef[] = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'done', label: 'Done', isCompletion: true },
+        { id: 'cancelled', label: 'Cancelled', isExcluded: true },
+      ];
+      expect(isExcludedStatus('todo', statuses)).toBe(false);
+      expect(isExcludedStatus('done', statuses)).toBe(false);
+    });
+
+    it('returns false for unknown status', () => {
+      const statuses: StatusDef[] = [
+        { id: 'cancelled', label: 'Cancelled', isExcluded: true },
+      ];
+      expect(isExcludedStatus('unknown', statuses)).toBe(false);
+    });
+
+    it('returns false for empty statuses', () => {
+      expect(isExcludedStatus('cancelled', [])).toBe(false);
+    });
+  });
+
+  describe('sprint date config parsing', () => {
+    it('parses sprints.length from config JSON', () => {
+      const config = parseConfigJsonContent(JSON.stringify({
+        sprints: { sequence: ['sprint-1'], length: 14 },
+        statuses: [{ id: 'todo', label: 'To Do' }],
+        sizes: ['M'],
+      }));
+      expect(config.sprintLength).toBe(14);
+    });
+
+    it('parses sprints.firstSprintStartDate from config JSON', () => {
+      const config = parseConfigJsonContent(JSON.stringify({
+        sprints: { sequence: ['sprint-1'], firstSprintStartDate: '2026-01-06' },
+        statuses: [{ id: 'todo', label: 'To Do' }],
+        sizes: ['M'],
+      }));
+      expect(config.firstSprintStartDate).toBe('2026-01-06');
+    });
+
+    it('parses isExcluded flag on statuses', () => {
+      const config = parseConfigJsonContent(JSON.stringify({
+        statuses: [
+          { id: 'todo', label: 'To Do' },
+          { id: 'cancelled', label: 'Cancelled', isExcluded: true },
+        ],
+        sizes: ['M'],
+      }));
+      expect(config.statuses![1].isExcluded).toBe(true);
+      expect(config.statuses![0].isExcluded).toBeUndefined();
+    });
+
+    it('mergeConfigWithDefaults preserves sprint date fields', () => {
+      const merged = mergeConfigWithDefaults({
+        sprintLength: 14,
+        firstSprintStartDate: '2026-01-06',
+      });
+      expect(merged.sprintLength).toBe(14);
+      expect(merged.firstSprintStartDate).toBe('2026-01-06');
+    });
+
+    it('mergeConfigWithDefaults leaves sprint date fields undefined when not set', () => {
+      const merged = mergeConfigWithDefaults({});
+      expect(merged.sprintLength).toBeUndefined();
+      expect(merged.firstSprintStartDate).toBeUndefined();
     });
   });
 });

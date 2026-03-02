@@ -17,6 +17,7 @@ import {
   DEFAULT_TEMPLATES,
 } from './createStoryUtils';
 import { validateStoryTitle } from '../utils/inputValidation';
+import { toKebabCase } from '../utils/filenameUtils';
 
 // Re-export for testing
 export {
@@ -69,27 +70,29 @@ Quick captures and ideas to triage later.
  */
 async function ensureInboxEpic(
   workspaceUri: vscode.Uri,
-  config: DevStoriesConfig
-): Promise<string> {
+  config: DevStoriesConfig,
+  store: Store
+): Promise<{ id: string; uri: vscode.Uri }> {
   const inboxId = `${config.epicPrefix}-INBOX`;
+
+  // Check store first — handles existing files regardless of filename suffix
+  const existing = store.getEpic(inboxId);
+  if (existing?.filePath) {
+    return { id: inboxId, uri: vscode.Uri.file(existing.filePath) };
+  }
+
+  // Not in store — create it
+  getLogger().debug('Creating inbox epic');
+  const markdown = generateInboxEpicMarkdown(config.epicPrefix);
   const epicUri = vscode.Uri.joinPath(
     workspaceUri,
     '.devstories',
     'epics',
-    `${inboxId}.md`
+    `${inboxId}-inbox.md`
   );
-
-  try {
-    await vscode.workspace.fs.stat(epicUri);
-    // File exists
-    return inboxId;
-  } catch {
-    // Inbox epic doesn't exist - create it (expected scenario)
-    getLogger().debug('Creating inbox epic');
-    const markdown = generateInboxEpicMarkdown(config.epicPrefix);
-    await vscode.workspace.fs.writeFile(epicUri, Buffer.from(markdown));
-    return inboxId;
-  }
+  await vscode.workspace.fs.writeFile(epicUri, Buffer.from(markdown));
+  await store.reloadFile(epicUri);
+  return { id: inboxId, uri: epicUri };
 }
 
 /**
@@ -169,12 +172,24 @@ export async function executeQuickCapture(store: Store): Promise<boolean> {
   const parsed = parseQuickInput(rawInput);
 
   // Ensure inbox epic exists
-  const inboxEpicId = await ensureInboxEpic(workspaceUri, config);
+  const { id: inboxEpicId, uri: inboxEpicUri } = await ensureInboxEpic(workspaceUri, config, store);
 
-  // Generate story ID
-  const existingIds = store.getStories().map(s => s.id);
-  const nextNum = findNextStoryId(existingIds, config.storyPrefix);
-  const storyId = `${config.storyPrefix}-${String(nextNum).padStart(3, '0')}`;
+  // Generate story ID — scan disk + store to guard against watcher race conditions
+  const storyFilePattern = new vscode.RelativePattern(
+    workspaceUri,
+    `.devstories/stories/${config.storyPrefix}-*.md`
+  );
+  const storyFiles = await vscode.workspace.findFiles(storyFilePattern);
+  const diskIds = storyFiles
+    .map(uri => {
+      const filename = uri.path.split('/').pop() ?? '';
+      const match = filename.match(new RegExp(`^(${config.storyPrefix}-\\d+)`));
+      return match ? match[1] : null;
+    })
+    .filter((id): id is string => id !== null);
+  const allExistingIds = [...new Set([...diskIds, ...store.getStories().map(s => s.id)])];
+  const nextNum = findNextStoryId(allExistingIds, config.storyPrefix);
+  const storyId = `${config.storyPrefix}-${String(nextNum).padStart(5, '0')}`;
 
   // Determine sprint based on config option (default: backlog for inbox workflow)
   const sprint = config.quickCaptureDefaultToCurrentSprint && config.currentSprint
@@ -207,19 +222,13 @@ export async function executeQuickCapture(store: Store): Promise<boolean> {
     workspaceUri,
     '.devstories',
     'stories',
-    `${storyId}.md`
+    `${storyId}-${toKebabCase(parsed.title)}.md`
   );
 
   await vscode.workspace.fs.writeFile(storyUri, Buffer.from(markdown));
+  await store.reloadFile(storyUri);
 
   // Auto-link to inbox epic
-  const inboxEpicUri = vscode.Uri.joinPath(
-    workspaceUri,
-    '.devstories',
-    'epics',
-    `${inboxEpicId}.md`
-  );
-
   try {
     const epicContent = Buffer.from(await vscode.workspace.fs.readFile(inboxEpicUri)).toString('utf8');
     const storyLink = generateStoryLink(storyId, parsed.title);

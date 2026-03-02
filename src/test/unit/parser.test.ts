@@ -44,6 +44,42 @@ This is the content.`;
       expect(story.filePath).toBe('/path/to/DS-001.md');
     });
 
+    it('should parse date_done field when present', () => {
+      const content = `---
+id: DS-010
+title: Done Story
+type: feature
+epic: EPIC-001
+status: done
+sprint: sprint-1
+size: M
+created: 2026-01-15
+updated: 2026-01-20
+date_done: 2026-01-20
+---
+
+# Done Story`;
+      const story = Parser.parseStory(content);
+      expect(story.dateDone).toBeInstanceOf(Date);
+      expect(story.dateDone!.toISOString().startsWith('2026-01-20')).toBe(true);
+    });
+
+    it('should set dateDone to undefined when date_done is absent', () => {
+      const content = `---
+id: DS-011
+title: Not Done Story
+type: feature
+epic: EPIC-001
+status: todo
+size: M
+created: 2026-01-15
+---
+
+# Not Done Story`;
+      const story = Parser.parseStory(content);
+      expect(story.dateDone).toBeUndefined();
+    });
+
     it('should throw error if frontmatter is missing', () => {
       const content = `# Just Markdown`;
       expect(() => Parser.parseStory(content)).toThrow('Invalid frontmatter');
@@ -55,6 +91,20 @@ id: DS-001
 ---
 # Content`;
       expect(() => Parser.parseStory(content)).toThrow('Missing required fields');
+    });
+
+    it('should parse successfully when epic field is absent (orphaned story)', () => {
+      const content = `---
+id: DS-002
+title: Orphan Story
+type: task
+status: todo
+size: S
+created: 2025-01-01
+---
+# Orphan Story`;
+      const story = Parser.parseStory(content);
+      expect(story.epic).toBe('');
     });
 
     it('should handle missing optional fields', () => {
@@ -241,6 +291,90 @@ created: 2025-01-01
 ---
 Content`;
       expect(() => Parser.parseEpic(content)).toThrow('control character');
+    });
+  });
+
+  describe('parseTheme', () => {
+    it('should parse a valid theme', () => {
+      const content = `---
+id: THEME-001
+title: User Onboarding
+status: active
+created: 2025-01-15
+updated: 2025-01-20
+---
+
+# User Onboarding
+
+## Description
+
+Covers all onboarding flows.
+
+## Epics
+
+- [[EPIC-001]] Registration`;
+
+      const theme = Parser.parseTheme(content, '/path/to/THEME-001.md');
+
+      expect(theme.id).toBe('THEME-001');
+      expect(theme.title).toBe('User Onboarding');
+      expect(theme.status).toBe('active');
+      expect(theme.created).toBeInstanceOf(Date);
+      expect(theme.created.toISOString().startsWith('2025-01-15')).toBe(true);
+      expect(theme.updated).toBeInstanceOf(Date);
+      expect(theme.content).toContain('# User Onboarding');
+      expect(theme.content).toContain('[[EPIC-001]]');
+      expect(theme.filePath).toBe('/path/to/THEME-001.md');
+    });
+
+    it('should throw error if frontmatter is missing', () => {
+      const content = `# Just Markdown`;
+      expect(() => Parser.parseTheme(content)).toThrow('Invalid frontmatter');
+    });
+
+    it('should throw error if id is missing', () => {
+      const content = `---
+title: Theme without ID
+status: todo
+created: 2025-01-01
+---
+Content`;
+      expect(() => Parser.parseTheme(content)).toThrow('id');
+    });
+
+    it('should throw error if title is missing', () => {
+      const content = `---
+id: THEME-001
+status: todo
+created: 2025-01-01
+---
+Content`;
+      expect(() => Parser.parseTheme(content)).toThrow('title');
+    });
+
+    it('should accept theme without updated date', () => {
+      const content = `---
+id: THEME-001
+title: Minimal Theme
+status: todo
+created: 2025-01-01
+---
+Content`;
+      const theme = Parser.parseTheme(content);
+      expect(theme.id).toBe('THEME-001');
+      expect(theme.updated).toBeUndefined();
+    });
+
+    it('should reject theme with title over 100 characters', () => {
+      const longTitle = 'b'.repeat(101);
+      const content = `---
+id: THEME-001
+title: "${longTitle}"
+status: todo
+created: 2025-01-01
+---
+Content`;
+      expect(() => Parser.parseTheme(content)).toThrow('100');
     });
   });
 });

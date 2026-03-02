@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { Store } from '../core/store';
 import { getLogger } from '../core/logger';
 import { StoryType, StorySize } from '../types/story';
+import { toKebabCase } from '../utils/filenameUtils';
 import {
   parseConfigJson,
   findNextStoryId,
@@ -27,6 +28,37 @@ export {
   generateStoryLink,
   appendStoryToEpic,
 } from './createStoryUtils';
+
+/**
+ * Collect existing story IDs by scanning the stories folder on disk.
+ * Combines disk-based filenames with store IDs so the ID counter is always
+ * accurate even if the FileSystemWatcher hasn't fired yet (Windows race).
+ */
+async function collectExistingStoryIds(
+  workspaceUri: vscode.Uri,
+  storyPrefix: string,
+  store: Store
+): Promise<string[]> {
+  // Scan filenames on disk — this is the ground truth
+  const pattern = new vscode.RelativePattern(
+    workspaceUri,
+    `.devstories/stories/${storyPrefix}-*.md`
+  );
+  const storyFiles = await vscode.workspace.findFiles(pattern);
+  const diskIds = storyFiles
+    .map(uri => {
+      const filename = uri.path.split('/').pop() ?? '';
+      const match = filename.match(new RegExp(`^(${storyPrefix}-\\d+)`));
+      return match ? match[1] : null;
+    })
+    .filter((id): id is string => id !== null);
+
+  // Also include store IDs — covers items added in the same session that
+  // findFiles might not see yet if the filesystem index is briefly stale
+  const storeIds = store.getStories().map(s => s.id);
+
+  return [...new Set([...diskIds, ...storeIds])];
+}
 
 /**
  * Read and parse config.json from workspace
@@ -115,8 +147,10 @@ interface TemplateQuickPickItem extends vscode.QuickPickItem {
 
 /**
  * Execute the createStory command
+ * @param preselectedEpicId When called from a tree item context menu, the epic
+ *   is pre-selected and the QuickPick is skipped entirely.
  */
-export async function executeCreateStory(store: Store): Promise<boolean> {
+export async function executeCreateStory(store: Store, preselectedEpicId?: string): Promise<boolean> {
   // Check for workspace
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -152,19 +186,28 @@ export async function executeCreateStory(store: Store): Promise<boolean> {
     return false;
   }
 
-  // Epic picker
-  const epicOptions = epics.map(e => ({
-    label: `[${e.id}] ${e.title}`,
-    description: e.status,
-    id: e.id,
-  }));
+  // Resolve epic: use pre-selected ID from context menu, or show picker
+  let selectedEpic: { label: string; description: string; id: string } | undefined;
 
-  const selectedEpic = await vscode.window.showQuickPick(epicOptions, {
-    placeHolder: 'Select parent epic',
-  });
-
-  if (!selectedEpic) {
-    return false;
+  if (preselectedEpicId) {
+    const epic = store.getEpic(preselectedEpicId);
+    if (!epic) {
+      void vscode.window.showErrorMessage(`DevStories: Epic '${preselectedEpicId}' not found.`);
+      return false;
+    }
+    selectedEpic = { label: `[${epic.id}] ${epic.title}`, description: epic.status, id: epic.id };
+  } else {
+    const epicOptions = epics.map(e => ({
+      label: `[${e.id}] ${e.title}`,
+      description: e.status,
+      id: e.id,
+    }));
+    selectedEpic = await vscode.window.showQuickPick(epicOptions, {
+      placeHolder: 'Select parent epic',
+    });
+    if (!selectedEpic) {
+      return false;
+    }
   }
 
   // Story title
@@ -351,10 +394,10 @@ export async function executeCreateStory(store: Store): Promise<boolean> {
     }
   }
 
-  // Generate ID
-  const existingIds = store.getStories().map(s => s.id);
+  // Generate ID — scan disk + store to guard against watcher race conditions
+  const existingIds = await collectExistingStoryIds(workspaceUri, config.storyPrefix, store);
   const nextNum = findNextStoryId(existingIds, config.storyPrefix);
-  const storyId = `${config.storyPrefix}-${String(nextNum).padStart(3, '0')}`;
+  const storyId = `${config.storyPrefix}-${String(nextNum).padStart(5, '0')}`;
 
   // Get template - custom content > library reference > default
   const template = selectedCustomContent
@@ -380,10 +423,11 @@ export async function executeCreateStory(store: Store): Promise<boolean> {
     workspaceUri,
     '.devstories',
     'stories',
-    `${storyId}.md`
+    `${storyId}-${toKebabCase(title)}.md`
   );
 
   await vscode.workspace.fs.writeFile(storyUri, Buffer.from(markdown));
+  await store.reloadFile(storyUri);
 
   // Auto-link to epic (Enhanced feature)
   const epic = epics.find(e => e.id === selectedEpic.id);

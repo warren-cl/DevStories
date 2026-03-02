@@ -243,6 +243,42 @@ export class ConfigService implements vscode.Disposable {
   }
 
   /**
+   * Update sprints.current in config.json and persist to disk.
+   * The existing file watcher will detect the change and reload _config automatically.
+   * @param sprint - Sprint name to set as current (e.g. 'sprint-4')
+   */
+  async updateCurrentSprint(sprint: string): Promise<void> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      return;
+    }
+
+    const configUri = vscode.Uri.joinPath(
+      workspaceFolder.uri,
+      '.devstories',
+      'config.json'
+    );
+
+    try {
+      const content = await vscode.workspace.fs.readFile(configUri);
+      const contentStr = new TextDecoder().decode(content);
+      const raw: Record<string, unknown> = JSON.parse(contentStr);
+
+      if (!raw.sprints || typeof raw.sprints !== 'object') {
+        raw.sprints = {};
+      }
+      (raw.sprints as Record<string, unknown>).current = sprint;
+
+      const updated = JSON.stringify(raw, null, 2);
+      await vscode.workspace.fs.writeFile(configUri, new TextEncoder().encode(updated));
+      // File watcher will detect the write and call reloadConfig() → emit onDidConfigChange
+    } catch (err) {
+      getLogger().error('Failed to update current sprint in config.json', err instanceof Error ? err.message : String(err));
+      throw err;
+    }
+  }
+
+  /**
    * Handle config.json deletion
    */
   private onConfigDeleted(): void {

@@ -104,7 +104,7 @@ export function parseConfigJson(content: string): DevStoriesConfig {
       storyPrefix: parsed?.idPrefix?.story ?? 'STORY',
       currentSprint: parsed?.sprints?.current,
       statuses: parsed?.statuses?.map((s: { id: string }) => s.id) ?? ['todo', 'in_progress', 'review', 'done'],
-      sizes: parsed?.sizes ?? ['XS', 'S', 'M', 'L', 'XL'],
+      sizes: parsed?.sizes ?? ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'],
       quickCaptureDefaultToCurrentSprint: parsed?.quickCapture?.defaultToCurrentSprint === true,
     };
   } catch {
@@ -113,7 +113,7 @@ export function parseConfigJson(content: string): DevStoriesConfig {
       storyPrefix: 'STORY',
       currentSprint: undefined,
       statuses: ['todo', 'in_progress', 'review', 'done'],
-      sizes: ['XS', 'S', 'M', 'L', 'XL'],
+      sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'],
       quickCaptureDefaultToCurrentSprint: false,
     };
   }

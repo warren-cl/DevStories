@@ -9,6 +9,7 @@ const matter = require('gray-matter');
 export interface DevStoriesConfig {
   epicPrefix: string;
   storyPrefix: string;
+  themePrefix: string;
   currentSprint?: string;
   statuses: string[];
 }
@@ -17,6 +18,7 @@ export interface EpicData {
   id: string;
   title: string;
   goal?: string;
+  theme?: string;
 }
 
 /**
@@ -29,6 +31,7 @@ export function parseConfigJson(content: string): DevStoriesConfig {
     return {
       epicPrefix: parsed?.idPrefix?.epic ?? 'EPIC',
       storyPrefix: parsed?.idPrefix?.story ?? 'STORY',
+      themePrefix: parsed?.idPrefix?.theme ?? 'THEME',
       currentSprint: parsed?.sprints?.current,
       statuses: parsed?.statuses?.map((s: { id: string }) => s.id) ?? ['todo', 'in_progress', 'review', 'done'],
     };
@@ -36,6 +39,7 @@ export function parseConfigJson(content: string): DevStoriesConfig {
     return {
       epicPrefix: 'EPIC',
       storyPrefix: 'STORY',
+      themePrefix: 'THEME',
       currentSprint: undefined,
       statuses: ['todo', 'in_progress', 'review', 'done'],
     };
@@ -70,12 +74,14 @@ export function generateEpicMarkdown(data: EpicData): string {
   const today = new Date().toISOString().split('T')[0];
   const escapedTitle = data.title.replace(/"/g, '\\"');
   const description = data.goal ?? '[Add epic description here]';
+  const themeLine = data.theme ? `theme: ${data.theme}\n` : '';
 
   return `---
 id: ${data.id}
 title: "${escapedTitle}"
 status: todo
-created: ${today}
+priority: 500
+${themeLine}created: ${today}
 ---
 
 # ${data.title}

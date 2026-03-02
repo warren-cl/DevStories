@@ -8,6 +8,7 @@ describe('Init Command', () => {
         projectName: 'my-project',
         epicPrefix: 'EPIC',
         storyPrefix: 'DS',
+        themePrefix: 'THEME',
         sprint: 'sprint-1',
       };
 
@@ -24,7 +25,8 @@ describe('Init Command', () => {
       expect(parsed.statuses[1].id).toBe('in_progress');
       expect(parsed.statuses[2].id).toBe('review');
       expect(parsed.statuses[3].id).toBe('done');
-      expect(parsed.sizes).toEqual(['XS', 'S', 'M', 'L', 'XL']);
+      expect(parsed.sizes).toEqual(['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL']);
+      expect(parsed.storypoints).toEqual([1, 2, 4, 8, 16, 32, 64]);
     });
 
     it('should handle custom prefixes', () => {
@@ -32,6 +34,7 @@ describe('Init Command', () => {
         projectName: 'acme-app',
         epicPrefix: 'EP',
         storyPrefix: 'US',
+        themePrefix: 'THEME',
         sprint: 'iteration-1',
       };
 
@@ -48,6 +51,7 @@ describe('Init Command', () => {
         projectName: 'my "quoted" project',
         epicPrefix: 'EPIC',
         storyPrefix: 'DS',
+        themePrefix: 'THEME',
         sprint: 'sprint-1',
       };
 
@@ -62,6 +66,7 @@ describe('Init Command', () => {
         projectName: 'my-project',
         epicPrefix: 'EPIC',
         storyPrefix: 'DS',
+        themePrefix: 'THEME',
         sprint: 'sprint-1',
       };
 

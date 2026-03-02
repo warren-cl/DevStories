@@ -25,8 +25,8 @@ describe('DS-057: Empty catch block handling', () => {
       const violations: string[] = [];
 
       for (const file of files) {
-        // Skip test files
-        if (file.includes('/test/')) {
+        // Skip test files (normalize separators for cross-platform compatibility)
+        if (file.includes('/test/') || file.includes('\\test\\')) {
           continue;
         }
 
@@ -52,8 +52,8 @@ describe('DS-057: Empty catch block handling', () => {
       const violations: string[] = [];
 
       for (const file of files) {
-        // Skip test files and logger itself
-        if (file.includes('/test/') || file.includes('logger.ts')) {
+        // Skip test files and logger itself (normalize separators for cross-platform compatibility)
+        if (file.includes('/test/') || file.includes('\\test\\') || file.includes('logger.ts')) {
           continue;
         }
 

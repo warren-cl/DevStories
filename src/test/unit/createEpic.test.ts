@@ -104,6 +104,24 @@ describe('createEpic utilities', () => {
       const nextId = findNextEpicId(existingIds, 'EPIC');
       expect(nextId).toBe(3);
     });
+
+    it('should handle 4-digit boundary: EPIC-0999 → 1000', () => {
+      const existingIds = ['EPIC-0997', 'EPIC-0998', 'EPIC-0999'];
+      const nextId = findNextEpicId(existingIds, 'EPIC');
+      expect(nextId).toBe(1000);
+    });
+
+    it('should handle mixed 3-digit and 4-digit IDs', () => {
+      const existingIds = ['EPIC-001', 'EPIC-0010', 'EPIC-005'];
+      const nextId = findNextEpicId(existingIds, 'EPIC');
+      expect(nextId).toBe(11);
+    });
+
+    it('should handle large IDs up to 9999', () => {
+      const existingIds = ['EPIC-9998', 'EPIC-9999'];
+      const nextId = findNextEpicId(existingIds, 'EPIC');
+      expect(nextId).toBe(10000);
+    });
   });
 
   describe('generateEpicMarkdown', () => {
@@ -157,6 +175,30 @@ describe('createEpic utilities', () => {
       });
 
       expect(markdown).toContain('## Stories');
+    });
+
+    it('should include theme in frontmatter when provided (context-menu scenario)', () => {
+      const markdown = generateEpicMarkdown({
+        id: 'EPIC-007',
+        title: 'Auth System',
+        theme: 'THEME-002',
+      });
+
+      expect(markdown).toContain('theme: THEME-002');
+      // theme line must appear before the Stories section
+      const themePos = markdown.indexOf('theme: THEME-002');
+      const storiesPos = markdown.indexOf('## Stories');
+      expect(themePos).toBeGreaterThan(-1);
+      expect(themePos).toBeLessThan(storiesPos);
+    });
+
+    it('should omit theme line when not provided', () => {
+      const markdown = generateEpicMarkdown({
+        id: 'EPIC-007',
+        title: 'Auth System',
+      });
+
+      expect(markdown).not.toContain('theme:');
     });
   });
 });

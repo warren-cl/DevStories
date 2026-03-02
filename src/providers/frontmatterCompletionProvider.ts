@@ -17,9 +17,11 @@ import {
   getSizeCompletions,
   getSprintCompletions,
   detectEpicField,
+  detectThemeField,
   detectDependencyContext,
   detectLinkTrigger,
   getEpicCompletions,
+  getThemeCompletions,
   getStoryCompletions,
   getAllIdCompletions,
   CompletionData,
@@ -49,13 +51,20 @@ export class FrontmatterCompletionProvider implements vscode.CompletionItemProvi
     if (detectLinkTrigger(line, position.character)) {
       const stories = this.store.getStories();
       const epics = this.store.getEpics();
-      return this.toCompletionItems(getAllIdCompletions(stories, epics), vscode.CompletionItemKind.Reference);
+      const themes = this.store.getThemes();
+      return this.toCompletionItems(getAllIdCompletions(stories, epics, themes), vscode.CompletionItemKind.Reference);
     }
 
     // Check if we're in frontmatter for other completions
     const inFrontmatter = isInFrontmatter(allLines, position.line);
     if (!inFrontmatter) {
       return null;
+    }
+
+    // Check for theme: field (in epic files)
+    if (detectThemeField(line, position.character)) {
+      const themes = this.store.getThemes();
+      return this.toCompletionItems(getThemeCompletions(themes), vscode.CompletionItemKind.Reference);
     }
 
     // Check for epic: field

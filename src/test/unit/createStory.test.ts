@@ -102,6 +102,22 @@ describe('createStory Utils', () => {
       const existing = ['STORY-005', 'EPIC-010', 'OTHER-100'];
       expect(findNextStoryId(existing, 'STORY')).toBe(6);
     });
+
+    it('should handle IDs near the 4-digit boundary', () => {
+      const existing = ['DS-09997', 'DS-09998', 'DS-09999'];
+      expect(findNextStoryId(existing, 'DS')).toBe(10000);
+    });
+
+    it('should handle IDs in the 5-digit range', () => {
+      const existing = ['DS-10000', 'DS-10001', 'DS-99998'];
+      expect(findNextStoryId(existing, 'DS')).toBe(99999);
+    });
+
+    it('should handle mixed 3-digit and 5-digit IDs on same project', () => {
+      // Backward-compatible: old DS-001 style and new DS-00100 style coexist
+      const existing = ['DS-001', 'DS-002', 'DS-00100'];
+      expect(findNextStoryId(existing, 'DS')).toBe(101);
+    });
   });
 
   describe('getSuggestedSize', () => {
@@ -206,6 +222,38 @@ describe('createStory Utils', () => {
       const md = generateStoryMarkdown(data, DEFAULT_TEMPLATES.bug);
 
       expect(md).toContain('title: "Fix \\"broken\\" thing"');
+    });
+
+    it('should embed the pre-selected epic ID in frontmatter (context-menu scenario)', () => {
+      // Simulates right-click on EPIC-042 in the tree → epic picker skipped,
+      // the exact ID must appear verbatim in the generated frontmatter.
+      const data = {
+        id: 'DS-00001',
+        title: 'First story from context menu',
+        type: 'feature' as const,
+        epic: 'EPIC-042',
+        sprint: 'sprint-3',
+        size: 'M' as const,
+      };
+      const md = generateStoryMarkdown(data, DEFAULT_TEMPLATES.feature);
+
+      expect(md).toContain('id: DS-00001');
+      expect(md).toContain('epic: EPIC-042');
+    });
+
+    it('should embed a 5-digit story ID correctly in frontmatter', () => {
+      const data = {
+        id: 'DS-10001',
+        title: 'High-numbered story',
+        type: 'task' as const,
+        epic: 'EPIC-001',
+        sprint: 'sprint-5',
+        size: 'S' as const,
+      };
+      const md = generateStoryMarkdown(data, DEFAULT_TEMPLATES.task);
+
+      expect(md).toContain('id: DS-10001');
+      expect(md).toContain('epic: EPIC-001');
     });
 
     it('should include dependencies wrapped in [[ID]] format', () => {

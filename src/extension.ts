@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { executeChangeStatus } from './commands/changeStatus';
 import { executeCreateEpic } from './commands/createEpic';
+import { executeCreateTheme } from './commands/createTheme';
 import { executeCreateStory } from './commands/createStory';
 import { executeCreateStoryMenu } from './commands/createStoryMenu';
 import { wrapCommand } from './commands/errorHandler';
@@ -8,10 +9,13 @@ import { executeInit } from './commands/init';
 import { executePickSprint } from './commands/pickSprint';
 import { executeQuickCapture } from './commands/quickCapture';
 import { executeSaveAsTemplate } from './commands/saveAsTemplate';
+import { executeSetCurrentSprint } from './commands/setCurrentSprint';
+import { executeSortStories } from './commands/sortStories';
 import { applyAutoFilterSprint } from './core/autoFilterSprint';
 import { AutoTimestamp } from './core/autoTimestamp';
 import { ConfigService } from './core/configService';
 import { initializeLogger, disposeLogger } from './core/logger';
+import { SortService } from './core/sortService';
 import { SprintFilterService } from './core/sprintFilterService';
 import { Store } from './core/store';
 import { Watcher } from './core/watcher';
@@ -21,6 +25,8 @@ import { StoryHoverProvider } from './providers/storyHoverProvider';
 import { StoryLinkProvider } from './providers/storyLinkProvider';
 import { FrontmatterDiagnosticsProvider } from './validation/frontmatterDiagnostics';
 import { StatusBarController } from './view/statusBar';
+import { StoriesDragAndDropController } from './view/storiesDragAndDropController';
+import { BurndownViewProvider } from './view/burndownViewProvider';
 import { StoriesProvider } from './view/storiesProvider';
 import { getTreeViewTitle } from './view/storiesProviderUtils';
 
@@ -34,7 +40,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	const store = new Store(watcher);
 	const configService = new ConfigService();
 	const sprintFilterService = new SprintFilterService();
-	const storiesProvider = new StoriesProvider(store, context.extensionPath, configService, sprintFilterService);
+	const sortService = new SortService();
+	const storiesProvider = new StoriesProvider(store, context.extensionPath, configService, sprintFilterService, sortService);
 	const statusBarController = new StatusBarController(store, configService, sprintFilterService);
 	const autoTimestamp = new AutoTimestamp();
 
@@ -45,19 +52,52 @@ export async function activate(context: vscode.ExtensionContext) {
 	applyAutoFilterSprint(configService.config, sprintFilterService);
 
 	// Register Tree View with createTreeView for dynamic title updates (DS-139)
+	const dragAndDropController = new StoriesDragAndDropController(store, () => storiesProvider.viewMode, sortService, configService);
 	const treeView = vscode.window.createTreeView('devstories.views.explorer', {
-		treeDataProvider: storiesProvider
+		treeDataProvider: storiesProvider,
+		dragAndDropController,
+		canSelectMany: true,
 	});
+
+	// Register Burndown Chart WebviewView (below tree view in sidebar)
+	const burndownProvider = new BurndownViewProvider(store, configService, sprintFilterService);
+	const burndownDisposable = vscode.window.registerWebviewViewProvider(
+		BurndownViewProvider.viewId,
+		burndownProvider,
+	);
+
+	// Helper: refresh tree title using current config + filter
+	const refreshTitle = () => {
+		treeView.title = getTreeViewTitle(
+			configService.config.currentSprint,
+			sprintFilterService.currentSprint,
+			storiesProvider.viewMode
+		);
+	};
 
 	// Update tree view title and context when sprint filter changes
 	sprintFilterService.onDidSprintChange(async (sprint) => {
-		treeView.title = getTreeViewTitle(sprint);
+		refreshTitle();
 		// DS-153: Update context for filter icon state
 		await vscode.commands.executeCommand('setContext', 'devstories:hasSprintFilter', sprint !== null);
 	});
 
-	// Set initial filter context
+	// Update title when config changes (e.g. currentSprint written to config.json)
+	configService.onDidConfigChange(() => {
+		refreshTitle();
+	});
+
+	// Set initial title and filter context
+	refreshTitle();
 	await vscode.commands.executeCommand('setContext', 'devstories:hasSprintFilter', sprintFilterService.currentSprint !== null);
+	// Set initial view mode context (default: backlog)
+	await vscode.commands.executeCommand('setContext', 'devstories:viewMode', storiesProvider.viewMode);
+
+	// Refresh title when view mode changes
+	storiesProvider.onDidViewModeChange(async (mode) => {
+		refreshTitle();
+		await vscode.commands.executeCommand('setContext', 'devstories:viewMode', mode);
+	});
 
 	// Register Document Link Provider for [[ID]] links
 	const storyLinkProvider = new StoryLinkProvider(store);
@@ -110,14 +150,16 @@ export async function activate(context: vscode.ExtensionContext) {
 	);
 
 	const createEpicCommand = vscode.commands.registerCommand('devstories.createEpic',
-		wrapCommand('createEpic', async () => {
-			await executeCreateEpic(store);
+		wrapCommand('createEpic', async (item) => {
+			// item is defined when invoked from tree view context menu
+			await executeCreateEpic(store, item?.id);
 		})
 	);
 
 	const createStoryCommand = vscode.commands.registerCommand('devstories.createStory',
-		wrapCommand('createStory', async () => {
-			await executeCreateStory(store);
+		wrapCommand('createStory', async (item) => {
+			// item is defined when invoked from tree view context menu
+			await executeCreateStory(store, item?.id);
 		})
 	);
 
@@ -139,7 +181,8 @@ export async function activate(context: vscode.ExtensionContext) {
 				// Called from context menu with tree item
 				const story = store.getStory(item.id);
 				const epic = store.getEpic(item.id);
-				const target = story || epic;
+				const theme = store.getTheme(item.id);
+				const target = story || epic || theme;
 				if (target) {
 					await executeChangeStatus(store, target, configService);
 				}
@@ -150,6 +193,18 @@ export async function activate(context: vscode.ExtensionContext) {
 	const pickSprintCommand = vscode.commands.registerCommand('devstories.pickSprint',
 		wrapCommand('pickSprint', async () => {
 			await executePickSprint(store, sprintFilterService, configService);
+		})
+	);
+
+	const setCurrentSprintCommand = vscode.commands.registerCommand('devstories.setCurrentSprint',
+		wrapCommand('setCurrentSprint', async () => {
+			await executeSetCurrentSprint(sprintFilterService, configService);
+		})
+	);
+
+	const sortStoriesCommand = vscode.commands.registerCommand('devstories.sortStories',
+		wrapCommand('sortStories', async () => {
+			await executeSortStories(sortService);
 		})
 	);
 
@@ -171,9 +226,39 @@ export async function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
+	const createThemeCommand = vscode.commands.registerCommand('devstories.createTheme',
+		wrapCommand('createTheme', async () => {
+			await executeCreateTheme(store);
+		})
+	);
+
+	const openThemeCommand = vscode.commands.registerCommand('devstories.openTheme',
+		wrapCommand('openTheme', async (item) => {
+			if (item) {
+				const theme = store.getTheme(item.id);
+				if (theme?.filePath) {
+					await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(theme.filePath));
+				}
+			}
+		})
+	);
+
 	const createStoryMenuCommand = vscode.commands.registerCommand('devstories.createStoryMenu',
 		wrapCommand('createStoryMenu', async () => {
 			await executeCreateStoryMenu();
+		})
+	);
+
+	// View mode toggle commands
+	const switchToBreakdownCommand = vscode.commands.registerCommand('devstories.switchToBreakdown',
+		wrapCommand('switchToBreakdown', async () => {
+			storiesProvider.setViewMode('breakdown');
+		})
+	);
+
+	const switchToBacklogCommand = vscode.commands.registerCommand('devstories.switchToBacklog',
+		wrapCommand('switchToBacklog', async () => {
+			storiesProvider.setViewMode('backlog');
 		})
 	);
 
@@ -181,9 +266,11 @@ export async function activate(context: vscode.ExtensionContext) {
 		watcher,
 		configService,
 		sprintFilterService,
+		sortService,
 		autoTimestamp,
 		statusBarController,
 		treeView,
+		burndownDisposable,
 		linkProviderDisposable,
 		hoverProviderDisposable,
 		completionProviderDisposable,
@@ -196,9 +283,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		saveAsTemplateCommand,
 		changeStatusCommand,
 		pickSprintCommand,
+		setCurrentSprintCommand,
+		sortStoriesCommand,
 		clearSprintFilterCommand,
 		openEpicCommand,
-		createStoryMenuCommand
+		createThemeCommand,
+		openThemeCommand,
+		createStoryMenuCommand,
+		switchToBreakdownCommand,
+		switchToBacklogCommand
 	);
 }
 

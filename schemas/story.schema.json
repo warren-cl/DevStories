@@ -34,7 +34,7 @@
     },
     "size": {
       "$ref": "defs/common.schema.json#/$defs/storySize",
-      "description": "Complexity estimate: XS, S, M, L, or XL"
+      "description": "Complexity estimate (valid values defined in config.json sizes array)"
     },
     "priority": {
       "type": "integer",
@@ -58,6 +58,10 @@
     "updated": {
       "$ref": "defs/common.schema.json#/$defs/dateString",
       "description": "Date story was last modified (auto-updated on save)"
+    },
+    "date_done": {
+      "$ref": "defs/common.schema.json#/$defs/dateString",
+      "description": "Date story reached completion status (auto-managed by extension)"
     }
   },
   "additionalProperties": false

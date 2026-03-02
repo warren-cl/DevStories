@@ -65,6 +65,7 @@ suite('StoryHoverProvider Integration Test', () => {
       id: 'EPIC-001',
       title: 'Test Epic',
       status: 'done',
+      priority: 500,
       created: new Date('2025-01-15'),
       content: '',
     };
@@ -82,6 +83,7 @@ suite('StoryHoverProvider Integration Test', () => {
       id: 'EPIC-001',
       title: 'Test Epic',
       status: 'in_progress',
+      priority: 500,
       created: new Date('2025-01-15'),
       content: '',
     };

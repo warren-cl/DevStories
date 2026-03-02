@@ -7,6 +7,7 @@ export interface InitConfig {
   projectName: string;
   epicPrefix: string;
   storyPrefix: string;
+  themePrefix: string;
   sprint: string;
 }
 
@@ -19,6 +20,7 @@ export function generateConfigJson(config: InitConfig): string {
     project: config.projectName,
     idMode: 'auto',
     idPrefix: {
+      theme: config.themePrefix,
       epic: config.epicPrefix,
       story: config.storyPrefix,
     },
@@ -32,7 +34,8 @@ export function generateConfigJson(config: InitConfig): string {
       current: config.sprint,
       sequence: [config.sprint, 'backlog'],
     },
-    sizes: ['XS', 'S', 'M', 'L', 'XL'],
+    sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'],
+    storypoints: [1, 2, 4, 8, 16, 32, 64],
   };
   return JSON.stringify(configObj, null, 2);
 }

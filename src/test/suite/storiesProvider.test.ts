@@ -5,8 +5,17 @@ import * as vscode from 'vscode';
 import { Store } from '../../core/store';
 import { Watcher } from '../../core/watcher';
 import { SprintFilterService } from '../../core/sprintFilterService';
-import { StoriesProvider } from '../../view/storiesProvider';
+import { ConfigService } from '../../core/configService';
+import { ConfigData } from '../../core/configServiceUtils';
+import { StoriesProvider, TreeElement } from '../../view/storiesProvider';
 import { getTreeViewTitle } from '../../view/storiesProviderUtils';
+import { isSprintNode } from '../../types/sprintNode';
+
+/** Helper: get .id from a TreeElement, handling SprintNode which has sprintId instead. */
+function getElementId(el: TreeElement): string {
+  if (isSprintNode(el)) { return el.sprintId; }
+  return el.id;
+}
 
 suite('StoriesProvider Test Suite', () => {
   const workspaceRoot = vscode.workspace.workspaceFolders![0].uri.fsPath;
@@ -68,7 +77,20 @@ created: 2025-01-01
 
     watcher = new Watcher();
     store = new Store(watcher);
-    provider = new StoriesProvider(store, mockExtensionPath);
+    const mockConfigService = {
+      config: {
+        statuses: [
+          { id: 'todo', label: 'To Do' },
+          { id: 'in_progress', label: 'In Progress' },
+          { id: 'done', label: 'Done' },
+        ],
+        sprintSequence: [],
+      },
+      onDidConfigChange: new vscode.EventEmitter<ConfigData>().event,
+    } as unknown as ConfigService;
+    provider = new StoriesProvider(store, mockExtensionPath, mockConfigService);
+    // Set to breakdown mode so existing tests work with Theme→Epic→Story hierarchy
+    provider.setViewMode('breakdown');
     await store.load();
   });
 
@@ -87,25 +109,25 @@ created: 2025-01-01
 
   test('should return epics as root children', async () => {
     const children = await provider.getChildren();
-    const epic = children.find(c => c.id === 'EPIC-VIEW');
+    const epic = children.find(c => getElementId(c) === 'EPIC-VIEW');
     assert.ok(epic, 'Epic should be found in root children');
   });
 
   test('should return stories as children of epic', async () => {
     const epics = await provider.getChildren();
-    const epic = epics.find(c => c.id === 'EPIC-VIEW');
+    const epic = epics.find(c => getElementId(c) === 'EPIC-VIEW');
     assert.ok(epic, 'Epic should be found');
 
     if (epic) {
       const stories = await provider.getChildren(epic);
-      const story = stories.find(s => s.id === 'STORY-VIEW');
+      const story = stories.find(s => getElementId(s) === 'STORY-VIEW');
       assert.ok(story, 'Story should be found in epic children');
     }
   });
 
   test('should return correct tree item for epic', async () => {
     const epics = await provider.getChildren();
-    const epic = epics.find(c => c.id === 'EPIC-VIEW');
+    const epic = epics.find(c => getElementId(c) === 'EPIC-VIEW');
 
     if (epic) {
       const treeItem = provider.getTreeItem(epic);
@@ -117,7 +139,7 @@ created: 2025-01-01
 
   test('epic tree item should NOT have command (single-click expands)', async () => {
     const epics = await provider.getChildren();
-    const epic = epics.find(c => c.id === 'EPIC-VIEW');
+    const epic = epics.find(c => getElementId(c) === 'EPIC-VIEW');
 
     if (epic) {
       const treeItem = provider.getTreeItem(epic);
@@ -127,7 +149,7 @@ created: 2025-01-01
 
   test('epic tree item should have resourceUri set', async () => {
     const epics = await provider.getChildren();
-    const epic = epics.find(c => c.id === 'EPIC-VIEW');
+    const epic = epics.find(c => getElementId(c) === 'EPIC-VIEW');
 
     if (epic) {
       const treeItem = provider.getTreeItem(epic);
@@ -138,11 +160,11 @@ created: 2025-01-01
 
   test('should return correct tree item for story', async () => {
     const epics = await provider.getChildren();
-    const epic = epics.find(c => c.id === 'EPIC-VIEW');
+    const epic = epics.find(c => getElementId(c) === 'EPIC-VIEW');
 
     if (epic) {
       const stories = await provider.getChildren(epic);
-      const story = stories.find(s => s.id === 'STORY-VIEW');
+      const story = stories.find(s => getElementId(s) === 'STORY-VIEW');
 
       if (story) {
         const treeItem = provider.getTreeItem(story);
@@ -158,7 +180,7 @@ created: 2025-01-01
   // DS-008: Icon Tests
   test('should display icon for epic', async () => {
     const epics = await provider.getChildren();
-    const epic = epics.find(c => c.id === 'EPIC-VIEW');
+    const epic = epics.find(c => getElementId(c) === 'EPIC-VIEW');
 
     if (epic) {
       const treeItem = provider.getTreeItem(epic);
@@ -175,13 +197,13 @@ created: 2025-01-01
 
   test('should display correct icon based on story type', async () => {
     const epics = await provider.getChildren();
-    const epic = epics.find(c => c.id === 'EPIC-VIEW');
+    const epic = epics.find(c => getElementId(c) === 'EPIC-VIEW');
 
     if (epic) {
       const stories = await provider.getChildren(epic);
 
       // Check feature story icon
-      const featureStory = stories.find(s => s.id === 'STORY-VIEW');
+      const featureStory = stories.find(s => getElementId(s) === 'STORY-VIEW');
       if (featureStory) {
         const featureItem = provider.getTreeItem(featureStory);
         const featureIcon = featureItem.iconPath as { light: vscode.Uri; dark: vscode.Uri };
@@ -189,7 +211,7 @@ created: 2025-01-01
       }
 
       // Check bug story icon
-      const bugStory = stories.find(s => s.id === 'STORY-BUG');
+      const bugStory = stories.find(s => getElementId(s) === 'STORY-BUG');
       if (bugStory) {
         const bugItem = provider.getTreeItem(bugStory);
         const bugIcon = bugItem.iconPath as { light: vscode.Uri; dark: vscode.Uri };
@@ -200,7 +222,7 @@ created: 2025-01-01
 
   test('should display status indicator in description', async () => {
     const epics = await provider.getChildren();
-    const epic = epics.find(c => c.id === 'EPIC-VIEW');
+    const epic = epics.find(c => getElementId(c) === 'EPIC-VIEW');
 
     if (epic) {
       // Epic with todo status
@@ -211,7 +233,7 @@ created: 2025-01-01
       const stories = await provider.getChildren(epic);
 
       // Bug story with in_progress status
-      const bugStory = stories.find(s => s.id === 'STORY-BUG');
+      const bugStory = stories.find(s => getElementId(s) === 'STORY-BUG');
       if (bugStory) {
         const bugItem = provider.getTreeItem(bugStory);
         assert.ok(bugItem.description?.toString().includes('◐'), 'In progress should show half circle');
@@ -222,11 +244,11 @@ created: 2025-01-01
 
   test('should show tooltip with story details', async () => {
     const epics = await provider.getChildren();
-    const epic = epics.find(c => c.id === 'EPIC-VIEW');
+    const epic = epics.find(c => getElementId(c) === 'EPIC-VIEW');
 
     if (epic) {
       const stories = await provider.getChildren(epic);
-      const story = stories.find(s => s.id === 'STORY-VIEW');
+      const story = stories.find(s => getElementId(s) === 'STORY-VIEW');
 
       if (story) {
         const treeItem = provider.getTreeItem(story);
@@ -244,7 +266,7 @@ created: 2025-01-01
   // DS-181: Epic tooltip parity
   test('should show tooltip with epic details', async () => {
     const epics = await provider.getChildren();
-    const epic = epics.find(c => c.id === 'EPIC-VIEW');
+    const epic = epics.find(c => getElementId(c) === 'EPIC-VIEW');
 
     if (epic) {
       const treeItem = provider.getTreeItem(epic);
@@ -260,16 +282,20 @@ created: 2025-01-01
   });
 
   // DS-139: Tree view title tests
-  test('getTreeViewTitle should return "Stories" when no filter', () => {
-    assert.strictEqual(getTreeViewTitle(null), 'Stories');
+  test('getTreeViewTitle should return current sprint label when no filter', () => {
+    assert.strictEqual(getTreeViewTitle('sprint-1', null, 'backlog'), 'BACKLOG: Current sprint-1');
   });
 
-  test('getTreeViewTitle should return "Stories (sprint-name)" when filtered', () => {
-    assert.strictEqual(getTreeViewTitle('sprint-1'), 'Stories (sprint-1)');
+  test('getTreeViewTitle should return current sprint label when filter matches current', () => {
+    assert.strictEqual(getTreeViewTitle('sprint-1', 'sprint-1', 'backlog'), 'BACKLOG: Current sprint-1');
   });
 
-  test('getTreeViewTitle should capitalize Backlog', () => {
-    assert.strictEqual(getTreeViewTitle('backlog'), 'Stories (Backlog)');
+  test('getTreeViewTitle should show filter sprint when different from current', () => {
+    assert.strictEqual(getTreeViewTitle('sprint-1', 'sprint-2', 'breakdown'), 'BREAKDOWN: Current sprint-1: Showing sprint-2');
+  });
+
+  test('getTreeViewTitle should show Backlog label when filtering backlog', () => {
+    assert.strictEqual(getTreeViewTitle('sprint-1', 'backlog', 'backlog'), 'BACKLOG: Current sprint-1: Showing Backlog');
   });
 
   test('StoriesProvider should accept SprintFilterService', () => {

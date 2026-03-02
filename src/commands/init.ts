@@ -145,16 +145,19 @@ export async function executeInit(options: InitOptions = {}): Promise<boolean> {
     projectName,
     epicPrefix: 'EPIC',
     storyPrefix,
+    themePrefix: 'THEME',
     sprint,
   };
 
   // Create directories
   const storiesUri = vscode.Uri.joinPath(devstoriesUri, 'stories');
   const epicsUri = vscode.Uri.joinPath(devstoriesUri, 'epics');
+  const themesUri = vscode.Uri.joinPath(devstoriesUri, 'themes');
 
   await vscode.workspace.fs.createDirectory(devstoriesUri);
   await vscode.workspace.fs.createDirectory(storiesUri);
   await vscode.workspace.fs.createDirectory(epicsUri);
+  await vscode.workspace.fs.createDirectory(themesUri);
 
   // Write config.json
   const configUri = vscode.Uri.joinPath(devstoriesUri, 'config.json');
@@ -166,8 +169,8 @@ export async function executeInit(options: InitOptions = {}): Promise<boolean> {
     const sampleEpic = generateSampleEpic(storyPrefix);
     const sampleStory = generateSampleStory(sprint, storyPrefix);
 
-    const epicUri = vscode.Uri.joinPath(epicsUri, 'EPIC-001.md');
-    const storyUri = vscode.Uri.joinPath(storiesUri, `${storyPrefix}-001.md`);
+    const epicUri = vscode.Uri.joinPath(epicsUri, 'EPIC-001-sample-epic-delete-me.md');
+    const storyUri = vscode.Uri.joinPath(storiesUri, `${storyPrefix}-001-sample-story-delete-me.md`);
 
     await vscode.workspace.fs.writeFile(epicUri, Buffer.from(sampleEpic));
     await vscode.workspace.fs.writeFile(storyUri, Buffer.from(sampleStory));

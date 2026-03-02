@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   findLinksInDocument,
@@ -45,20 +46,20 @@ Also see [[EPIC-001]] for the parent epic.
   test('createDocumentLink should resolve valid IDs', () => {
     const match: LinkMatch = { id: 'DS-001', start: 0, end: 10 };
     const basePath = '/workspace/.devstories';
-    const knownIds = new Set(['DS-001', 'EPIC-001']);
+    const resolver = (id: string) =>
+      id === 'DS-001' ? path.join(basePath, 'stories', 'DS-001.md') : undefined;
 
-    const link = createDocumentLink(match, basePath, knownIds);
+    const link = createDocumentLink(match, resolver);
 
     assert.ok(link !== null);
-    assert.strictEqual(link!.targetPath, '/workspace/.devstories/stories/DS-001.md');
+    assert.strictEqual(link!.targetPath, path.join(basePath, 'stories', 'DS-001.md'));
   });
 
   test('createDocumentLink should return null for broken links', () => {
     const match: LinkMatch = { id: 'DS-999', start: 0, end: 10 };
-    const basePath = '/workspace/.devstories';
-    const knownIds = new Set(['DS-001']);
+    const resolver = (_id: string) => undefined;
 
-    const link = createDocumentLink(match, basePath, knownIds);
+    const link = createDocumentLink(match, resolver);
 
     assert.strictEqual(link, null);
   });
@@ -66,23 +67,25 @@ Also see [[EPIC-001]] for the parent epic.
   test('createDocumentLink should handle epic IDs', () => {
     const match: LinkMatch = { id: 'EPIC-001', start: 0, end: 12 };
     const basePath = '/workspace/.devstories';
-    const knownIds = new Set(['EPIC-001']);
+    const resolver = (id: string) =>
+      id === 'EPIC-001' ? path.join(basePath, 'epics', 'EPIC-001.md') : undefined;
 
-    const link = createDocumentLink(match, basePath, knownIds);
+    const link = createDocumentLink(match, resolver);
 
     assert.ok(link !== null);
-    assert.strictEqual(link!.targetPath, '/workspace/.devstories/epics/EPIC-001.md');
+    assert.strictEqual(link!.targetPath, path.join(basePath, 'epics', 'EPIC-001.md'));
   });
 
   test('createDocumentLink should handle EPIC-INBOX', () => {
     const match: LinkMatch = { id: 'EPIC-INBOX', start: 0, end: 14 };
     const basePath = '/workspace/.devstories';
-    const knownIds = new Set(['EPIC-INBOX']);
+    const resolver = (id: string) =>
+      id === 'EPIC-INBOX' ? path.join(basePath, 'epics', 'EPIC-INBOX.md') : undefined;
 
-    const link = createDocumentLink(match, basePath, knownIds);
+    const link = createDocumentLink(match, resolver);
 
     assert.ok(link !== null);
-    assert.strictEqual(link!.targetPath, '/workspace/.devstories/epics/EPIC-INBOX.md');
+    assert.strictEqual(link!.targetPath, path.join(basePath, 'epics', 'EPIC-INBOX.md'));
   });
 
   test('findLinksInDocument should handle custom prefixes', () => {

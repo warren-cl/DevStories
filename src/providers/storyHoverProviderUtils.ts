@@ -1,6 +1,7 @@
 import { LINK_PATTERN, BARE_ID_PATTERN } from '../utils/linkResolver';
 import { Story, StoryType } from '../types/story';
 import { Epic } from '../types/epic';
+import { Theme } from '../types/theme';
 
 /**
  * Represents a link match with position info
@@ -32,7 +33,7 @@ export function getStatusIndicator(status: string): string {
 /**
  * Get type icon emoji for display
  */
-export function getTypeIcon(type: StoryType | 'epic'): string {
+export function getTypeIcon(type: StoryType | 'epic' | 'theme'): string {
   switch (type) {
     case 'feature':
       return '✨';
@@ -44,6 +45,8 @@ export function getTypeIcon(type: StoryType | 'epic'): string {
       return '🔧';
     case 'epic':
       return '📁';
+    case 'theme':
+      return '🗂️';
     default:
       return '📄';
   }
@@ -65,16 +68,17 @@ export interface EpicProgress {
 }
 
 /**
- * Format hover card markdown for a story or epic
+ * Format hover card markdown for a story, epic, or theme
  */
 export function formatHoverCard(
-  item: Story | Epic,
-  type: 'story' | 'epic',
+  item: Story | Epic | Theme,
+  type: 'story' | 'epic' | 'theme',
   progress?: EpicProgress
 ): string {
   const isStory = type === 'story';
+  const isTheme = type === 'theme';
   const story = item as Story;
-  const icon = isStory ? getTypeIcon(story.type) : getTypeIcon('epic');
+  const icon = isStory ? getTypeIcon(story.type) : getTypeIcon(type);
 
   const lines: string[] = [];
 
@@ -105,14 +109,24 @@ export function formatHoverCard(
     lines.push(`**Epic:** ${story.epic}  `);
   }
 
-  // Sprint (stories only - epics don't have sprints)
+  // Theme (epics only, when present)
+  if (type === 'epic' && (item as Epic).theme) {
+    lines.push(`**Theme:** ${(item as Epic).theme}  `);
+  }
+
+  // Sprint (stories only - epics and themes don't have sprints)
   if (isStory && (item as Story).sprint) {
     lines.push(`**Sprint:** ${(item as Story).sprint}  `);
   }
 
   // Progress (epics only)
-  if (!isStory && progress) {
+  if (type === 'epic' && progress) {
     lines.push(`**Progress:** ${progress.done}/${progress.total} stories done  `);
+  }
+
+  // Epic count (themes only)
+  if (isTheme && progress) {
+    lines.push(`**Epics:** ${progress.total}  `);
   }
 
   return lines.join('\n');
@@ -279,7 +293,7 @@ const STORY_FIELD_DESCRIPTIONS: Record<string, string> = {
   epic: 'Parent epic ID this story belongs to',
   status: 'Current workflow status (validated against config.yaml statuses)',
   sprint: 'Sprint identifier (validated against config.yaml sprints)',
-  size: 'Complexity estimate: XS, S, M, L, or XL',
+  size: 'Complexity estimate (valid values defined in config.json)',
   priority: 'Sort priority - lower values appear first',
   assignee: 'Person assigned to this story',
   dependencies: 'List of story IDs this story depends on',
@@ -290,9 +304,18 @@ const STORY_FIELD_DESCRIPTIONS: Record<string, string> = {
 const EPIC_FIELD_DESCRIPTIONS: Record<string, string> = {
   id: 'Unique epic identifier (e.g., EPIC-001 or EPIC-INBOX)',
   title: 'Epic title - thematic grouping of related stories',
+  theme: 'Parent theme ID this epic belongs to (optional)',
   status: 'Current workflow status (validated against config.yaml statuses)',
   created: 'Date epic was created (YYYY-MM-DD)',
   updated: 'Date epic was last modified (auto-updated on save)',
+};
+
+const THEME_FIELD_DESCRIPTIONS: Record<string, string> = {
+  id: 'Unique theme identifier (e.g., THEME-001)',
+  title: 'Theme title - top-level strategic grouping of related epics',
+  status: 'Current workflow status (validated against config.yaml statuses)',
+  created: 'Date theme was created (YYYY-MM-DD)',
+  updated: 'Date theme was last modified (auto-updated on save)',
 };
 
 /**
@@ -301,7 +324,14 @@ const EPIC_FIELD_DESCRIPTIONS: Record<string, string> = {
  * @param fileType 'story' or 'epic'
  * @returns Description string or null if field not found
  */
-export function getFieldDescription(fieldName: string, fileType: 'story' | 'epic'): string | null {
-  const descriptions = fileType === 'story' ? STORY_FIELD_DESCRIPTIONS : EPIC_FIELD_DESCRIPTIONS;
+export function getFieldDescription(fieldName: string, fileType: 'story' | 'epic' | 'theme'): string | null {
+  let descriptions: Record<string, string>;
+  if (fileType === 'story') {
+    descriptions = STORY_FIELD_DESCRIPTIONS;
+  } else if (fileType === 'theme') {
+    descriptions = THEME_FIELD_DESCRIPTIONS;
+  } else {
+    descriptions = EPIC_FIELD_DESCRIPTIONS;
+  }
   return descriptions[fieldName] ?? null;
 }

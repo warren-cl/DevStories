@@ -141,7 +141,7 @@ export class FrontmatterDiagnosticsProvider implements vscode.Disposable {
   /**
    * Validate a single document
    */
-  private validateDocument(doc: vscode.TextDocument, fileType: 'story' | 'epic'): void {
+  private validateDocument(doc: vscode.TextDocument, fileType: 'story' | 'epic' | 'theme'): void {
     const content = doc.getText();
 
     // Build config from ConfigService
@@ -171,7 +171,9 @@ export class FrontmatterDiagnosticsProvider implements vscode.Disposable {
   private buildKnownIds(): KnownIds {
     const stories = new Set<string>();
     const epics = new Set<string>();
+    const themes = new Set<string>();
     const epicStoryMap = new Map<string, Set<string>>();
+    const themeEpicMap = new Map<string, Set<string>>();
 
     // Collect all story IDs
     for (const story of this.store.getStories()) {
@@ -188,15 +190,32 @@ export class FrontmatterDiagnosticsProvider implements vscode.Disposable {
       LINK_PATTERN.lastIndex = 0;
       while ((match = LINK_PATTERN.exec(epic.content)) !== null) {
         const id = match[1];
-        // Only include story-like IDs (not EPIC-*)
-        if (!id.startsWith('EPIC-')) {
+        // Only include story-like IDs (not EPIC-* or THEME-*)
+        if (!id.startsWith('EPIC-') && !id.startsWith('THEME-')) {
           storyLinks.add(id);
         }
       }
       epicStoryMap.set(epic.id, storyLinks);
     }
 
-    return { stories, epics, epicStoryMap };
+    // Collect all theme IDs and extract [[EPIC-*]] links from their content
+    for (const theme of this.store.getThemes()) {
+      themes.add(theme.id);
+
+      // Extract epic IDs mentioned in theme's content (## Epics section)
+      const epicLinks = new Set<string>();
+      let match;
+      LINK_PATTERN.lastIndex = 0;
+      while ((match = LINK_PATTERN.exec(theme.content)) !== null) {
+        const id = match[1];
+        if (id.startsWith('EPIC-')) {
+          epicLinks.add(id);
+        }
+      }
+      themeEpicMap.set(theme.id, epicLinks);
+    }
+
+    return { stories, epics, themes, epicStoryMap, themeEpicMap };
   }
 
   /**

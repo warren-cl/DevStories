@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 DevStories is a VS Code extension for lightweight story management using markdown files. Stories live in `.devstories/` as version-controlled markdown files, eliminating the need for external tools like JIRA.
 
-**Current Status:** Planning complete, ready for implementation. No code exists yet—this is a greenfield project.
+**Current Status:** v1.0.0 released. Version 2 proposal in progress on `feat/version-2-proposal` branch — adds themes, dual view modes, drag-and-drop, burndown charts, and story-point tracking.
 
 ## Architecture
 
@@ -17,43 +17,76 @@ DevStories is a VS Code extension for lightweight story management using markdow
 3. **VS Code native**: Uses VS Code Extension API, no external services
 4. **TDD approach**: Write tests before implementation (Red → Green → Refactor)
 
-### Directory Structure (Target)
+### Directory Structure
 
 ```
-devstories/
+DevStories/
 ├── src/
-│   ├── extension.ts              # Entry point
-│   ├── core/                     # Core functionality
-│   │   ├── parser.ts             # Markdown + frontmatter parsing (gray-matter)
-│   │   ├── store.ts              # In-memory story cache (Map<id, Story>)
-│   │   ├── watcher.ts            # File system watching
-│   │   └── writer.ts             # Write changes back to markdown
-│   ├── providers/                # VS Code providers
-│   │   ├── treeProvider.ts       # Sidebar tree view
-│   │   ├── hoverProvider.ts      # [[STORY-ID]] hover preview
-│   │   └── linkProvider.ts       # [[STORY-ID]] clickable links
-│   ├── views/
-│   │   ├── boardView.ts          # Kanban webview controller
-│   │   └── statusBar.ts          # Progress bar in status bar
+│   ├── extension.ts              # Entry point — registers all commands, providers, views
+│   ├── core/
+│   │   ├── parser.ts             # Frontmatter parsing (gray-matter) for stories, epics, themes
+│   │   ├── store.ts              # In-memory cache (stories, epics, themes, brokenFiles Maps)
+│   │   ├── watcher.ts            # FileSystemWatcher for .devstories/ changes
+│   │   ├── configService.ts      # Reads/watches config.json, exposes ConfigData + events
+│   │   ├── configServiceUtils.ts # Pure functions: parseConfig, mergeDefaults, getSizePoints, isCompletedStatus
+│   │   ├── sortService.ts        # Session-only sort state (key + direction) with event emitter
+│   │   ├── sprintFilterService.ts# Sprint view-filter state + events
+│   │   ├── autoFilterSprint.ts   # Auto-apply sprint filter from config
+│   │   ├── autoTimestamp.ts      # Auto-update 'updated' field on save
+│   │   ├── logger.ts             # Output channel logger
+│   │   └── welcomeContext.ts     # Welcome/empty-state detection
 │   ├── commands/
-│   │   ├── init.ts               # Initialize .devstories/
-│   │   ├── createEpic.ts         # Create epic command
-│   │   ├── createStory.ts        # Create story command
-│   │   ├── quickCapture.ts       # Cmd+Shift+S quick capture
-│   │   └── changeStatus.ts       # Change story status
+│   │   ├── init.ts               # Initialize .devstories/ directory
+│   │   ├── createStory.ts        # Create story (supports preselected epic from context menu)
+│   │   ├── createEpic.ts         # Create epic (supports preselected theme from context menu)
+│   │   ├── createTheme.ts        # Create theme
+│   │   ├── quickCapture.ts       # Cmd+Shift+S quick story capture
+│   │   ├── changeStatus.ts       # Change status on story/epic/theme (manages date_done)
+│   │   ├── pickSprint.ts         # View-only sprint filter picker
+│   │   ├── setCurrentSprint.ts   # Persist current sprint to config.json
+│   │   ├── sortStories.ts        # QuickPick sort order selection
+│   │   ├── saveAsTemplate.ts     # Save story as reusable template
+│   │   ├── createStoryMenu.ts    # Multi-option story creation menu
+│   │   ├── errorHandler.ts       # wrapCommand() error boundary
+│   │   └── *Utils.ts             # Pure-function companions (testable without VS Code API)
+│   ├── providers/
+│   │   ├── storyHoverProvider.ts  # [[ID]] hover preview + field descriptions
+│   │   ├── storyLinkProvider.ts   # [[ID]] clickable DocumentLinks
+│   │   └── frontmatterCompletionProvider.ts  # Autocomplete for status, type, size, sprint, epic, theme, [[ID]]
+│   ├── validation/
+│   │   ├── frontmatterValidator.ts   # Ajv-based schema + cross-file validation
+│   │   └── frontmatterDiagnostics.ts # VS Code DiagnosticCollection provider
+│   ├── view/
+│   │   ├── storiesProvider.ts     # TreeDataProvider — Breakdown (Theme→Epic→Story) & Backlog (Sprint→Story)
+│   │   ├── storiesProviderUtils.ts# Sorting, status indicators, ViewMode type
+│   │   ├── storiesDragAndDropController.ts  # Drag-and-drop: reassign epics/stories, reorder by priority
+│   │   ├── backlogDropHandler.ts  # Backlog-specific drop logic with priority bumping
+│   │   ├── burndownViewProvider.ts# Sprint burndown WebviewView (SVG chart)
+│   │   ├── burndownUtils.ts       # Pure burndown calculation functions
+│   │   ├── burndownSvgRenderer.ts # SVG/HTML rendering for burndown chart
+│   │   ├── statusBar.ts          # Status bar progress (story-point based)
+│   │   └── statusBarUtils.ts     # Pure stats/formatting functions
+│   ├── types/
+│   │   ├── story.ts              # Story interface + StoryType, StorySize, StoryStatus
+│   │   ├── epic.ts               # Epic interface (with theme + priority fields)
+│   │   ├── theme.ts              # Theme interface (top-level grouping)
+│   │   ├── brokenFile.ts         # BrokenFile interface (parse failures shown in tree)
+│   │   └── sprintNode.ts         # SprintNode virtual tree node for Backlog view
 │   ├── utils/
-│   │   ├── idGenerator.ts        # Generate story/epic IDs
-│   │   ├── linkResolver.ts       # Resolve [[ID]] to file path
-│   │   └── validator.ts          # Validate frontmatter
-│   └── types/
-│       ├── story.ts              # Story type definitions
-│       ├── epic.ts               # Epic type definitions
-│       └── config.ts             # Config type definitions
-├── webview/                      # Board view HTML/CSS/JS
-├── test/
-│   ├── unit/                     # Vitest unit tests
-│   └── integration/              # @vscode/test-electron integration tests
-├── docs/PRD/                     # Complete product requirements
+│   │   ├── linkResolver.ts       # Resolve [[ID]] to file path (story/epic/theme)
+│   │   ├── inputValidation.ts    # Title/name validation for stories, epics, themes
+│   │   └── filenameUtils.ts      # toKebabCase() for filename slugs
+│   └── test/
+│       ├── suite/                # @vscode/test-electron integration tests
+│       └── unit/                 # Vitest unit tests
+├── schemas/                      # JSON Schema definitions
+│   ├── devstories.schema.json    # config.json schema
+│   ├── story.schema.json         # Story frontmatter schema
+│   ├── epic.schema.json          # Epic frontmatter schema
+│   ├── theme.schema.json         # Theme frontmatter schema
+│   └── defs/common.schema.json   # Shared definitions (ID patterns, enums)
+├── webview/                      # Tutorial/webview assets
+├── docs/PRD/                     # Product requirements
 └── package.json
 ```
 
@@ -61,21 +94,23 @@ devstories/
 
 ### Store-Centric Architecture
 - **Store** (`src/core/store.ts`) is the single source of truth in memory
-- All UI components (tree view, board view, status bar) read from Store
-- Store emits events when data changes (`onStoryChanged`, `onEpicChanged`)
-- File changes trigger Store updates via Watcher
+- Maintains four Maps: `stories`, `epics`, `themes`, `brokenFiles`
+- All UI components (tree view, burndown, status bar) read from Store
+- Store emits a single `onDidUpdate` event when data changes
+- File changes trigger Store updates via Watcher; `store.reloadFile(uri)` allows immediate refresh after programmatic writes (avoids Windows FileSystemWatcher race)
 
 ### File → Store → UI Flow
 ```
-.devstories/stories/STORY-001.md (filesystem)
+.devstories/stories/DS-00001-login-form.md (filesystem)
   ↓ (FileWatcher detects change)
-Parser.parseStory() (gray-matter)
+Parser.parseStory() / parseEpic() / parseTheme() (gray-matter)
   ↓
 Store.stories.set(id, story) (Map update)
+  — on parse failure → Store.brokenFiles.set(filePath, brokenFile)
   ↓
-Store.onStoryChanged event fires
+Store.onDidUpdate event fires
   ↓
-TreeProvider.refresh() + BoardView.updateWebview() (UI updates)
+StoriesProvider.refresh() + BurndownViewProvider.refresh() + StatusBar.update()
 ```
 
 ### UI → File Flow
@@ -84,7 +119,8 @@ User clicks status in tree view
   ↓
 Command: changeStatus(storyId, newStatus)
   ↓
-Writer.updateStoryStatus() (update YAML frontmatter only)
+updateStoryStatus() / updateEpicStatus() / updateThemeStatus() (gray-matter stringify)
+  — manages date_done field on completion transitions
   ↓
 File saved to disk
   ↓
@@ -96,19 +132,21 @@ FileWatcher detects change → Store reloads → UI refreshes
 ### Story File Structure
 ```markdown
 ---
-id: STORY-001
+id: DS-00001
 title: Login Form Implementation
 type: feature              # feature | bug | task | chore
-epic: EPIC-001
-status: todo              # Defined in config.yaml
+epic: EPIC-0001            # Optional — missing/empty routes to "No Epic" sentinel
+status: todo               # Defined in config.json statuses
 sprint: sprint-4
-size: M                   # XS | S | M | L | XL
+size: M                    # From config.json sizes array (default: XXS..XXL)
+priority: 500              # Lower = higher priority (for drag-and-drop ordering)
 assignee: ""
 dependencies:
-  - STORY-005
-  - STORY-006
+  - DS-00005
+  - DS-00006
 created: 2025-01-15
-updated: 2025-01-20      # Auto-updated on save
+updated: 2025-01-20        # Auto-updated on save
+date_done: 2025-02-01      # Auto-set when status reaches isCompletion, cleared otherwise
 ---
 
 # Login Form Implementation
@@ -116,57 +154,56 @@ updated: 2025-01-20      # Auto-updated on save
 [Markdown content follows...]
 ```
 
-### Config File (`.devstories/config.yaml`)
+### Epic File Fields
+- Same base fields as stories (id, title, status, created, updated, priority)
+- `theme: THEME-001` — optional parent theme reference
+- No sprint field — epic timing is derived from child stories
+
+### Theme File Fields
+- `id`, `title`, `status`, `priority`, `created`, `updated`
+- Top-level grouping above epics; epics reference themes via `theme:` field
+
+### Filename Convention
+Files include a kebab-case slug: `DS-00001-login-form.md`, `EPIC-0001-user-auth.md`, `THEME-001-platform.md`
+
+### Config File (`.devstories/config.json`)
 Defines:
-- ID prefixes (e.g., `STORY`, `EPIC`, or custom like `PROJ`, `FEAT`)
-- Status workflow (columns for board view)
-- Valid sizes
-- Story templates per type (feature/bug/task/chore)
-- Current sprint
+- ID prefixes: `storyPrefix`, `epicPrefix`, `themePrefix`
+- Status workflow: `statuses[]` with `id`, `label`, optional `isCompletion` and `isExcluded` flags
+- Sizes: `sizes[]` array (e.g., `["XXS","XS","S","M","L","XL","XXL"]`)
+- Story points: `storypoints[]` parallel to sizes (e.g., `[1,2,4,8,16,32,64]`)
+- Sprint config: `sprintSequence[]`, `current`, `length` (days), `firstSprintStartDate`
+- Quick capture options, auto-filter setting, templates
 
-See `docs/PRD/specs/01-markdown-spec.md` for complete specification.
+See `schemas/devstories.schema.json` for the complete JSON Schema.
 
-## Implementation Phases (23 Stories)
+## Implementation Status
 
-Implement in this exact order—dependencies matter:
+v1.0.0 shipped all original 23 stories across 5 phases (foundation, tree view, commands, links, board view). The project is now self-hosting via `.devstories/` in this repo.
 
-1. **Phase 1 (DS-001 to DS-005)**: Foundation
-   - Scaffolding, parser, watcher, store, auto-timestamps
-   - **Critical**: Store must be complete before tree view
-
-2. **Phase 2 (DS-006 to DS-009)**: Tree View
-   - TreeDataProvider, epic/story hierarchy, icons, progress bar
-   - **Blocker**: Requires working Store from Phase 1
-
-3. **Phase 3 (DS-010 to DS-015)**: Commands
-   - Init, create epic, create story, quick capture, templates, change status
-   - **Note**: Quick capture (DS-013) is high-value UX feature
-
-4. **Phase 4 (DS-016 to DS-018)**: Links
-   - Link detection, DocumentLinkProvider, HoverProvider
-   - **Note**: `[[STORY-ID]]` clickable links + inline preview
-
-5. **Phase 5 (DS-019 to DS-023)**: Board View
-   - Webview scaffolding, kanban UI, drag-drop, file writing, sprint filter
-   - **Complexity**: Webview ↔ extension communication via postMessage
-
-See `docs/PRD/features/02-story-breakdown.md` for detailed task breakdowns per story.
+**Version 2 (in progress):** Theme hierarchy, dual view modes, drag-and-drop, burndown charts, story-point tracking, IntelliSense & validation. See CHANGELOG.md [Unreleased] section.
 
 ## Testing Strategy
 
-### Unit Tests (Vitest)
-Test pure logic without VS Code API:
-- `parser.test.ts`: Valid/invalid frontmatter, missing fields
-- `idGenerator.test.ts`: Sequential IDs, custom prefixes
-- `linkResolver.test.ts`: Resolve links, handle missing stories
-- `store.test.ts`: CRUD operations, event emissions
+### Unit Tests (Vitest — `npm test`)
+Test pure logic without VS Code API. Key test files:
+- `parser.test.ts`: Story, epic, and theme frontmatter parsing
+- `configService.test.ts`: Config parsing, storypoints, burndown config, isCompletion/isExcluded
+- `statusBar.test.ts`: Effort-based progress (story points)
+- `treeViewSorting.test.ts`: Sort by priority/date/ID, backlog view grouping
+- `changeStatus.test.ts`: Status transitions, date_done management
+- `burndownUtils.test.ts`: Sprint date ranges, burndown calculations
+- `dragAndDrop.test.ts`, `backlogDropHandler.test.ts`: Drag-and-drop logic
+- `createTheme.test.ts`, `setCurrentSprint.test.ts`, `sortService.test.ts`
+- `frontmatterValidator.test.ts`, `schemas.test.ts`: Validation and JSON schemas
 
-### Integration Tests (@vscode/test-electron)
-Test VS Code API integration:
+### Integration Tests (@vscode/test-electron — `npm run test:integration`)
+Test VS Code API integration in a real extension host:
 - `extension.test.ts`: Extension activation
-- `commands.test.ts`: Command registration and execution
-- `treeView.test.ts`: Tree rendering, expand/collapse
-- `webview.test.ts`: Webview communication
+- `storiesProvider.test.ts`: Tree rendering, view modes, tooltips
+- `storyLinkProvider.test.ts`, `storyHoverProvider.test.ts`: Link/hover providers
+- `configService.test.ts`, `statusBar.test.ts`: Live config + status bar
+- `createStory.test.ts`, `createEpic.test.ts`: Command execution
 
 ### TDD Workflow
 1. Write failing test (Red)
@@ -176,11 +213,15 @@ Test VS Code API integration:
 
 ## Key Dependencies
 
-- **gray-matter**: YAML frontmatter parsing (critical for parser)
-- **remark**: Markdown AST parsing (may be needed for content analysis)
-- **Vitest**: Unit tests (fast, modern)
-- **@vscode/test-electron**: Integration tests (VS Code environment)
-- **esbuild**: Extension bundling (fast builds)
+### Runtime
+- **gray-matter**: YAML frontmatter parsing (parser, changeStatus, autoTimestamp)
+- **ajv** + **ajv-formats**: JSON Schema validation for frontmatter diagnostics
+
+### Dev
+- **Vitest**: Unit tests (`npm test`)
+- **@vscode/test-electron**: Integration tests (`npm run test:integration`)
+- **esbuild**: Extension bundling
+- **TypeScript** 5.9, **ESLint** 9 (flat config)
 
 ## VS Code Extension Specifics
 
@@ -191,10 +232,10 @@ Extension activates when:
 - Workspace contains story files
 
 ### Package.json Contributions
-- Commands: `devstories.init`, `devstories.createStory`, etc.
-- Views: Tree view in sidebar, board view panel
-- Keybindings: `Cmd+Shift+S` for quick capture
-- Languages: Markdown file association for `.devstories/` context
+- **Commands**: init, createStory, createEpic, createTheme, createStoryMenu, quickCapture, changeStatus, pickSprint, setCurrentSprint, sortStories, switchToBreakdown, switchToBacklog, clearSprintFilter, openEpic, openTheme, saveAsTemplate
+- **Views**: Tree view (`devstories.views.explorer`) + Burndown webview (`devstories.views.burndown`)
+- **Menus**: Title bar (view mode toggle, create theme, set sprint, filter, sort) + context menus (create story on epic, create epic on theme, change status, open file)
+- **Keybindings**: `Cmd+Shift+S` for quick capture
 
 ### Performance Considerations
 - **Lazy loading**: Parse stories only when Store.load() is called
@@ -205,11 +246,15 @@ Extension activates when:
 ## Common Pitfalls to Avoid
 
 1. **Don't bypass the Store**: UI should never read files directly—always go through Store
-2. **Auto-timestamp behavior**: The `updated` field auto-updates on save—Writer must handle this
-3. **Link resolution**: `[[STORY-ID]]` must resolve even if story is in different directory
-4. **Frontmatter preservation**: Writer must preserve markdown content when updating YAML
+2. **Auto-timestamp behavior**: The `updated` field auto-updates on save via AutoTimestamp
+3. **Link resolution**: `[[ID]]` links must resolve for stories, epics, AND themes; use store `filePath` not ID-based guessing (filenames are now kebab-cased)
+4. **Frontmatter preservation**: Use gray-matter parse/stringify to preserve markdown content when updating YAML
 5. **Event loops**: Avoid infinite loops where file save triggers watcher triggers save
-6. **Epics don't have sprints**: Only stories have sprint associations. Epics are thematic containers that span multiple sprints. Epic "timing" is derived from their stories' sprints.
+6. **Epics don't have sprints**: Only stories have sprint associations. Epics and themes derive timing from descendant stories.
+7. **Windows FileSystemWatcher race**: After creating files programmatically, call `store.reloadFile(uri)` — the watcher can be delayed on Windows
+8. **date_done management**: `changeStatus` must set `date_done` when transitioning to a completion status and clear it when moving away
+9. **isCompletion vs last status**: Progress calculations check `isCompletion` flag on statuses first; fall back to last status in array if no status has the flag
+10. **Story points parallel array**: `storypoints[]` must stay index-aligned with `sizes[]` in config
 
 ## Development Workflow
 
@@ -229,13 +274,9 @@ When implementing a new story:
 - **All 23 Stories**: `docs/PRD/features/02-story-breakdown.md`
 - **Tech Stack Details**: `docs/PRD/architecture/01-tech-stack.md`
 
-## Dogfooding Strategy
+## Dogfooding
 
-DevStories will manage its own development. After Phase 1 is complete:
-- Initialize `.devstories/` in this repo
-- Create EPIC-001 through EPIC-005 (matching the 5 phases)
-- Migrate DS-001 through DS-023 into story files
-- Use the extension to manage remaining work
+DevStories manages its own development. The `.devstories/` directory in this repo contains all stories and epics tracked by the extension itself.
 
 ## Claude Code Session Protocol
 

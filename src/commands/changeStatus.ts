@@ -9,10 +9,12 @@ import { Store } from '../core/store';
 import { getLogger } from '../core/logger';
 import { Story } from '../types/story';
 import { Epic } from '../types/epic';
+import { Theme } from '../types/theme';
 import {
   parseStatusesFromConfig,
   updateStoryStatus,
   updateEpicStatus,
+  updateThemeStatus,
 } from './changeStatusUtils';
 
 /**
@@ -47,7 +49,7 @@ async function readConfigJson(): Promise<string | undefined> {
  */
 export async function executeChangeStatus(
   store: Store,
-  item: Story | Epic,
+  item: Story | Epic | Theme,
   configService?: ConfigService
 ): Promise<boolean> {
   // DS-035: Use ConfigService if available, otherwise read from file
@@ -96,11 +98,17 @@ export async function executeChangeStatus(
     const bytes = await vscode.workspace.fs.readFile(fileUri);
     const content = new TextDecoder().decode(bytes);
 
-    // Determine if story or epic
+    // Determine if story, epic, or theme
     const isStory = 'type' in item;
-    const updatedContent = isStory
-      ? updateStoryStatus(content, newStatus)
-      : updateEpicStatus(content, newStatus);
+    const isTheme = !isStory && !('type' in item) && item.id.startsWith('THEME-');
+    let updatedContent: string;
+    if (isStory) {
+      updatedContent = updateStoryStatus(content, newStatus, configService?.config.statuses);
+    } else if (isTheme) {
+      updatedContent = updateThemeStatus(content, newStatus);
+    } else {
+      updatedContent = updateEpicStatus(content, newStatus);
+    }
 
     // Write back
     await vscode.workspace.fs.writeFile(
