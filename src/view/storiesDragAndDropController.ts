@@ -4,10 +4,15 @@
  * Supported moves (Breakdown view):
  *   Story  → Epic   — reassigns story.epic
  *   Epic   → Theme  — reassigns epic.theme (or clears it when dropped on "No Theme")
+ *   InboxSpikeFile → Theme/NoTheme — converts to epic
+ *   InboxSpikeFile → Epic/NoEpic  — converts to story
+ *   InboxSpikeFile → Story        — converts to story at target priority
  *
  * Supported moves (Backlog view):
  *   Story  → SprintNode — story becomes priority 1 in that sprint, bumps others
  *   Story  → Story      — story inserted above target, bumps stories with >= priority
+ *   InboxSpikeFile → SprintNode — converts to story in that sprint
+ *   InboxSpikeFile → Story      — converts to story at target priority
  *
  * All other drag/drop combinations are silently refused.
  */
@@ -21,9 +26,11 @@ import { Epic } from '../types/epic';
 import { Story } from '../types/story';
 import { Theme } from '../types/theme';
 import { SprintNode, isSprintNode } from '../types/sprintNode';
+import { InboxSpikeNode, InboxSpikeFile, isInboxSpikeNode, isInboxSpikeFile } from '../types/inboxSpikeNode';
 import { ViewMode } from './storiesProviderUtils';
 import { updateStoryEpic, updateEpicTheme, clearStoryEpic } from './storiesDragAndDropControllerUtils';
 import { handleBacklogDrop } from './backlogDropHandler';
+import { handleInboxDropOnBacklog, handleInboxDropOnBreakdown, BreakdownTarget } from './inboxDropHandler';
 import { getLogger } from '../core/logger';
 
 /** MIME type used to identify items dragged from this tree view. */
@@ -35,15 +42,21 @@ const NO_THEME_ID = '__NO_THEME__';
 /** Sentinel id for the virtual "No Epic" node nested under "No Theme" (mirrors storiesProvider.ts). */
 const NO_EPIC_ID = '__NO_EPIC__';
 
-type NodeType = 'story' | 'epic' | 'theme' | 'broken' | 'sprintNode';
+type NodeType = 'story' | 'epic' | 'theme' | 'broken' | 'sprintNode' | 'inboxSpikeFile' | 'inboxSpikeNode';
 
 interface DragPayloadItem {
   id: string;
   nodeType: NodeType;
 }
 
-/** Discriminate among Theme | Epic | Story | BrokenFile | SprintNode based on structural shape. */
-function getNodeType(node: Theme | Epic | Story | BrokenFile | SprintNode): NodeType {
+/** Discriminate among all tree node types based on structural shape. */
+function getNodeType(node: Theme | Epic | Story | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile): NodeType {
+  if (isInboxSpikeFile(node)) {
+    return 'inboxSpikeFile';
+  }
+  if (isInboxSpikeNode(node)) {
+    return 'inboxSpikeNode';
+  }
   if (isSprintNode(node)) {
     return 'sprintNode';
   }
@@ -60,7 +73,7 @@ function getNodeType(node: Theme | Epic | Story | BrokenFile | SprintNode): Node
 }
 
 export class StoriesDragAndDropController
-  implements vscode.TreeDragAndDropController<Theme | Epic | Story | BrokenFile | SprintNode> {
+  implements vscode.TreeDragAndDropController<Theme | Epic | Story | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile> {
 
   readonly dragMimeTypes = [MIME_TYPE];
   readonly dropMimeTypes = [MIME_TYPE];
@@ -75,26 +88,35 @@ export class StoriesDragAndDropController
   // ─── handleDrag ────────────────────────────────────────────────────────────
 
   handleDrag(
-    source: readonly (Theme | Epic | Story | BrokenFile | SprintNode)[],
+    source: readonly (Theme | Epic | Story | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile)[],
     dataTransfer: vscode.DataTransfer,
     _token: vscode.CancellationToken
   ): void {
-    // Silently exclude broken files and sprint nodes — they cannot be moved
-    const draggable = source.filter(n => !('broken' in n) && !isSprintNode(n)) as (Theme | Epic | Story)[];
+    // Silently exclude broken files, sprint nodes, and inbox/spike container sentinels — they cannot be moved.
+    // Allow InboxSpikeFile nodes to be dragged.
+    const draggable = source.filter(n => {
+      if ('broken' in n) { return false; }
+      if (isSprintNode(n)) { return false; }
+      if (isInboxSpikeNode(n)) { return false; }
+      return true;
+    }) as (Theme | Epic | Story | InboxSpikeFile)[];
     if (draggable.length === 0) {
       return;
     }
-    const items: DragPayloadItem[] = draggable.map(n => ({
-      id: n.id,
-      nodeType: getNodeType(n),
-    }));
+    const items: DragPayloadItem[] = draggable.map(n => {
+      // InboxSpikeFile uses filePath as id (they don't have story IDs yet)
+      if (isInboxSpikeFile(n)) {
+        return { id: n.filePath, nodeType: 'inboxSpikeFile' as NodeType };
+      }
+      return { id: n.id, nodeType: getNodeType(n) };
+    });
     dataTransfer.set(MIME_TYPE, new vscode.DataTransferItem(JSON.stringify(items)));
   }
 
   // ─── handleDrop ────────────────────────────────────────────────────────────
 
   async handleDrop(
-    target: Theme | Epic | Story | BrokenFile | SprintNode | undefined,
+    target: Theme | Epic | Story | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile | undefined,
     dataTransfer: vscode.DataTransfer,
     _token: vscode.CancellationToken
   ): Promise<void> {
@@ -103,8 +125,8 @@ export class StoriesDragAndDropController
       return;
     }
 
-    // Refuse drops onto broken file nodes
-    if ('broken' in target) {
+    // Refuse drops onto broken file nodes, inbox/spike containers, and inbox/spike files
+    if ('broken' in target || isInboxSpikeNode(target) || isInboxSpikeFile(target)) {
       return;
     }
 
@@ -133,6 +155,26 @@ export class StoriesDragAndDropController
 
     // ── Backlog view: priority-based reordering ─────────────────────────────
     if (this.getViewMode() === 'backlog') {
+      // ── InboxSpikeFile → Backlog drop ─────────────────────────────────────
+      if (dragged.nodeType === 'inboxSpikeFile') {
+        if (!isSprintNode(target) && !('type' in target)) {
+          return;
+        }
+        if (!this.sortService || !this.configService) {
+          return;
+        }
+        const sourceFile = this.findInboxSpikeFile(dragged.id);
+        if (!sourceFile) { return; }
+        await handleInboxDropOnBacklog({
+          sourceFile,
+          target: target as SprintNode | Story,
+          store: this.store,
+          configService: this.configService,
+          sortService: this.sortService,
+        });
+        return;
+      }
+
       // Only stories can be dropped in backlog mode
       if (dragged.nodeType !== 'story') {
         return;
@@ -161,6 +203,44 @@ export class StoriesDragAndDropController
     }
 
     const targetType = getNodeType(target);
+
+    // ── InboxSpikeFile → Breakdown drop ─────────────────────────────────────
+    if (dragged.nodeType === 'inboxSpikeFile') {
+      if (!this.configService) { return; }
+      const sourceFile = this.findInboxSpikeFile(dragged.id);
+      if (!sourceFile) { return; }
+
+      let breakdownTarget: BreakdownTarget | undefined;
+
+      // Theme node (including No Theme sentinel)
+      if (targetType === 'theme') {
+        const theme = target as Theme;
+        breakdownTarget = theme.id === NO_THEME_ID
+          ? { kind: 'noTheme' }
+          : { kind: 'theme', theme };
+      }
+      // Epic node (including No Epic sentinel)
+      else if (targetType === 'epic') {
+        const epic = target as Epic;
+        breakdownTarget = epic.id === NO_EPIC_ID
+          ? { kind: 'noEpic' }
+          : { kind: 'epic', epic };
+      }
+      // Story node
+      else if (targetType === 'story') {
+        breakdownTarget = { kind: 'story', story: target as Story };
+      }
+
+      if (!breakdownTarget) { return; }
+
+      await handleInboxDropOnBreakdown({
+        sourceFile,
+        target: breakdownTarget,
+        store: this.store,
+        configService: this.configService,
+      });
+      return;
+    }
 
     // ── Valid combo 0: Story → "No Epic" sentinel — clears epic field ────────
     if (dragged.nodeType === 'story' && (target as Epic).id === NO_EPIC_ID) {
@@ -211,6 +291,14 @@ export class StoriesDragAndDropController
 
     // ── All other combinations: silently refuse ─────────────────────────────
     // (e.g. Story→Theme, Epic→Story, Theme→anything, drop on root)
+  }
+
+  // ─── Helper: lookup an InboxSpikeFile by filePath ─────────────────────────
+
+  private findInboxSpikeFile(filePath: string): InboxSpikeFile | undefined {
+    const inbox = this.store.getInboxFiles().find(f => f.filePath === filePath);
+    if (inbox) { return inbox; }
+    return this.store.getSpikeFiles().find(f => f.filePath === filePath);
   }
 }
 

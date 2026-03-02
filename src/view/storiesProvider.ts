@@ -6,6 +6,7 @@ import { SprintFilterService } from '../core/sprintFilterService';
 import { Store } from '../core/store';
 import { BrokenFile } from '../types/brokenFile';
 import { Epic } from '../types/epic';
+import { InboxSpikeNode, InboxSpikeFile, INBOX_NODE_ID, SPIKES_NODE_ID, isInboxSpikeNode, isInboxSpikeFile } from '../types/inboxSpikeNode';
 import { Story, StoryType } from '../types/story';
 import { Theme } from '../types/theme';
 import { SprintNode, BACKLOG_SPRINT_ID, isSprintNode } from '../types/sprintNode';
@@ -42,7 +43,15 @@ function makeNoEpicNode(): Epic {
 }
 
 /** Union of all node types that can appear in the tree view. */
-export type TreeElement = Theme | Epic | Story | BrokenFile | SprintNode;
+export type TreeElement = Theme | Epic | Story | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile;
+
+function makeInboxNode(): InboxSpikeNode {
+  return { _kind: 'inboxSpikeNode', nodeId: INBOX_NODE_ID, label: 'Inbox', folderName: 'inbox' };
+}
+
+function makeSpikesNode(): InboxSpikeNode {
+  return { _kind: 'inboxSpikeNode', nodeId: SPIKES_NODE_ID, label: 'Spikes', folderName: 'spikes' };
+}
 
 export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
   private _onDidChangeTreeData: vscode.EventEmitter<TreeElement | undefined | null | void> = new vscode.EventEmitter<TreeElement | undefined | null | void>();
@@ -144,7 +153,28 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
         });
       }
 
+      // Append Inbox and Spikes sentinels if those folders have files
+      if (this.store.getInboxFiles().length > 0) {
+        nodes.push(makeInboxNode() as unknown as SprintNode);
+      }
+      if (this.store.getSpikeFiles().length > 0) {
+        nodes.push(makeSpikesNode() as unknown as SprintNode);
+      }
+
       return Promise.resolve(nodes);
+    }
+
+    // InboxSpikeNode children: flat list of files in that folder
+    if (isInboxSpikeNode(element)) {
+      const files = element.folderName === 'inbox'
+        ? this.store.getInboxFiles()
+        : this.store.getSpikeFiles();
+      return Promise.resolve(files);
+    }
+
+    // InboxSpikeFile nodes are leaves
+    if (isInboxSpikeFile(element)) {
+      return Promise.resolve([]);
     }
 
     // SprintNode children: stories belonging to this sprint
@@ -212,9 +242,17 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
         this.sortService?.state
       );
 
-      const roots: (Theme | Epic | Story | BrokenFile)[] = [...sortedThemes];
+      const roots: TreeElement[] = [...sortedThemes];
       if (orphanEpics.length > 0 || orphanStories.length > 0 || brokenEpics.length > 0 || brokenStories.length > 0) {
         roots.push(makeNoThemeNode());
+      }
+
+      // Append Inbox and Spikes sentinels if those folders have files
+      if (this.store.getInboxFiles().length > 0) {
+        roots.push(makeInboxNode());
+      }
+      if (this.store.getSpikeFiles().length > 0) {
+        roots.push(makeSpikesNode());
       }
 
       return Promise.resolve(roots);
@@ -225,8 +263,16 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       return Promise.resolve([]);
     }
 
-    // SprintNode should never appear in breakdown mode, but guard anyway
-    if (isSprintNode(element)) {
+    // InboxSpikeNode children: flat list of files in that folder
+    if (isInboxSpikeNode(element)) {
+      const files = element.folderName === 'inbox'
+        ? this.store.getInboxFiles()
+        : this.store.getSpikeFiles();
+      return Promise.resolve(files);
+    }
+
+    // InboxSpikeFile and SprintNode nodes are leaves in breakdown mode
+    if (isInboxSpikeFile(element) || isSprintNode(element)) {
       return Promise.resolve([]);
     }
 
@@ -318,8 +364,9 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
   private isTheme(element: Theme | Epic | Story): element is Theme {
     // Theme has no 'type' (Story discriminant) and no 'theme' key (Epic always has
-    // theme: data.theme set by parser, even when undefined, making 'theme' in epic === true)
-    return !('type' in element) && !('theme' in element);
+    // theme: data.theme set by parser, even when undefined, making 'theme' in epic === true).
+    // Also exclude _kind-based nodes (SprintNode, InboxSpikeNode, InboxSpikeFile).
+    return !('type' in element) && !('theme' in element) && !('_kind' in element);
   }
 
   private isStory(element: Epic | Story): element is Story {
@@ -356,6 +403,12 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
   }
 
   private createTreeItem(element: TreeElement): vscode.TreeItem {
+    if (isInboxSpikeNode(element)) {
+      return this.createInboxSpikeNodeTreeItem(element);
+    }
+    if (isInboxSpikeFile(element)) {
+      return this.createInboxSpikeFileTreeItem(element);
+    }
     if (isSprintNode(element)) {
       return this.createSprintTreeItem(element);
     }
@@ -369,6 +422,43 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       return this.createEpicTreeItem(element as Epic);
     }
     return this.createStoryTreeItem(element as Story);
+  }
+
+  private createInboxSpikeNodeTreeItem(element: InboxSpikeNode): vscode.TreeItem {
+    const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.Expanded);
+    item.contextValue = 'inboxSpikeNode';
+    item.id = element.nodeId;
+
+    const files = element.folderName === 'inbox'
+      ? this.store.getInboxFiles()
+      : this.store.getSpikeFiles();
+    const count = files.length;
+
+    if (element.folderName === 'inbox') {
+      item.iconPath = new vscode.ThemeIcon('inbox');
+      item.description = `${count} ${count === 1 ? 'file' : 'files'}`;
+      item.tooltip = 'Inbox — drag files onto sprints or epics to convert them';
+    } else {
+      item.iconPath = new vscode.ThemeIcon('beaker');
+      item.description = `${count} ${count === 1 ? 'file' : 'files'}`;
+      item.tooltip = 'Spikes — drag files onto sprints or epics to convert them';
+    }
+
+    return item;
+  }
+
+  private createInboxSpikeFileTreeItem(element: InboxSpikeFile): vscode.TreeItem {
+    const item = new vscode.TreeItem(element.fileName, vscode.TreeItemCollapsibleState.None);
+    item.contextValue = 'inboxSpikeFile';
+    item.id = `inboxSpike:${element.filePath}`;
+    item.iconPath = new vscode.ThemeIcon('file');
+    item.tooltip = `${element.folderType === 'inbox' ? 'Inbox' : 'Spike'}: ${element.fileName}\nDrag onto a sprint, epic, or theme to convert`;
+    item.command = {
+      command: 'vscode.open',
+      title: 'Open file',
+      arguments: [vscode.Uri.file(element.filePath)],
+    };
+    return item;
   }
 
   private createSprintTreeItem(element: SprintNode): vscode.TreeItem {

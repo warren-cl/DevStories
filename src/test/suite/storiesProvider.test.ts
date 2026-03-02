@@ -10,10 +10,13 @@ import { ConfigData } from '../../core/configServiceUtils';
 import { StoriesProvider, TreeElement } from '../../view/storiesProvider';
 import { getTreeViewTitle } from '../../view/storiesProviderUtils';
 import { isSprintNode } from '../../types/sprintNode';
+import { isInboxSpikeNode, isInboxSpikeFile } from '../../types/inboxSpikeNode';
 
 /** Helper: get .id from a TreeElement, handling SprintNode which has sprintId instead. */
 function getElementId(el: TreeElement): string {
   if (isSprintNode(el)) { return el.sprintId; }
+  if (isInboxSpikeNode(el)) { return el.nodeId; }
+  if (isInboxSpikeFile(el)) { return el.filePath; }
   return el.id;
 }
 
