@@ -90,6 +90,15 @@ As a [user], I need [feature] so that [benefit].
 ## Checklist
 - [ ]
 `,
+  spike: `## Goal
+
+## Questions to Answer
+- 
+
+## Time Box
+
+## Findings
+`,
 };
 
 /**
@@ -161,6 +170,8 @@ export function getSuggestedSize(type: StoryType, sizes: StorySize[]): StorySize
       return sizes[secondIndex];
     case 'chore':
       return sizes[0];
+    case 'spike':
+      return sizes[secondIndex];
     default:
       return sizes[middleIndex];
   }
@@ -222,7 +233,7 @@ export function generateStoryMarkdown(
     author: options?.author,
   });
 
-  const priority = data.priority ?? 500;
+  const priority = data.priority ?? 1;
 
   return `---
 id: ${data.id}

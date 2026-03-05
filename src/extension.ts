@@ -11,12 +11,14 @@ import { executeQuickCapture } from './commands/quickCapture';
 import { executeSaveAsTemplate } from './commands/saveAsTemplate';
 import { executeSetCurrentSprint } from './commands/setCurrentSprint';
 import { executeSortStories } from './commands/sortStories';
+import { executeTextFilter } from './commands/textFilter';
 import { applyAutoFilterSprint } from './core/autoFilterSprint';
 import { AutoTimestamp } from './core/autoTimestamp';
 import { ConfigService } from './core/configService';
 import { initializeLogger, disposeLogger } from './core/logger';
 import { SortService } from './core/sortService';
 import { SprintFilterService } from './core/sprintFilterService';
+import { TextFilterService } from './core/textFilterService';
 import { Store } from './core/store';
 import { Watcher } from './core/watcher';
 import { updateWelcomeContext } from './core/welcomeContext';
@@ -41,7 +43,8 @@ export async function activate(context: vscode.ExtensionContext) {
 	const configService = new ConfigService();
 	const sprintFilterService = new SprintFilterService();
 	const sortService = new SortService();
-	const storiesProvider = new StoriesProvider(store, context.extensionPath, configService, sprintFilterService, sortService);
+	const textFilterService = new TextFilterService();
+	const storiesProvider = new StoriesProvider(store, context.extensionPath, configService, sprintFilterService, sortService, textFilterService);
 	const statusBarController = new StatusBarController(store, configService, sprintFilterService);
 	const autoTimestamp = new AutoTimestamp();
 
@@ -71,7 +74,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		treeView.title = getTreeViewTitle(
 			configService.config.currentSprint,
 			sprintFilterService.currentSprint,
-			storiesProvider.viewMode
+			storiesProvider.viewMode,
+			textFilterService.filterText
 		);
 	};
 
@@ -82,6 +86,12 @@ export async function activate(context: vscode.ExtensionContext) {
 		await vscode.commands.executeCommand('setContext', 'devstories:hasSprintFilter', sprint !== null);
 	});
 
+	// Update title and context when text filter changes
+	textFilterService.onDidFilterChange(async (text) => {
+		refreshTitle();
+		await vscode.commands.executeCommand('setContext', 'devstories:hasTextFilter', text !== '');
+	});
+
 	// Update title when config changes (e.g. currentSprint written to config.json)
 	configService.onDidConfigChange(() => {
 		refreshTitle();
@@ -90,6 +100,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	// Set initial title and filter context
 	refreshTitle();
 	await vscode.commands.executeCommand('setContext', 'devstories:hasSprintFilter', sprintFilterService.currentSprint !== null);
+	await vscode.commands.executeCommand('setContext', 'devstories:hasTextFilter', textFilterService.filterText !== '');
 	// Set initial view mode context (default: backlog)
 	await vscode.commands.executeCommand('setContext', 'devstories:viewMode', storiesProvider.viewMode);
 
@@ -215,6 +226,19 @@ export async function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
+	// Text search filter commands
+	const textFilterCommand = vscode.commands.registerCommand('devstories.textFilter',
+		wrapCommand('textFilter', async () => {
+			await executeTextFilter(textFilterService, sprintFilterService);
+		})
+	);
+
+	const clearTextFilterCommand = vscode.commands.registerCommand('devstories.clearTextFilter',
+		wrapCommand('clearTextFilter', async () => {
+			textFilterService.setFilter('');
+		})
+	);
+
 	const openEpicCommand = vscode.commands.registerCommand('devstories.openEpic',
 		wrapCommand('openEpic', async (item) => {
 			if (item) {
@@ -267,6 +291,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		configService,
 		sprintFilterService,
 		sortService,
+		textFilterService,
 		autoTimestamp,
 		statusBarController,
 		treeView,
@@ -286,6 +311,8 @@ export async function activate(context: vscode.ExtensionContext) {
 		setCurrentSprintCommand,
 		sortStoriesCommand,
 		clearSprintFilterCommand,
+		textFilterCommand,
+		clearTextFilterCommand,
 		openEpicCommand,
 		createThemeCommand,
 		openThemeCommand,

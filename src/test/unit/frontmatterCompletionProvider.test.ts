@@ -102,18 +102,19 @@ describe('frontmatterCompletionProviderUtils', () => {
   });
 
   describe('getTypeCompletions', () => {
-    it('should return all four story types', () => {
+    it('should return all five story types', () => {
       const completions = getTypeCompletions();
-      expect(completions).toHaveLength(4);
+      expect(completions).toHaveLength(5);
     });
 
-    it('should include feature, bug, task, chore', () => {
+    it('should include feature, bug, task, chore, spike', () => {
       const completions = getTypeCompletions();
       const values = completions.map(c => c.value);
       expect(values).toContain('feature');
       expect(values).toContain('bug');
       expect(values).toContain('task');
       expect(values).toContain('chore');
+      expect(values).toContain('spike');
     });
 
     it('should have descriptions for each type', () => {

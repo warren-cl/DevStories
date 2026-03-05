@@ -243,6 +243,7 @@ export async function executeCreateStory(store: Store, preselectedEpicId?: strin
     { label: '$(bug) Bug', description: 'Something is broken', value: 'bug' },
     { label: '$(tasklist) Task', description: 'Work to be done', value: 'task' },
     { label: '$(tools) Chore', description: 'Maintenance work', value: 'chore' },
+    { label: '$(beaker) Spike', description: 'Time-boxed investigation', value: 'spike' },
   ];
 
   const selectedType = await vscode.window.showQuickPick(typeOptions, {

@@ -43,6 +43,8 @@ export function getTypeIcon(type: StoryType | 'epic' | 'theme'): string {
       return '📋';
     case 'chore':
       return '🔧';
+    case 'spike':
+      return '🔬';
     case 'epic':
       return '📁';
     case 'theme':
@@ -289,7 +291,7 @@ export function findFieldNameAtPosition(text: string, position: number): FieldNa
 const STORY_FIELD_DESCRIPTIONS: Record<string, string> = {
   id: 'Unique story identifier (e.g., DS-001)',
   title: 'Story title - brief description of the work',
-  type: 'Story type: feature, bug, task, or chore',
+  type: 'Story type: feature, bug, task, chore, or spike',
   epic: 'Parent epic ID this story belongs to',
   status: 'Current workflow status (validated against config.yaml statuses)',
   sprint: 'Sprint identifier (validated against config.yaml sprints)',

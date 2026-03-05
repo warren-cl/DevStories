@@ -44,7 +44,7 @@ This is the content.`;
       expect(story.filePath).toBe('/path/to/DS-001.md');
     });
 
-    it('should parse date_done field when present', () => {
+    it('should parse completed_on field when present', () => {
       const content = `---
 id: DS-010
 title: Done Story
@@ -55,16 +55,16 @@ sprint: sprint-1
 size: M
 created: 2026-01-15
 updated: 2026-01-20
-date_done: 2026-01-20
+completed_on: 2026-01-20
 ---
 
 # Done Story`;
       const story = Parser.parseStory(content);
-      expect(story.dateDone).toBeInstanceOf(Date);
-      expect(story.dateDone!.toISOString().startsWith('2026-01-20')).toBe(true);
+      expect(story.completedOn).toBeInstanceOf(Date);
+      expect(story.completedOn!.toISOString().startsWith('2026-01-20')).toBe(true);
     });
 
-    it('should set dateDone to undefined when date_done is absent', () => {
+    it('should set completedOn to undefined when completed_on is absent', () => {
       const content = `---
 id: DS-011
 title: Not Done Story
@@ -77,7 +77,7 @@ created: 2026-01-15
 
 # Not Done Story`;
       const story = Parser.parseStory(content);
-      expect(story.dateDone).toBeUndefined();
+      expect(story.completedOn).toBeUndefined();
     });
 
     it('should throw error if frontmatter is missing', () => {

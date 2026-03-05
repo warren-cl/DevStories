@@ -41,7 +41,7 @@ DevStories/
 │   │   ├── createEpic.ts         # Create epic (supports preselected theme from context menu)
 │   │   ├── createTheme.ts        # Create theme
 │   │   ├── quickCapture.ts       # Cmd+Shift+S quick story capture
-│   │   ├── changeStatus.ts       # Change status on story/epic/theme (manages date_done)
+│   │   ├── changeStatus.ts       # Change status on story/epic/theme (manages completed_on)
 │   │   ├── pickSprint.ts         # View-only sprint filter picker
 │   │   ├── setCurrentSprint.ts   # Persist current sprint to config.json
 │   │   ├── sortStories.ts        # QuickPick sort order selection
@@ -120,7 +120,7 @@ User clicks status in tree view
 Command: changeStatus(storyId, newStatus)
   ↓
 updateStoryStatus() / updateEpicStatus() / updateThemeStatus() (gray-matter stringify)
-  — manages date_done field on completion transitions
+  — manages completed_on field on completion transitions
   ↓
 File saved to disk
   ↓
@@ -146,7 +146,7 @@ dependencies:
   - DS-00006
 created: 2025-01-15
 updated: 2025-01-20        # Auto-updated on save
-date_done: 2025-02-01      # Auto-set when status reaches isCompletion, cleared otherwise
+completed_on: 2025-02-01      # Auto-set when status reaches isCompletion, cleared otherwise
 ---
 
 # Login Form Implementation
@@ -191,7 +191,7 @@ Test pure logic without VS Code API. Key test files:
 - `configService.test.ts`: Config parsing, storypoints, burndown config, isCompletion/isExcluded
 - `statusBar.test.ts`: Effort-based progress (story points)
 - `treeViewSorting.test.ts`: Sort by priority/date/ID, backlog view grouping
-- `changeStatus.test.ts`: Status transitions, date_done management
+- `changeStatus.test.ts`: Status transitions, completed_on management
 - `burndownUtils.test.ts`: Sprint date ranges, burndown calculations
 - `dragAndDrop.test.ts`, `backlogDropHandler.test.ts`: Drag-and-drop logic
 - `createTheme.test.ts`, `setCurrentSprint.test.ts`, `sortService.test.ts`
@@ -252,7 +252,7 @@ Extension activates when:
 5. **Event loops**: Avoid infinite loops where file save triggers watcher triggers save
 6. **Epics don't have sprints**: Only stories have sprint associations. Epics and themes derive timing from descendant stories.
 7. **Windows FileSystemWatcher race**: After creating files programmatically, call `store.reloadFile(uri)` — the watcher can be delayed on Windows
-8. **date_done management**: `changeStatus` must set `date_done` when transitioning to a completion status and clear it when moving away
+8. **completed_on management**: `changeStatus` must set `completed_on` when transitioning to a completion status and clear it when moving away
 9. **isCompletion vs last status**: Progress calculations check `isCompletion` flag on statuses first; fall back to last status in array if no status has the flag
 10. **Story points parallel array**: `storypoints[]` must stay index-aligned with `sizes[]` in config
 

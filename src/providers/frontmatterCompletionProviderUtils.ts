@@ -41,6 +41,7 @@ const TYPE_DESCRIPTIONS: Record<string, string> = {
   bug: 'Defect or issue to fix',
   task: 'Work item or action',
   chore: 'Maintenance or housekeeping',
+  spike: 'Time-boxed investigation or research',
 };
 
 /**
@@ -94,7 +95,7 @@ export function getStatusCompletions(statuses: StatusDef[]): CompletionData[] {
  * @returns Completion data array with fixed story types
  */
 export function getTypeCompletions(): CompletionData[] {
-  return ['feature', 'bug', 'task', 'chore'].map(type => ({
+  return ['feature', 'bug', 'task', 'chore', 'spike'].map(type => ({
     value: type,
     detail: TYPE_DESCRIPTIONS[type],
   }));

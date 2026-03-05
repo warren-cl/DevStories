@@ -44,7 +44,7 @@ export function generateThemeMarkdown(data: ThemeData): string {
 id: ${data.id}
 title: "${escapedTitle}"
 status: todo
-priority: 500
+priority: 1
 created: ${today}
 ---
 

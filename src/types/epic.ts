@@ -8,6 +8,9 @@ export interface Epic {
   priority: number; // Default 500, lower = higher priority
   created: Date;
   updated?: Date;
+  workflow?: string;
+  author?: string;
+  owner?: string;
   content: string;
   filePath?: string;
 }

@@ -24,8 +24,9 @@ const PLOT_HEIGHT = VIEWBOX_HEIGHT - CHART_PADDING_TOP - CHART_PADDING_BOTTOM;
 export function renderBurndownHtml(
   dataPoints: BurndownDataPoint[],
   sprintName: string,
+  locale?: string,
 ): string {
-  const svg = renderBurndownSvg(dataPoints, sprintName);
+  const svg = renderBurndownSvg(dataPoints, sprintName, locale);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -52,6 +53,7 @@ export function renderBurndownHtml(
 export function renderBurndownSvg(
   dataPoints: BurndownDataPoint[],
   sprintName: string,
+  locale?: string,
 ): string {
   if (dataPoints.length === 0) {
     return renderPlaceholderSvg('No data for this sprint');
@@ -89,13 +91,13 @@ export function renderBurndownSvg(
   const labelStep = numDays <= 7 ? 1 : numDays <= 14 ? 2 : Math.ceil(numDays / 7);
   for (let i = 0; i < numDays; i += labelStep) {
     const date = parseISODate(dataPoints[i].date);
-    const label = formatShortDate(date);
+    const label = formatShortDate(date, locale);
     xLabels.push(`<text x="${x(i).toFixed(1)}" y="${VIEWBOX_HEIGHT - CHART_PADDING_BOTTOM + 14}" text-anchor="middle" fill="var(--vscode-descriptionForeground, #888)" font-size="7">${label}</text>`);
   }
   // Always show last label if not already shown
   if ((numDays - 1) % labelStep !== 0 && numDays > 1) {
     const lastDate = parseISODate(dataPoints[numDays - 1].date);
-    xLabels.push(`<text x="${x(numDays - 1).toFixed(1)}" y="${VIEWBOX_HEIGHT - CHART_PADDING_BOTTOM + 14}" text-anchor="middle" fill="var(--vscode-descriptionForeground, #888)" font-size="7">${formatShortDate(lastDate)}</text>`);
+    xLabels.push(`<text x="${x(numDays - 1).toFixed(1)}" y="${VIEWBOX_HEIGHT - CHART_PADDING_BOTTOM + 14}" text-anchor="middle" fill="var(--vscode-descriptionForeground, #888)" font-size="7">${formatShortDate(lastDate, locale)}</text>`);
   }
 
   // Today marker (vertical dashed line)

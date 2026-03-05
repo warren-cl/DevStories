@@ -22,12 +22,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Orphan Collection**: Orphaned epics (no theme) and stories (no/invalid epic) collected under virtual sentinel nodes; broken files surfaced in tree
 - **Sprint Burndown Chart**: Inline SVG burndown in the sidebar below the tree view — ideal vs actual lines, auto-refreshes on store/config/filter changes
 - **Kebab-Case Filenames**: Stories and epics now created with title slugs (e.g. `DS-00001-login-form.md`)
-- **`date_done` Field**: Auto-set when a story reaches a completion status, auto-cleared when moved away to support sprint burndown chart.
+- **`completed_on` Field**: Auto-set when a story reaches a completion status, auto-cleared when moved away to support sprint burndown chart.
 - **`isCompletion` Status Flag**: Defines end of user story process.  Place "Cancelled", "Deferred" status after `isCompletion` flagged status to support correct user story progres pie chart icon selection.
 - **`isExcluded` Status Flag**: Fine-grained control over which statuses count as done or are excluded from burndown
 - **Expanded Default Sizes**: `XXS` and `XXL` added to default size options, can be tailored to other values.  Remember to also update story points.
 - **Theme Autocomplete**: `[[THEME-ID]]` links, `theme:` field completions, and theme hover previews in IntelliSense providers
 - **Prioritisation**: Added prioritisation for themes and epics to enable sorting on priorities.
+- **Inbox & Spikes**: New `.devstories/inbox/` and `.devstories/spikes/` staging folders for rough ideas and exploratory work. Files appear as collapsible sentinel nodes at the bottom of both Breakdown and Backlog views. Drag a file onto a sprint or story (Backlog) to convert it into a story with auto-generated ID and sprint assignment; drag onto an epic or theme (Breakdown) to convert into a story or epic. Existing frontmatter fields are preserved; missing fields are filled with sensible defaults.
 
 ### Changed
 
@@ -45,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Completion checks (progress bar, status bar) now respect the configured workflow instead of hardcoded `done` status
 - Custom sizes (e.g. `XXS`, `XXL`) no longer trigger a false validation error in `config.json`
 - Store refresh on Windows: `store.reloadFile()` called after programmatic file creation to avoid FileSystemWatcher race conditions
+- Burndown chart "today" now derived from local system clock instead of UTC, so the actual line plots correctly for users in timezones ahead of UTC
+- Burndown x-axis date labels now use `Intl.DateTimeFormat` for locale-aware formatting (e.g. "3 Mar" in en-AU, "Mar 3" in en-US) instead of hardcoded English month names
+- Inbox drag-to-convert now always assigns the drop target's epic/theme, overriding any pre-existing `epic` field in the source file's frontmatter
 
 ### Security
 
