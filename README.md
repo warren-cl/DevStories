@@ -77,6 +77,7 @@ Use quick capture for fast ideas or the full form for detailed stories with temp
 ### 🔍 Sort & Filter
 - **Sort** stories by priority, creation date, or ID
 - **Filter** by sprint to focus on current work — auto-filter on load is configurable
+- **Search** — filter the entire tree by text using the magnifier icon in the title bar; matches stories, epics, themes, inbox/spike files by ID and title (case-insensitive); ancestor nodes stay visible when a descendant matches; activating search clears the sprint filter automatically
 - **Set Current Sprint** from the view title bar
 
 ### ✅ Frontmatter Validation & Autocomplete
@@ -84,7 +85,7 @@ Use quick capture for fast ideas or the full form for detailed stories with temp
 - **Autocomplete** — IntelliSense suggestions for `status`, `type`, `size`, `sprint`, `epic`, `theme`, and `[[ID]]` references
 
 ### More Features
-- **Story Templates** — Different templates per type (feature/bug/task/chore)
+- **Story Templates** — Different templates per type (feature/bug/task/chore/spike)
 - **Auto-timestamps** — `updated` field auto-updates on save
 - **Completion Tracking** — `completed_on` is auto-set when a story reaches a completion status, and cleared when moved back
 - **Status Toggle** — Right-click stories, epics, or themes to change status
