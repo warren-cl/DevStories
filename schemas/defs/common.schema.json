@@ -30,8 +30,8 @@
     },
     "storyType": {
       "type": "string",
-      "enum": ["feature", "bug", "task", "chore"],
-      "description": "Story type: feature (new functionality), bug (fix), task (general work), chore (maintenance)"
+      "enum": ["feature", "bug", "task", "chore", "spike"],
+      "description": "Story type: feature (new functionality), bug (fix), task (general work), chore (maintenance), spike (time-boxed investigation)"
     },
     "storySize": {
       "type": "string",

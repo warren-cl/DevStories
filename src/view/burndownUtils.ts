@@ -5,7 +5,7 @@
  * Terminology:
  *   - "planned points": total story points of stories in the sprint that are
  *     NOT excluded (e.g. not cancelled/deferred).
- *   - "done points": points of stories whose date_done <= a given day.
+ *   - "done points": points of stories whose completed_on <= a given day.
  *   - "ideal": linear from planned points to 0 across sprint days.
  *   - "actual": planned points minus cumulative done points each day.
  */
@@ -70,11 +70,30 @@ export function addDays(date: Date, days: number): Date {
 }
 
 /**
- * Format a Date as a short label for display (e.g. "Mar 2").
+ * Format a Date as a short label for display (e.g. "Mar 2" in en-US, "2 mars" in fr).
+ * Uses Intl.DateTimeFormat for locale-aware formatting.
+ *
+ * @param date   UTC midnight Date to format.
+ * @param locale BCP 47 locale tag (e.g. 'en', 'fr', 'de'). Defaults to host locale.
  */
-export function formatShortDate(date: Date): string {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[date.getUTCMonth()]} ${date.getUTCDate()}`;
+export function formatShortDate(date: Date, locale?: string): string {
+  return new Intl.DateTimeFormat(locale ?? undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
+/**
+ * Get today's date as YYYY-MM-DD using **local** time (not UTC).
+ * The burndown chart should reflect the user's local calendar day.
+ */
+export function localToday(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 // ─── Sprint date range ──────────────────────────────────────────────────────
@@ -139,7 +158,7 @@ export function calculateBurndown(
   storypoints: number[],
   today?: string,
 ): BurndownDataPoint[] {
-  const todayDate = today ? parseISODate(today) : parseISODate(formatISODate(new Date()));
+  const todayDate = parseISODate(today ?? localToday());
 
   // Filter out excluded stories (cancelled, deferred, etc.)
   const relevantStories = stories.filter(s => !isExcludedStatus(s.status, statuses));
@@ -150,9 +169,9 @@ export function calculateBurndown(
     0,
   );
 
-  // Completed stories with dateDone set
+  // Completed stories with completedOn set
   const completedStories = relevantStories.filter(s =>
-    isCompletedStatus(s.status, statuses) && s.dateDone,
+    isCompletedStatus(s.status, statuses) && s.completedOn,
   );
 
   const dataPoints: BurndownDataPoint[] = [];
@@ -170,10 +189,10 @@ export function calculateBurndown(
     // Actual line: only for days <= today
     let actual: number | null = null;
     if (date.getTime() <= todayDate.getTime()) {
-      // Cumulative done points: stories with dateDone <= this day
+      // Cumulative done points: stories with completedOn <= this day
       const donePointsOnDay = completedStories
         .filter(s => {
-          const doneDateStr = formatISODate(s.dateDone!);
+          const doneDateStr = formatISODate(s.completedOn!);
           return doneDateStr <= dateStr; // lexicographic compare works for YYYY-MM-DD
         })
         .reduce((sum, s) => sum + getSizePoints(s.size, sizes, storypoints), 0);

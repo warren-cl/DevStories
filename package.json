@@ -138,6 +138,16 @@
         "command": "devstories.switchToBacklog",
         "title": "DevStories: Switch to Backlog View",
         "icon": "$(calendar)"
+      },
+      {
+        "command": "devstories.textFilter",
+        "title": "DevStories: Search",
+        "icon": "$(search)"
+      },
+      {
+        "command": "devstories.clearTextFilter",
+        "title": "DevStories: Clear Search",
+        "icon": "$(search-stop)"
       }
     ],
     "menus": {
@@ -176,6 +186,16 @@
           "command": "devstories.sortStories",
           "when": "view == devstories.views.explorer",
           "group": "navigation@4"
+        },
+        {
+          "command": "devstories.textFilter",
+          "when": "view == devstories.views.explorer && !devstories:hasTextFilter",
+          "group": "navigation@5"
+        },
+        {
+          "command": "devstories.clearTextFilter",
+          "when": "view == devstories.views.explorer && devstories:hasTextFilter",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
@@ -300,6 +320,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@vscode/vsce": "^3.7.1",
     "ajv-formats": "^3.0.1",
     "gray-matter": "^4.0.3"
   },

@@ -12,7 +12,7 @@
  * or firstSprintStartDate) it shows a placeholder message.
  *
  * Re-renders on:
- *   - Store update (story status / date_done changes)
+ *   - Store update (story status / completed_on changes)
  *   - Config change (sprint settings, statuses, sizes, storypoints)
  *   - Sprint filter change (user picks a different sprint)
  */
@@ -137,7 +137,7 @@ export class BurndownViewProvider implements vscode.WebviewViewProvider {
     );
 
     // Render
-    this._view.webview.html = renderBurndownHtml(dataPoints, selectedSprint);
+    this._view.webview.html = renderBurndownHtml(dataPoints, selectedSprint, vscode.env.language);
   }
 
   /**

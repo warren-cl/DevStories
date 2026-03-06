@@ -28,21 +28,29 @@ export type ViewMode = 'breakdown' | 'backlog';
 export function getTreeViewTitle(
   currentSprint: string | null | undefined,
   filterSprint: string | null,
-  viewMode: ViewMode = 'backlog'
+  viewMode: ViewMode = 'backlog',
+  textFilter: string = ''
 ): string {
   const prefix = viewMode === 'backlog' ? 'BACKLOG' : 'BREAKDOWN';
   const currentLabel = currentSprint ?? '(none)';
 
+  let title: string;
+
   // No filter, or filter matches current sprint
   if (filterSprint === null || filterSprint === currentSprint) {
-    return `${prefix}: Current ${currentLabel}`;
+    title = `${prefix}: Current ${currentLabel}`;
+  } else if (filterSprint === 'backlog') {
+    title = `${prefix}: Current ${currentLabel}: Showing Backlog`;
+  } else {
+    title = `${prefix}: Current ${currentLabel}: Showing ${filterSprint}`;
   }
 
-  if (filterSprint === 'backlog') {
-    return `${prefix}: Current ${currentLabel}: Showing Backlog`;
+  // Append text search indicator
+  if (textFilter !== '') {
+    title += `: Search "${textFilter}"`;
   }
 
-  return `${prefix}: Current ${currentLabel}: Showing ${filterSprint}`;
+  return title;
 }
 
 /**

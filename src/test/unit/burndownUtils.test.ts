@@ -78,8 +78,8 @@ describe('date helpers', () => {
   });
 
   it('formatShortDate shows month and day', () => {
-    expect(formatShortDate(parseISODate('2026-03-02'))).toBe('Mar 2');
-    expect(formatShortDate(parseISODate('2026-12-25'))).toBe('Dec 25');
+    expect(formatShortDate(parseISODate('2026-03-02'), 'en-US')).toBe('Mar 2');
+    expect(formatShortDate(parseISODate('2026-12-25'), 'en-US')).toBe('Dec 25');
   });
 });
 
@@ -193,7 +193,7 @@ describe('calculateBurndown', () => {
 
   it('actual line decreases when stories are done', () => {
     const stories = [
-      makeStory({ id: 'DS-001', size: 'M', status: 'done', dateDone: new Date('2026-01-08') }), // 4 pts, done day 3
+      makeStory({ id: 'DS-001', size: 'M', status: 'done', completedOn: new Date('2026-01-08') }), // 4 pts, done day 3
       makeStory({ id: 'DS-002', size: 'S', status: 'todo' }), // 2 pts, not done
     ];
     const result = calculateBurndown(stories, sprintStart, 14, DEFAULT_STATUSES, DEFAULT_SIZES, DEFAULT_STORYPOINTS, '2026-01-10');
@@ -236,9 +236,9 @@ describe('calculateBurndown', () => {
   });
 
   it('completed + excluded story has no contribution', () => {
-    // A cancelled story with dateDone set should still be excluded
+    // A cancelled story with completedOn set should still be excluded
     const stories = [
-      makeStory({ id: 'DS-001', size: 'M', status: 'cancelled', dateDone: new Date('2026-01-07') }),
+      makeStory({ id: 'DS-001', size: 'M', status: 'cancelled', completedOn: new Date('2026-01-07') }),
     ];
     const result = calculateBurndown(stories, sprintStart, 14, DEFAULT_STATUSES, DEFAULT_SIZES, DEFAULT_STORYPOINTS, '2026-01-10');
 
@@ -263,8 +263,8 @@ describe('calculateBurndown', () => {
 
   it('handles multiple stories done on the same day', () => {
     const stories = [
-      makeStory({ id: 'DS-001', size: 'S', status: 'done', dateDone: new Date('2026-01-08') }), // 2
-      makeStory({ id: 'DS-002', size: 'M', status: 'done', dateDone: new Date('2026-01-08') }), // 4
+      makeStory({ id: 'DS-001', size: 'S', status: 'done', completedOn: new Date('2026-01-08') }), // 2
+      makeStory({ id: 'DS-002', size: 'M', status: 'done', completedOn: new Date('2026-01-08') }), // 4
       makeStory({ id: 'DS-003', size: 'L', status: 'todo' }), // 8
     ];
     const result = calculateBurndown(stories, sprintStart, 14, DEFAULT_STATUSES, DEFAULT_SIZES, DEFAULT_STORYPOINTS, '2026-01-08');
@@ -277,7 +277,7 @@ describe('calculateBurndown', () => {
   it('story done before sprint start still counts', () => {
     // Edge case: story marked done before sprint even started
     const stories = [
-      makeStory({ id: 'DS-001', size: 'M', status: 'done', dateDone: new Date('2026-01-01') }), // before sprint
+      makeStory({ id: 'DS-001', size: 'M', status: 'done', completedOn: new Date('2026-01-01') }), // before sprint
       makeStory({ id: 'DS-002', size: 'S', status: 'todo' }),
     ];
     const result = calculateBurndown(stories, sprintStart, 14, DEFAULT_STATUSES, DEFAULT_SIZES, DEFAULT_STORYPOINTS, '2026-01-06');
@@ -305,8 +305,8 @@ describe('calculateBurndown', () => {
 
   it('actual line ends at 0 when all stories are done', () => {
     const stories = [
-      makeStory({ id: 'DS-001', size: 'M', status: 'done', dateDone: new Date('2026-01-08') }),
-      makeStory({ id: 'DS-002', size: 'S', status: 'done', dateDone: new Date('2026-01-10') }),
+      makeStory({ id: 'DS-001', size: 'M', status: 'done', completedOn: new Date('2026-01-08') }),
+      makeStory({ id: 'DS-002', size: 'S', status: 'done', completedOn: new Date('2026-01-10') }),
     ];
     const result = calculateBurndown(stories, sprintStart, 14, DEFAULT_STATUSES, DEFAULT_SIZES, DEFAULT_STORYPOINTS, '2026-01-19');
 

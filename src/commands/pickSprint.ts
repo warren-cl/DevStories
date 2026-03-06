@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import { ConfigService } from '../core/configService';
 import { SprintFilterService } from '../core/sprintFilterService';
 import { Store } from '../core/store';
+import { isBacklogStory } from '../view/storiesProviderUtils';
 
 interface SprintQuickPickItem extends vscode.QuickPickItem {
   value: string | null;
@@ -38,8 +39,10 @@ export async function executePickSprint(
     value: null,
   });
 
-  // Backlog option — only shown when backlog stories exist
-  const hasBacklogStories = stories.some(s => !s.sprint || s.sprint === '' || s.sprint === 'backlog');
+  // Backlog option — only shown when backlog stories exist.
+  // Uses isBacklogStory so stories whose sprint value is not in sprintSequence
+  // (e.g. a leftover sprint-0) are also counted.
+  const hasBacklogStories = stories.some(s => isBacklogStory(s, sprintSequence));
   if (hasBacklogStories) {
     items.push({
       label: '$(archive) Backlog',

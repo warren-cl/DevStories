@@ -51,9 +51,9 @@ export function getNextWorkflowStatus(currentStatus: string, statuses: string[])
 
 /**
  * Update the status field in a story's frontmatter.
- * When statuses are provided, also manages the date_done field:
- *   - Sets date_done when transitioning to a completion status
- *   - Removes date_done when transitioning away from a completion status
+ * When statuses are provided, also manages the completed_on field:
+ *   - Sets completed_on when transitioning to a completion status
+ *   - Removes completed_on when transitioning away from a completion status
  * Returns the updated markdown content
  */
 export function updateStoryStatus(content: string, newStatus: string, statuses?: StatusDef[]): string {
@@ -64,12 +64,12 @@ export function updateStoryStatus(content: string, newStatus: string, statuses?:
   parsed.data.status = newStatus;
   parsed.data.updated = today;
 
-  // Manage date_done field based on completion status
+  // Manage completed_on field based on completion status
   if (statuses) {
     if (isCompletedStatus(newStatus, statuses)) {
-      parsed.data.date_done = today;
+      parsed.data.completed_on = today;
     } else {
-      delete parsed.data.date_done;
+      delete parsed.data.completed_on;
     }
   }
 

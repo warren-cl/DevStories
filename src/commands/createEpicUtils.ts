@@ -80,7 +80,7 @@ export function generateEpicMarkdown(data: EpicData): string {
 id: ${data.id}
 title: "${escapedTitle}"
 status: todo
-priority: 500
+priority: 1
 ${themeLine}created: ${today}
 ---
 

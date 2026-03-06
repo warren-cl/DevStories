@@ -592,7 +592,7 @@ describe('storyHoverProviderUtils', () => {
     it('should return description for type field', () => {
       const result = getFieldDescription('type', 'story');
 
-      expect(result).toBe('Story type: feature, bug, task, or chore');
+      expect(result).toBe('Story type: feature, bug, task, chore, or spike');
     });
 
     it('should return description for size field', () => {

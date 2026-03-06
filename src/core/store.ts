@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { BrokenFile } from '../types/brokenFile';
 import { Epic } from '../types/epic';
+import { InboxSpikeFile, InboxSpikeFolderType } from '../types/inboxSpikeNode';
 import { Story } from '../types/story';
 import { Theme } from '../types/theme';
 import { Parser } from './parser';
@@ -14,6 +15,8 @@ export class Store {
   private epics = new Map<string, Epic>();
   private themes = new Map<string, Theme>();
   private brokenFiles = new Map<string, BrokenFile>(); // keyed by filePath
+  private inboxFiles = new Map<string, InboxSpikeFile>(); // keyed by filePath
+  private spikeFiles = new Map<string, InboxSpikeFile>(); // keyed by filePath
   private _onDidUpdate = new vscode.EventEmitter<void>();
   readonly onDidUpdate = this._onDidUpdate.event;
 
@@ -28,15 +31,21 @@ export class Store {
     const storyFiles = await vscode.workspace.findFiles('**/.devstories/stories/*.md');
     const epicFiles = await vscode.workspace.findFiles('**/.devstories/epics/*.md');
     const themeFiles = await vscode.workspace.findFiles('**/.devstories/themes/*.md');
+    const inboxFiles = await vscode.workspace.findFiles('**/.devstories/inbox/*.md');
+    const spikeFiles = await vscode.workspace.findFiles('**/.devstories/spikes/*.md');
 
     this.stories.clear();
     this.epics.clear();
     this.themes.clear();
     this.brokenFiles.clear();
+    this.inboxFiles.clear();
+    this.spikeFiles.clear();
 
     await Promise.all(storyFiles.map(uri => this.parseAndAddStory(uri)));
     await Promise.all(epicFiles.map(uri => this.parseAndAddEpic(uri)));
     await Promise.all(themeFiles.map(uri => this.parseAndAddTheme(uri)));
+    for (const uri of inboxFiles) { this.addInboxSpikeFile(uri, 'inbox'); }
+    for (const uri of spikeFiles) { this.addInboxSpikeFile(uri, 'spikes'); }
 
     // Notify listeners that data has been loaded
     this._onDidUpdate.fire();
@@ -86,6 +95,11 @@ export class Store {
     return Array.from(this.brokenFiles.values()).filter(f => f.fileType === 'story');
   }
 
+  /** Theme files that failed to parse — shown at the root of the Breakdown view. */
+  getBrokenThemes(): BrokenFile[] {
+    return Array.from(this.brokenFiles.values()).filter(f => f.fileType === 'theme');
+  }
+
   getEpics(): Epic[] {
     return Array.from(this.epics.values());
   }
@@ -96,6 +110,16 @@ export class Store {
 
   getThemes(): Theme[] {
     return Array.from(this.themes.values());
+  }
+
+  /** Get all files in the .devstories/inbox/ folder. */
+  getInboxFiles(): InboxSpikeFile[] {
+    return Array.from(this.inboxFiles.values());
+  }
+
+  /** Get all files in the .devstories/spikes/ folder. */
+  getSpikeFiles(): InboxSpikeFile[] {
+    return Array.from(this.spikeFiles.values());
   }
 
   /**
@@ -127,6 +151,10 @@ export class Store {
       await this.parseAndAddEpic(uri);
     } else if (uri.path.includes('/themes/')) {
       await this.parseAndAddTheme(uri);
+    } else if (uri.path.includes('/inbox/')) {
+      this.addInboxSpikeFile(uri, 'inbox');
+    } else if (uri.path.includes('/spikes/')) {
+      this.addInboxSpikeFile(uri, 'spikes');
     }
     this._onDidUpdate.fire();
   }
@@ -159,6 +187,11 @@ export class Store {
     }
     // Also remove from broken files if it was previously broken
     this.brokenFiles.delete(uri.fsPath);
+
+    // Remove from inbox/spike files
+    this.inboxFiles.delete(uri.fsPath);
+    this.spikeFiles.delete(uri.fsPath);
+
     this._onDidUpdate.fire();
   }
 
@@ -203,8 +236,31 @@ export class Store {
       const content = await this.readFile(uri);
       const theme = Parser.parseTheme(content, uri.fsPath);
       this.themes.set(theme.id, theme);
+      this.brokenFiles.delete(uri.fsPath); // clear if previously broken
     } catch (e) {
       getLogger().error(`Failed to parse theme ${uri.fsPath}:`, e);
+      this.brokenFiles.set(uri.fsPath, {
+        broken: true,
+        id: path.basename(uri.fsPath, '.md'),
+        filePath: uri.fsPath,
+        error: (e instanceof Error ? e.message : String(e)),
+        fileType: 'theme',
+      });
+    }
+  }
+
+  private addInboxSpikeFile(uri: vscode.Uri, folderType: InboxSpikeFolderType): void {
+    const fileName = path.basename(uri.fsPath, '.md');
+    const file: InboxSpikeFile = {
+      _kind: 'inboxSpikeFile',
+      fileName,
+      filePath: uri.fsPath,
+      folderType,
+    };
+    if (folderType === 'inbox') {
+      this.inboxFiles.set(uri.fsPath, file);
+    } else {
+      this.spikeFiles.set(uri.fsPath, file);
     }
   }
 

@@ -95,12 +95,11 @@ function resolveTargetSprint(
   if (isSprintNode(target)) {
     return target.isBacklog ? 'backlog' : target.sprintId;
   }
-  // Story target — use its sprint, falling back to 'backlog'
+  // Story target — always return the canonical 'backlog' value when the story belongs to
+  // the backlog bucket (covers unrecognised sprint values such as 'sprint-43' that are
+  // not in sprintSequence, in addition to the obvious undefined/''/backlog cases).
   const story = target as Story;
-  if (!story.sprint || story.sprint === '' || isBacklogStory(story, sprintSequence)) {
-    return story.sprint && story.sprint !== '' ? story.sprint : 'backlog';
-  }
-  return story.sprint;
+  return isBacklogStory(story, sprintSequence) ? 'backlog' : (story.sprint ?? 'backlog');
 }
 
 /**

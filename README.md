@@ -45,6 +45,30 @@ Hover over any `[[DS-00001]]`, `[[EPIC-0001]]`, or `[[THEME-001]]` link to see t
 ### ↕️ Drag & Drop
 Reorder stories and reassign them between epics or sprints by dragging and dropping in the tree view. Priority is automatically updated.
 
+### 📥 Inbox & Spikes
+Capture ideas and exploratory work without committing to a fully-formed story:
+
+- **Inbox** (`.devstories/inbox/`) — raw ideas and captured thoughts waiting to be refined
+- **Spikes** (`.devstories/spikes/`) — time-boxed research or investigation notes
+
+Create any `.md` file in either folder (optionally prefix with a date: `2026-03-03-dark-mode.md`). The files appear as expandable sentinel nodes at the bottom of both the Breakdown and Backlog views.
+
+**Converting to a story or epic** — just drag and drop:
+
+| Drop target (Backlog view) | Result |
+|---|---|
+| Sprint node | New story assigned to that sprint, placed at the top |
+| Story node | New story inserted at that story's priority position |
+
+| Drop target (Breakdown view) | Result |
+|---|---|
+| Epic node | New story added under that epic |
+| Theme node | New epic created under that theme |
+| Story node | New story inserted at that story's priority |
+| No Epic / No Theme sentinel | New story/epic with no parent assigned |
+
+Any existing frontmatter in the file (title, type, size, status, etc.) is preserved during conversion. The ID, sprint, epic/theme, and priority are always set from the drop context. The date prefix is stripped from the filename automatically.
+
 ### ➕ Create Stories Your Way
 Use quick capture for fast ideas or the full form for detailed stories with templates.
 
@@ -53,6 +77,7 @@ Use quick capture for fast ideas or the full form for detailed stories with temp
 ### 🔍 Sort & Filter
 - **Sort** stories by priority, creation date, or ID
 - **Filter** by sprint to focus on current work — auto-filter on load is configurable
+- **Search** — filter the entire tree by text using the magnifier icon in the title bar; matches stories, epics, themes, inbox/spike files by ID and title (case-insensitive); ancestor nodes stay visible when a descendant matches; activating search clears the sprint filter automatically
 - **Set Current Sprint** from the view title bar
 
 ### ✅ Frontmatter Validation & Autocomplete
@@ -60,9 +85,9 @@ Use quick capture for fast ideas or the full form for detailed stories with temp
 - **Autocomplete** — IntelliSense suggestions for `status`, `type`, `size`, `sprint`, `epic`, `theme`, and `[[ID]]` references
 
 ### More Features
-- **Story Templates** — Different templates per type (feature/bug/task/chore)
+- **Story Templates** — Different templates per type (feature/bug/task/chore/spike)
 - **Auto-timestamps** — `updated` field auto-updates on save
-- **Completion Tracking** — `date_done` is auto-set when a story reaches a completion status, and cleared when moved back
+- **Completion Tracking** — `completed_on` is auto-set when a story reaches a completion status, and cleared when moved back
 - **Status Toggle** — Right-click stories, epics, or themes to change status
 - **Clickable Links** — `[[ID]]` links open the corresponding story, epic, or theme file
 - **Configurable Sizes & Story Points** — Map t-shirt sizes (XXS–XXL) to story-point values for progress tracking
@@ -154,6 +179,10 @@ your-project/
     ├── stories/
     │   ├── DS-00001-login-form.md
     │   └── DS-00002-signup-flow.md
+    ├── inbox/
+    │   └── 2026-03-03-dark-mode-idea.md
+    ├── spikes/
+    │   └── 2026-03-01-auth-library-research.md
     └── templates/
         └── feature.md
 ```

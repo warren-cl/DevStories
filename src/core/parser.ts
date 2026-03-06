@@ -37,7 +37,10 @@ export class Parser {
       dependencies: data.dependencies || [],
       created: new Date(data.created),
       updated: data.updated ? new Date(data.updated) : undefined,
-      dateDone: data.date_done ? new Date(data.date_done) : undefined,
+      completedOn: data.completed_on ? new Date(data.completed_on) : undefined,
+      workflow: data.workflow,
+      author: data.author,
+      owner: data.owner,
       content: parsed.content,
       filePath: filePath
     };
@@ -69,6 +72,9 @@ export class Parser {
       priority: data.priority ?? 500,
       created: new Date(data.created),
       updated: data.updated ? new Date(data.updated) : undefined,
+      workflow: data.workflow,
+      author: data.author,
+      owner: data.owner,
       content: parsed.content,
       filePath: filePath
     };
@@ -99,6 +105,9 @@ export class Parser {
       priority: data.priority ?? 500,
       created: new Date(data.created),
       updated: data.updated ? new Date(data.updated) : undefined,
+      workflow: data.workflow,
+      author: data.author,
+      owner: data.owner,
       content: parsed.content,
       filePath: filePath
     };

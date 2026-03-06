@@ -200,29 +200,29 @@ updated: 2025-01-15
       expect(result).toContain('priority: 100');
     });
 
-    // --- date_done lifecycle tests ---
+    // --- completed_on lifecycle tests ---
 
-    it('should set date_done when status changes to completion status', () => {
+    it('should set completed_on when status changes to completion status', () => {
       const statuses = [
         { id: 'todo', label: 'To Do' },
         { id: 'done', label: 'Done', isCompletion: true },
       ];
       const result = updateStoryStatus(storyContent, 'done', statuses);
       const today = new Date().toISOString().split('T')[0];
-      expect(result).toMatch(new RegExp(`date_done: ['"]?${today}['"]?`));
+      expect(result).toMatch(new RegExp(`completed_on: ['"]?${today}['"]?`));
     });
 
-    it('should not set date_done when status is not completion', () => {
+    it('should not set completed_on when status is not completion', () => {
       const statuses = [
         { id: 'todo', label: 'To Do' },
         { id: 'in_progress', label: 'In Progress' },
         { id: 'done', label: 'Done', isCompletion: true },
       ];
       const result = updateStoryStatus(storyContent, 'in_progress', statuses);
-      expect(result).not.toContain('date_done');
+      expect(result).not.toContain('completed_on');
     });
 
-    it('should remove date_done when moving away from completion status', () => {
+    it('should remove completed_on when moving away from completion status', () => {
       const storyWithDateDone = `---
 id: DS-005
 title: "Done Story"
@@ -236,7 +236,7 @@ assignee: ""
 dependencies:
 created: 2025-01-15
 updated: 2025-01-20
-date_done: 2025-01-20
+completed_on: 2025-01-20
 ---
 
 # Done Story
@@ -248,12 +248,12 @@ date_done: 2025-01-20
       ];
       const result = updateStoryStatus(storyWithDateDone, 'in_progress', statuses);
       expect(result).toContain('status: in_progress');
-      expect(result).not.toContain('date_done');
+      expect(result).not.toContain('completed_on');
     });
 
-    it('should not set date_done when statuses are not provided (backward compat)', () => {
+    it('should not set completed_on when statuses are not provided (backward compat)', () => {
       const result = updateStoryStatus(storyContent, 'done');
-      expect(result).not.toContain('date_done');
+      expect(result).not.toContain('completed_on');
     });
 
     it('should use fallback completion for last status when no isCompletion flag', () => {
@@ -265,7 +265,7 @@ date_done: 2025-01-20
       // Last status in array is treated as completion
       const result = updateStoryStatus(storyContent, 'done', statuses);
       const today = new Date().toISOString().split('T')[0];
-      expect(result).toMatch(new RegExp(`date_done: ['"]?${today}['"]?`));
+      expect(result).toMatch(new RegExp(`completed_on: ['"]?${today}['"]?`));
     });
   });
 
