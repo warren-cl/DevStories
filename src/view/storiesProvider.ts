@@ -265,6 +265,7 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       const orphanStories = this.getVisibleOrphanStories(sprintFilter, textFilter);
       const brokenEpics = this.store.getBrokenEpics();
       const brokenStories = this.store.getBrokenStories();
+      const brokenThemes = this.store.getBrokenThemes();
 
       // Filter themes to only those with visible descendants (or that match text filter directly)
       let visibleThemes = allThemes;
@@ -298,15 +299,18 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
         this.sortService?.state
       );
 
-      const roots: TreeElement[] = [...sortedThemes];
-
+      // Broken theme files surface at root level alongside valid themes
       // Filter broken files by text filter if active
       let filteredBrokenEpics = brokenEpics;
       let filteredBrokenStories = brokenStories;
+      let filteredBrokenThemes = brokenThemes;
       if (textFilter !== '') {
         filteredBrokenEpics = brokenEpics.filter(b => this.matchesTextFilter(b));
         filteredBrokenStories = brokenStories.filter(b => this.matchesTextFilter(b));
+        filteredBrokenThemes = brokenThemes.filter(b => this.matchesTextFilter(b));
       }
+
+      const roots: TreeElement[] = [...sortedThemes, ...filteredBrokenThemes];
 
       if (orphanEpics.length > 0 || orphanStories.length > 0 || filteredBrokenEpics.length > 0 || filteredBrokenStories.length > 0) {
         roots.push(makeNoThemeNode());

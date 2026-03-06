@@ -98,9 +98,10 @@ export async function executeChangeStatus(
     const bytes = await vscode.workspace.fs.readFile(fileUri);
     const content = new TextDecoder().decode(bytes);
 
-    // Determine if story, epic, or theme
+    // Determine if story, epic, or theme.
+    // Use the store's theme map for a structural check — avoids relying on the configurable ID prefix.
     const isStory = 'type' in item;
-    const isTheme = !isStory && !('type' in item) && item.id.startsWith('THEME-');
+    const isTheme = !isStory && store.getTheme(item.id) !== undefined;
     let updatedContent: string;
     if (isStory) {
       updatedContent = updateStoryStatus(content, newStatus, configService?.config.statuses);

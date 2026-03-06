@@ -95,6 +95,11 @@ export class Store {
     return Array.from(this.brokenFiles.values()).filter(f => f.fileType === 'story');
   }
 
+  /** Theme files that failed to parse — shown at the root of the Breakdown view. */
+  getBrokenThemes(): BrokenFile[] {
+    return Array.from(this.brokenFiles.values()).filter(f => f.fileType === 'theme');
+  }
+
   getEpics(): Epic[] {
     return Array.from(this.epics.values());
   }
@@ -231,8 +236,16 @@ export class Store {
       const content = await this.readFile(uri);
       const theme = Parser.parseTheme(content, uri.fsPath);
       this.themes.set(theme.id, theme);
+      this.brokenFiles.delete(uri.fsPath); // clear if previously broken
     } catch (e) {
       getLogger().error(`Failed to parse theme ${uri.fsPath}:`, e);
+      this.brokenFiles.set(uri.fsPath, {
+        broken: true,
+        id: path.basename(uri.fsPath, '.md'),
+        filePath: uri.fsPath,
+        error: (e instanceof Error ? e.message : String(e)),
+        fileType: 'theme',
+      });
     }
   }
 

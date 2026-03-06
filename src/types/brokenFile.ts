@@ -15,6 +15,6 @@ export interface BrokenFile {
   filePath: string;
   /** The error message thrown by the parser. */
   error: string;
-  /** Whether this was a story or epic file, used to route it to the correct sentinel. */
-  fileType: 'story' | 'epic';
+  /** Whether this was a story, epic, or theme file, used to route it to the correct sentinel. */
+  fileType: 'story' | 'epic' | 'theme';
 }
