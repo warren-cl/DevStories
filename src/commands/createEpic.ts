@@ -1,27 +1,29 @@
 import * as vscode from 'vscode';
 import { Store } from '../core/store';
+import { ConfigService } from '../core/configService';
+import { ConfigData, parseConfigJsonContent, mergeConfigWithDefaults } from '../core/configServiceUtils';
 import { getLogger } from '../core/logger';
+import { StorydocsService } from '../core/storydocsService';
 import {
-  parseConfigJson,
   findNextEpicId,
   generateEpicMarkdown,
-  DevStoriesConfig,
 } from './createEpicUtils';
 import { appendEpicToTheme, generateEpicLink } from './createThemeUtils';
 import { validateEpicName } from '../utils/inputValidation';
 import { toKebabCase } from '../utils/filenameUtils';
 
 // Re-export for convenience
-export { parseConfigJson, findNextEpicId, generateEpicMarkdown } from './createEpicUtils';
+export { findNextEpicId, generateEpicMarkdown } from './createEpicUtils';
 
 /**
- * Read and parse config.json from workspace
+ * Read config.json from workspace as fallback when ConfigService is not available
  */
-async function readConfig(workspaceUri: vscode.Uri): Promise<DevStoriesConfig | undefined> {
+async function readConfigFallback(workspaceUri: vscode.Uri): Promise<ConfigData | undefined> {
   const configUri = vscode.Uri.joinPath(workspaceUri, '.devstories', 'config.json');
   try {
     const content = await vscode.workspace.fs.readFile(configUri);
-    return parseConfigJson(Buffer.from(content).toString('utf8'));
+    const parsed = parseConfigJsonContent(Buffer.from(content).toString('utf8'));
+    return mergeConfigWithDefaults(parsed);
   } catch (error) {
     getLogger().debug('Config not found or unreadable', error);
     return undefined;
@@ -47,7 +49,7 @@ function findSimilarEpic(title: string, store: Store): string | undefined {
  *   is pre-selected and the theme QuickPick is skipped entirely. Pass '__NO_THEME__'
  *   to explicitly create the epic without a theme.
  */
-export async function executeCreateEpic(store: Store, preselectedThemeId?: string): Promise<boolean> {
+export async function executeCreateEpic(store: Store, preselectedThemeId?: string, storydocsService?: StorydocsService, configService?: ConfigService): Promise<boolean> {
   // Check for workspace
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -57,8 +59,8 @@ export async function executeCreateEpic(store: Store, preselectedThemeId?: strin
 
   const workspaceUri = workspaceFolders[0].uri;
 
-  // Read config
-  const config = await readConfig(workspaceUri);
+  // Use ConfigService if available, otherwise read from file
+  const config = configService ? configService.config : await readConfigFallback(workspaceUri);
   if (!config) {
     const action = await vscode.window.showErrorMessage(
       'DevStories: No config.json found. Initialize DevStories first.',
@@ -156,6 +158,9 @@ export async function executeCreateEpic(store: Store, preselectedThemeId?: strin
 
   await vscode.workspace.fs.writeFile(epicUri, Buffer.from(markdown));
   await store.reloadFile(epicUri);
+
+  // Create storydocs folder (best-effort, non-blocking)
+  void storydocsService?.ensureFolder(epicId, 'epic');
 
   // If a theme was selected, append this epic to the theme's ## Epics section
   if (selectedThemeId) {

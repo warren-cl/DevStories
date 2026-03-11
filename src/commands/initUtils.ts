@@ -16,7 +16,7 @@ export interface InitConfig {
  */
 export function generateConfigJson(config: InitConfig): string {
   const configObj = {
-    version: 1,
+    version: 2,
     project: config.projectName,
     idMode: 'auto',
     idPrefix: {
@@ -36,6 +36,14 @@ export function generateConfigJson(config: InitConfig): string {
     },
     sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'],
     storypoints: [1, 2, 4, 8, 16, 32, 64],
+    autoFilterCurrentSprint: true,
+    quickCapture: {
+      defaultToCurrentSprint: false,
+    },
+    storydocs: {
+      enabled: false,
+      root: 'docs/storydocs',
+    },
   };
   return JSON.stringify(configObj, null, 2);
 }

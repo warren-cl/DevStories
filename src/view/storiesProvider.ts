@@ -1,32 +1,40 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
-import { ConfigService } from '../core/configService';
-import { SortService } from '../core/sortService';
-import { SprintFilterService } from '../core/sprintFilterService';
-import { TextFilterService } from '../core/textFilterService';
-import { Store } from '../core/store';
-import { BrokenFile } from '../types/brokenFile';
-import { Epic } from '../types/epic';
-import { InboxSpikeNode, InboxSpikeFile, INBOX_NODE_ID, SPIKES_NODE_ID, isInboxSpikeNode, isInboxSpikeFile } from '../types/inboxSpikeNode';
-import { Story, StoryType } from '../types/story';
-import { Theme } from '../types/theme';
-import { SprintNode, BACKLOG_SPRINT_ID, isSprintNode } from '../types/sprintNode';
-import { sortStoriesBy, sortStoriesForTreeView, sortEpicsBySprintOrder, sortThemesByEpicSprintOrder, getStatusIndicator, isBacklogStory, ViewMode } from './storiesProviderUtils';
+import * as vscode from "vscode";
+import * as path from "path";
+import { ConfigService } from "../core/configService";
+import { SortService } from "../core/sortService";
+import { SprintFilterService } from "../core/sprintFilterService";
+import { TextFilterService } from "../core/textFilterService";
+import { Store } from "../core/store";
+import { BrokenFile } from "../types/brokenFile";
+import { Epic } from "../types/epic";
+import { InboxSpikeNode, InboxSpikeFile, INBOX_NODE_ID, SPIKES_NODE_ID, isInboxSpikeNode, isInboxSpikeFile } from "../types/inboxSpikeNode";
+import { Story, StoryType } from "../types/story";
+import { Theme } from "../types/theme";
+import { SprintNode, BACKLOG_SPRINT_ID, isSprintNode } from "../types/sprintNode";
+import {
+  sortStoriesBy,
+  sortStoriesForTreeView,
+  sortEpicsBySprintOrder,
+  sortThemesByEpicSprintOrder,
+  getStatusIndicator,
+  isBacklogStory,
+  ViewMode,
+} from "./storiesProviderUtils";
 
 /** Sentinel id for the virtual "No Theme" root node */
-const NO_THEME_ID = '__NO_THEME__';
+const NO_THEME_ID = "__NO_THEME__";
 
 /** Sentinel id for the virtual "No Epic" node nested under "No Theme" */
-const NO_EPIC_ID = '__NO_EPIC__';
+const NO_EPIC_ID = "__NO_EPIC__";
 
 function makeNoThemeNode(): Theme {
   return {
     id: NO_THEME_ID,
-    title: 'No Theme',
-    status: '',
+    title: "No Theme",
+    status: "",
     priority: 500,
     created: new Date(0),
-    content: '',
+    content: "",
   };
 }
 
@@ -34,12 +42,12 @@ function makeNoThemeNode(): Theme {
 function makeNoEpicNode(): Epic {
   return {
     id: NO_EPIC_ID,
-    title: 'No Epic',
-    status: '',
+    title: "No Epic",
+    status: "",
     theme: NO_THEME_ID, // ensures 'theme' in obj === true → not detected as Theme
     priority: 500,
     created: new Date(0),
-    content: '',
+    content: "",
   };
 }
 
@@ -47,18 +55,20 @@ function makeNoEpicNode(): Epic {
 export type TreeElement = Theme | Epic | Story | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile;
 
 function makeInboxNode(): InboxSpikeNode {
-  return { _kind: 'inboxSpikeNode', nodeId: INBOX_NODE_ID, label: 'Inbox', folderName: 'inbox' };
+  return { _kind: "inboxSpikeNode", nodeId: INBOX_NODE_ID, label: "Inbox", folderName: "inbox" };
 }
 
 function makeSpikesNode(): InboxSpikeNode {
-  return { _kind: 'inboxSpikeNode', nodeId: SPIKES_NODE_ID, label: 'Spikes', folderName: 'spikes' };
+  return { _kind: "inboxSpikeNode", nodeId: SPIKES_NODE_ID, label: "Spikes", folderName: "spikes" };
 }
 
 export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
-  private _onDidChangeTreeData: vscode.EventEmitter<TreeElement | undefined | null | void> = new vscode.EventEmitter<TreeElement | undefined | null | void>();
+  private _onDidChangeTreeData: vscode.EventEmitter<TreeElement | undefined | null | void> = new vscode.EventEmitter<
+    TreeElement | undefined | null | void
+  >();
   readonly onDidChangeTreeData: vscode.Event<TreeElement | undefined | null | void> = this._onDidChangeTreeData.event;
 
-  private _viewMode: ViewMode = 'backlog';
+  private _viewMode: ViewMode = "backlog";
 
   /** Event emitted when the view mode changes. */
   private _onDidViewModeChange = new vscode.EventEmitter<ViewMode>();
@@ -70,7 +80,7 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
     private configService?: ConfigService,
     private sprintFilterService?: SprintFilterService,
     private sortService?: SortService,
-    private textFilterService?: TextFilterService
+    private textFilterService?: TextFilterService,
   ) {
     this.store.onDidUpdate(() => this.refresh());
     // DS-035: Subscribe to config changes to refresh tree
@@ -106,7 +116,11 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
   }
 
   getChildren(element?: TreeElement): Thenable<TreeElement[]> {
-    if (this._viewMode === 'backlog') {
+    // Return empty array at root when store has no content so VS Code shows welcome view
+    if (!element && !this.store.hasContent()) {
+      return Promise.resolve([]);
+    }
+    if (this._viewMode === "backlog") {
       return this.getBacklogChildren(element);
     }
     return this.getBreakdownChildren(element);
@@ -116,9 +130,9 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
   private getBacklogChildren(element?: TreeElement): Thenable<TreeElement[]> {
     const sprintSequence = this.configService?.config.sprintSequence ?? [];
-    const textFilter = this.textFilterService?.filterText ?? '';
+    const textFilter = this.textFilterService?.filterText ?? "";
     // When text filter is active, bypass sprint filter so all nodes are searched
-    const sprintFilter = textFilter !== '' ? null : (this.sprintFilterService?.currentSprint ?? null);
+    const sprintFilter = textFilter !== "" ? null : (this.sprintFilterService?.currentSprint ?? null);
     const currentSprint = this.configService?.config.currentSprint ?? null;
 
     if (!element) {
@@ -128,13 +142,13 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
       for (const sprint of sprintSequence) {
         // Skip 'backlog' sprint — its stories go to the catch-all Backlog sentinel
-        if (sprint.toLowerCase() === 'backlog') {
+        if (sprint.toLowerCase() === "backlog") {
           continue;
         }
 
         // Apply sprint filter: if a filter is active, only show matching sprint node(s)
         if (sprintFilter !== null) {
-          if (sprintFilter === 'backlog') {
+          if (sprintFilter === "backlog") {
             continue; // skip named sprints when filtering to backlog only
           }
           if (sprintFilter !== sprint) {
@@ -143,15 +157,15 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
         }
 
         // When text filter is active, hide sprint nodes with no matching stories
-        if (textFilter !== '') {
-          const sprintStories = allStories.filter(s => s.sprint === sprint);
-          if (!sprintStories.some(s => this.matchesTextFilter(s))) {
+        if (textFilter !== "") {
+          const sprintStories = allStories.filter((s) => s.sprint === sprint);
+          if (!sprintStories.some((s) => this.matchesTextFilter(s))) {
             continue;
           }
         }
 
         nodes.push({
-          _kind: 'sprintNode',
+          _kind: "sprintNode",
           sprintId: sprint,
           label: sprint,
           isBacklog: false,
@@ -159,20 +173,19 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       }
 
       // Always add the Backlog sentinel (unless filter is a named sprint)
-      if (sprintFilter === null || sprintFilter === 'backlog') {
+      if (sprintFilter === null || sprintFilter === "backlog") {
         // When text filter active, only show backlog if it has matching stories or broken files
         let showBacklog = true;
-        if (textFilter !== '') {
-          const backlogStories = allStories.filter(s => isBacklogStory(s, sprintSequence));
+        if (textFilter !== "") {
+          const backlogStories = allStories.filter((s) => isBacklogStory(s, sprintSequence));
           const brokenStories = this.store.getBrokenStories();
-          showBacklog = backlogStories.some(s => this.matchesTextFilter(s))
-            || brokenStories.some(b => this.matchesTextFilter(b));
+          showBacklog = backlogStories.some((s) => this.matchesTextFilter(s)) || brokenStories.some((b) => this.matchesTextFilter(b));
         }
         if (showBacklog) {
           nodes.push({
-            _kind: 'sprintNode',
+            _kind: "sprintNode",
             sprintId: BACKLOG_SPRINT_ID,
-            label: 'Backlog',
+            label: "Backlog",
             isBacklog: true,
           });
         }
@@ -181,13 +194,13 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       // Append Inbox and Spikes sentinels if those folders have (matching) files
       const inboxFiles = this.store.getInboxFiles();
       if (inboxFiles.length > 0) {
-        if (textFilter === '' || inboxFiles.some(f => this.matchesTextFilter(f))) {
+        if (textFilter === "" || inboxFiles.some((f) => this.matchesTextFilter(f))) {
           nodes.push(makeInboxNode() as unknown as SprintNode);
         }
       }
       const spikeFiles = this.store.getSpikeFiles();
       if (spikeFiles.length > 0) {
-        if (textFilter === '' || spikeFiles.some(f => this.matchesTextFilter(f))) {
+        if (textFilter === "" || spikeFiles.some((f) => this.matchesTextFilter(f))) {
           nodes.push(makeSpikesNode() as unknown as SprintNode);
         }
       }
@@ -197,11 +210,9 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
     // InboxSpikeNode children: flat list of (matching) files in that folder
     if (isInboxSpikeNode(element)) {
-      let files = element.folderName === 'inbox'
-        ? this.store.getInboxFiles()
-        : this.store.getSpikeFiles();
-      if (textFilter !== '') {
-        files = files.filter(f => this.matchesTextFilter(f));
+      let files = element.folderName === "inbox" ? this.store.getInboxFiles() : this.store.getSpikeFiles();
+      if (textFilter !== "") {
+        files = files.filter((f) => this.matchesTextFilter(f));
       }
       return Promise.resolve(files);
     }
@@ -219,25 +230,23 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       let filtered: Story[];
       if (element.isBacklog) {
         // Backlog catch-all: unassigned, empty, 'backlog', or sprint not in sequence
-        filtered = allStories.filter(s => isBacklogStory(s, sprintSequence));
+        filtered = allStories.filter((s) => isBacklogStory(s, sprintSequence));
       } else {
-        filtered = allStories.filter(s => s.sprint === element.sprintId);
+        filtered = allStories.filter((s) => s.sprint === element.sprintId);
       }
 
       // Apply text filter if active
-      if (textFilter !== '') {
-        filtered = filtered.filter(s => this.matchesTextFilter(s));
+      if (textFilter !== "") {
+        filtered = filtered.filter((s) => this.matchesTextFilter(s));
       }
 
-      const sorted = sortState
-        ? sortStoriesBy(filtered, sortState, sprintSequence)
-        : sortStoriesForTreeView(filtered, sprintSequence);
+      const sorted = sortState ? sortStoriesBy(filtered, sortState, sprintSequence) : sortStoriesForTreeView(filtered, sprintSequence);
 
       // In the backlog node, also show broken stories at the top
       if (element.isBacklog) {
         let brokenStories = this.store.getBrokenStories();
-        if (textFilter !== '') {
-          brokenStories = brokenStories.filter(b => this.matchesTextFilter(b));
+        if (textFilter !== "") {
+          brokenStories = brokenStories.filter((b) => this.matchesTextFilter(b));
         }
         return Promise.resolve([...brokenStories, ...sorted]);
       }
@@ -253,9 +262,9 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
   private getBreakdownChildren(element?: TreeElement): Thenable<TreeElement[]> {
     const sprintSequence = this.configService?.config.sprintSequence ?? [];
-    const textFilter = this.textFilterService?.filterText ?? '';
+    const textFilter = this.textFilterService?.filterText ?? "";
     // When text filter is active, bypass sprint filter so all nodes are searched
-    const sprintFilter = textFilter !== '' ? null : (this.sprintFilterService?.currentSprint ?? null);
+    const sprintFilter = textFilter !== "" ? null : (this.sprintFilterService?.currentSprint ?? null);
 
     if (!element) {
       // Root level: return themes + "No Theme" virtual node
@@ -269,24 +278,24 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
       // Filter themes to only those with visible descendants (or that match text filter directly)
       let visibleThemes = allThemes;
-      if (sprintFilter !== null || textFilter !== '') {
-        visibleThemes = allThemes.filter(theme => {
+      if (sprintFilter !== null || textFilter !== "") {
+        visibleThemes = allThemes.filter((theme) => {
           // Theme itself matches text filter → show it
-          if (textFilter !== '' && this.matchesTextFilter(theme)) {
+          if (textFilter !== "" && this.matchesTextFilter(theme)) {
             return true;
           }
           const epics = this.store.getEpicsByTheme(theme.id);
-          return epics.some(epic => {
+          return epics.some((epic) => {
             // Epic itself matches text filter → show its parent theme
-            if (textFilter !== '' && this.matchesTextFilter(epic)) {
+            if (textFilter !== "" && this.matchesTextFilter(epic)) {
               return true;
             }
             const stories = this.store.getStoriesByEpic(epic.id);
             if (sprintFilter !== null) {
-              return stories.some(s => this.matchesSprintFilter(s, sprintFilter));
+              return stories.some((s) => this.matchesSprintFilter(s, sprintFilter));
             }
             // Text filter: at least one child story matches
-            return stories.some(s => this.matchesTextFilter(s));
+            return stories.some((s) => this.matchesTextFilter(s));
           });
         });
       }
@@ -296,7 +305,7 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
         sprintSequence,
         (themeId) => this.store.getEpicsByTheme(themeId),
         (epicId) => this.store.getStoriesByEpic(epicId),
-        this.sortService?.state
+        this.sortService?.state,
       );
 
       // Broken theme files surface at root level alongside valid themes
@@ -304,10 +313,10 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       let filteredBrokenEpics = brokenEpics;
       let filteredBrokenStories = brokenStories;
       let filteredBrokenThemes = brokenThemes;
-      if (textFilter !== '') {
-        filteredBrokenEpics = brokenEpics.filter(b => this.matchesTextFilter(b));
-        filteredBrokenStories = brokenStories.filter(b => this.matchesTextFilter(b));
-        filteredBrokenThemes = brokenThemes.filter(b => this.matchesTextFilter(b));
+      if (textFilter !== "") {
+        filteredBrokenEpics = brokenEpics.filter((b) => this.matchesTextFilter(b));
+        filteredBrokenStories = brokenStories.filter((b) => this.matchesTextFilter(b));
+        filteredBrokenThemes = brokenThemes.filter((b) => this.matchesTextFilter(b));
       }
 
       const roots: TreeElement[] = [...sortedThemes, ...filteredBrokenThemes];
@@ -319,13 +328,13 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       // Append Inbox and Spikes sentinels if those folders have (matching) files
       const inboxFiles = this.store.getInboxFiles();
       if (inboxFiles.length > 0) {
-        if (textFilter === '' || inboxFiles.some(f => this.matchesTextFilter(f))) {
+        if (textFilter === "" || inboxFiles.some((f) => this.matchesTextFilter(f))) {
           roots.push(makeInboxNode());
         }
       }
       const spikeFiles = this.store.getSpikeFiles();
       if (spikeFiles.length > 0) {
-        if (textFilter === '' || spikeFiles.some(f => this.matchesTextFilter(f))) {
+        if (textFilter === "" || spikeFiles.some((f) => this.matchesTextFilter(f))) {
           roots.push(makeSpikesNode());
         }
       }
@@ -334,17 +343,15 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
     }
 
     // BrokenFile nodes are leaves — no children
-    if ('broken' in element) {
+    if ("broken" in element) {
       return Promise.resolve([]);
     }
 
     // InboxSpikeNode children: flat list of (matching) files in that folder
     if (isInboxSpikeNode(element)) {
-      let files = element.folderName === 'inbox'
-        ? this.store.getInboxFiles()
-        : this.store.getSpikeFiles();
-      if (textFilter !== '') {
-        files = files.filter(f => this.matchesTextFilter(f));
+      let files = element.folderName === "inbox" ? this.store.getInboxFiles() : this.store.getSpikeFiles();
+      if (textFilter !== "") {
+        files = files.filter((f) => this.matchesTextFilter(f));
       }
       return Promise.resolve(files);
     }
@@ -356,16 +363,14 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
     if (this.isTheme(element)) {
       // Theme: return filtered epics for this theme
-      const epics = element.id === NO_THEME_ID
-        ? this.store.getEpicsWithoutTheme()
-        : this.store.getEpicsByTheme(element.id);
+      const epics = element.id === NO_THEME_ID ? this.store.getEpicsWithoutTheme() : this.store.getEpicsByTheme(element.id);
 
       const visibleEpics = this.getVisibleEpics(epics, sprintFilter, textFilter);
       const sortedEpics = sortEpicsBySprintOrder(
         visibleEpics,
         sprintSequence,
         (epicId) => this.store.getStoriesByEpic(epicId),
-        this.sortService?.state
+        this.sortService?.state,
       );
 
       // Under "No Theme", also show broken epics and the "No Epic" sentinel
@@ -373,9 +378,9 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
         const orphanStories = this.getVisibleOrphanStories(sprintFilter, textFilter);
         let brokenEpics = this.store.getBrokenEpics();
         let brokenStories = this.store.getBrokenStories();
-        if (textFilter !== '') {
-          brokenEpics = brokenEpics.filter(b => this.matchesTextFilter(b));
-          brokenStories = brokenStories.filter(b => this.matchesTextFilter(b));
+        if (textFilter !== "") {
+          brokenEpics = brokenEpics.filter((b) => this.matchesTextFilter(b));
+          brokenStories = brokenStories.filter((b) => this.matchesTextFilter(b));
         }
         const trailing: (Epic | BrokenFile)[] = [
           ...brokenEpics,
@@ -394,8 +399,8 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       if (epic.id === NO_EPIC_ID) {
         const orphanStories = this.getVisibleOrphanStories(sprintFilter, textFilter);
         let brokenStories = this.store.getBrokenStories();
-        if (textFilter !== '') {
-          brokenStories = brokenStories.filter(b => this.matchesTextFilter(b));
+        if (textFilter !== "") {
+          brokenStories = brokenStories.filter((b) => this.matchesTextFilter(b));
         }
         const sortState = this.sortService?.state;
         const sortedValid = sortState
@@ -410,20 +415,18 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       // Apply sprint filter if active
       let filtered = stories;
       if (sprintFilter !== null) {
-        filtered = stories.filter(s => this.matchesSprintFilter(s, sprintFilter));
+        filtered = stories.filter((s) => this.matchesSprintFilter(s, sprintFilter));
       }
 
       // Apply text filter: if the epic itself matches, show all its stories;
       // otherwise only show stories that individually match
-      if (textFilter !== '' && !this.matchesTextFilter(epic)) {
-        filtered = filtered.filter(s => this.matchesTextFilter(s));
+      if (textFilter !== "" && !this.matchesTextFilter(epic)) {
+        filtered = filtered.filter((s) => this.matchesTextFilter(s));
       }
 
       // Sort stories by configured sort state (or fallback to default sprint/priority sort)
       const sortState = this.sortService?.state;
-      const sorted = sortState
-        ? sortStoriesBy(filtered, sortState, sprintSequence)
-        : sortStoriesForTreeView(filtered, sprintSequence);
+      const sorted = sortState ? sortStoriesBy(filtered, sortState, sprintSequence) : sortStoriesForTreeView(filtered, sprintSequence);
 
       return Promise.resolve(sorted);
     }
@@ -431,30 +434,34 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
     return Promise.resolve([]);
   }
 
-  private getVisibleEpics(epics: Epic[], sprintFilter: string | null, textFilter: string = ''): Epic[] {
-    if (sprintFilter === null && textFilter === '') { return epics; }
-    return epics.filter(epic => {
+  private getVisibleEpics(epics: Epic[], sprintFilter: string | null, textFilter: string = ""): Epic[] {
+    if (sprintFilter === null && textFilter === "") {
+      return epics;
+    }
+    return epics.filter((epic) => {
       // Epic itself matches text filter → show it (with ancestor)
-      if (textFilter !== '' && this.matchesTextFilter(epic)) {
+      if (textFilter !== "" && this.matchesTextFilter(epic)) {
         return true;
       }
       const stories = this.store.getStoriesByEpic(epic.id);
       if (sprintFilter !== null) {
-        return stories.some(s => this.matchesSprintFilter(s, sprintFilter));
+        return stories.some((s) => this.matchesSprintFilter(s, sprintFilter));
       }
       // Text filter only: at least one child story matches
-      return stories.some(s => this.matchesTextFilter(s));
+      return stories.some((s) => this.matchesTextFilter(s));
     });
   }
 
-  private getVisibleOrphanStories(sprintFilter: string | null, textFilter: string = ''): Story[] {
+  private getVisibleOrphanStories(sprintFilter: string | null, textFilter: string = ""): Story[] {
     const orphans = this.store.getStoriesWithoutEpic();
-    if (sprintFilter === null && textFilter === '') { return orphans; }
-    return orphans.filter(s => {
+    if (sprintFilter === null && textFilter === "") {
+      return orphans;
+    }
+    return orphans.filter((s) => {
       if (sprintFilter !== null && !this.matchesSprintFilter(s, sprintFilter)) {
         return false;
       }
-      if (textFilter !== '' && !this.matchesTextFilter(s)) {
+      if (textFilter !== "" && !this.matchesTextFilter(s)) {
         return false;
       }
       return true;
@@ -462,9 +469,9 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
   }
 
   private matchesSprintFilter(story: Story, sprintFilter: string): boolean {
-    if (sprintFilter === 'backlog') {
+    if (sprintFilter === "backlog") {
       // Backlog = empty, undefined, or 'backlog' sprint
-      return !story.sprint || story.sprint === '' || story.sprint === 'backlog';
+      return !story.sprint || story.sprint === "" || story.sprint === "backlog";
     }
     return story.sprint === sprintFilter;
   }
@@ -474,11 +481,13 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
    * Returns true when no text filter is active (empty string).
    */
   private matchesTextFilter(element: Story | Epic | Theme | BrokenFile | InboxSpikeFile): boolean {
-    const filterText = this.textFilterService?.filterText ?? '';
-    if (filterText === '') { return true; }
+    const filterText = this.textFilterService?.filterText ?? "";
+    if (filterText === "") {
+      return true;
+    }
     const query = filterText.toLowerCase();
 
-    if ('broken' in element) {
+    if ("broken" in element) {
       // BrokenFile — match against id
       return element.id.toLowerCase().includes(query);
     }
@@ -495,11 +504,11 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
     // Theme has no 'type' (Story discriminant) and no 'theme' key (Epic always has
     // theme: data.theme set by parser, even when undefined, making 'theme' in epic === true).
     // Also exclude _kind-based nodes (SprintNode, InboxSpikeNode, InboxSpikeFile).
-    return !('type' in element) && !('theme' in element) && !('_kind' in element);
+    return !("type" in element) && !("theme" in element) && !("_kind" in element);
   }
 
   private isStory(element: Epic | Story): element is Story {
-    return 'type' in element;
+    return "type" in element;
   }
 
   private getIconPath(iconName: string): vscode.ThemeIcon | { light: vscode.Uri; dark: vscode.Uri } | undefined {
@@ -507,7 +516,7 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       return undefined;
     }
 
-    const iconsPath = path.join(this.extensionPath, 'assets', 'icons');
+    const iconsPath = path.join(this.extensionPath, "assets", "icons");
     return {
       light: vscode.Uri.file(path.join(iconsPath, `${iconName}-light.svg`)),
       dark: vscode.Uri.file(path.join(iconsPath, `${iconName}-dark.svg`)),
@@ -516,14 +525,14 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
   private getStoryIcon(type: StoryType): vscode.ThemeIcon | { light: vscode.Uri; dark: vscode.Uri } | undefined {
     const iconMap: Record<StoryType, string> = {
-      feature: 'feature',
-      bug: 'bug',
-      task: 'task',
-      chore: 'chore',
-      spike: 'task',
+      feature: "feature",
+      bug: "bug",
+      task: "task",
+      chore: "chore",
+      spike: "task",
     };
 
-    const iconName = iconMap[type] || 'story';
+    const iconName = iconMap[type] || "story";
     return this.getIconPath(iconName);
   }
 
@@ -542,7 +551,7 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
     if (isSprintNode(element)) {
       return this.createSprintTreeItem(element);
     }
-    if ('broken' in element) {
+    if ("broken" in element) {
       return this.createBrokenFileTreeItem(element);
     }
     if (this.isTheme(element)) {
@@ -556,22 +565,20 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
   private createInboxSpikeNodeTreeItem(element: InboxSpikeNode): vscode.TreeItem {
     const item = new vscode.TreeItem(element.label, vscode.TreeItemCollapsibleState.Expanded);
-    item.contextValue = 'inboxSpikeNode';
+    item.contextValue = "inboxSpikeNode";
     item.id = element.nodeId;
 
-    const files = element.folderName === 'inbox'
-      ? this.store.getInboxFiles()
-      : this.store.getSpikeFiles();
+    const files = element.folderName === "inbox" ? this.store.getInboxFiles() : this.store.getSpikeFiles();
     const count = files.length;
 
-    if (element.folderName === 'inbox') {
-      item.iconPath = new vscode.ThemeIcon('inbox');
-      item.description = `${count} ${count === 1 ? 'file' : 'files'}`;
-      item.tooltip = 'Inbox — drag files onto sprints or epics to convert them';
+    if (element.folderName === "inbox") {
+      item.iconPath = new vscode.ThemeIcon("inbox");
+      item.description = `${count} ${count === 1 ? "file" : "files"}`;
+      item.tooltip = "Inbox — drag files onto sprints or epics to convert them";
     } else {
-      item.iconPath = new vscode.ThemeIcon('beaker');
-      item.description = `${count} ${count === 1 ? 'file' : 'files'}`;
-      item.tooltip = 'Spikes — drag files onto sprints or epics to convert them';
+      item.iconPath = new vscode.ThemeIcon("beaker");
+      item.description = `${count} ${count === 1 ? "file" : "files"}`;
+      item.tooltip = "Spikes — drag files onto sprints or epics to convert them";
     }
 
     return item;
@@ -579,13 +586,13 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
   private createInboxSpikeFileTreeItem(element: InboxSpikeFile): vscode.TreeItem {
     const item = new vscode.TreeItem(element.fileName, vscode.TreeItemCollapsibleState.None);
-    item.contextValue = 'inboxSpikeFile';
+    item.contextValue = "inboxSpikeFile";
     item.id = `inboxSpike:${element.filePath}`;
-    item.iconPath = new vscode.ThemeIcon('file');
-    item.tooltip = `${element.folderType === 'inbox' ? 'Inbox' : 'Spike'}: ${element.fileName}\nDrag onto a sprint, epic, or theme to convert`;
+    item.iconPath = new vscode.ThemeIcon("file");
+    item.tooltip = `${element.folderType === "inbox" ? "Inbox" : "Spike"}: ${element.fileName}\nDrag onto a sprint, epic, or theme to convert`;
     item.command = {
-      command: 'vscode.open',
-      title: 'Open file',
+      command: "vscode.open",
+      title: "Open file",
       arguments: [vscode.Uri.file(element.filePath)],
     };
     return item;
@@ -598,30 +605,28 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
     // When filtered to a single sprint, expand it; otherwise expand only the current sprint
     const isFiltered = sprintFilter !== null;
-    const collapsibleState = isFiltered || isCurrent
-      ? vscode.TreeItemCollapsibleState.Expanded
-      : vscode.TreeItemCollapsibleState.Collapsed;
+    const collapsibleState = isFiltered || isCurrent ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.Collapsed;
 
     const item = new vscode.TreeItem(element.label, collapsibleState);
-    item.contextValue = 'sprintNode';
+    item.contextValue = "sprintNode";
     item.id = isFiltered ? `sprint:${element.sprintId}:filtered` : `sprint:${element.sprintId}`;
 
     if (element.isBacklog) {
-      item.iconPath = new vscode.ThemeIcon('inbox');
+      item.iconPath = new vscode.ThemeIcon("inbox");
       // Count stories in backlog
       const sprintSequence = this.configService?.config.sprintSequence ?? [];
-      const backlogCount = this.store.getStories().filter(s => isBacklogStory(s, sprintSequence)).length;
+      const backlogCount = this.store.getStories().filter((s) => isBacklogStory(s, sprintSequence)).length;
       const brokenCount = this.store.getBrokenStories().length;
       const totalCount = backlogCount + brokenCount;
-      item.description = `${totalCount} ${totalCount === 1 ? 'story' : 'stories'}`;
-      item.tooltip = 'Unassigned & unrecognized sprints';
+      item.description = `${totalCount} ${totalCount === 1 ? "story" : "stories"}`;
+      item.tooltip = "Unassigned & unrecognized sprints";
     } else {
-      item.iconPath = new vscode.ThemeIcon('milestone');
+      item.iconPath = new vscode.ThemeIcon("milestone");
       // Count stories in this sprint
-      const storyCount = this.store.getStories().filter(s => s.sprint === element.sprintId).length;
-      const suffix = isCurrent ? ' (current)' : '';
-      item.description = `${storyCount} ${storyCount === 1 ? 'story' : 'stories'}${suffix}`;
-      item.tooltip = `Sprint: ${element.sprintId}${isCurrent ? ' (current sprint)' : ''}`;
+      const storyCount = this.store.getStories().filter((s) => s.sprint === element.sprintId).length;
+      const suffix = isCurrent ? " (current)" : "";
+      item.description = `${storyCount} ${storyCount === 1 ? "story" : "stories"}${suffix}`;
+      item.tooltip = `Sprint: ${element.sprintId}${isCurrent ? " (current sprint)" : ""}`;
     }
 
     return item;
@@ -629,51 +634,46 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
   private createBrokenFileTreeItem(element: BrokenFile): vscode.TreeItem {
     const item = new vscode.TreeItem(element.id, vscode.TreeItemCollapsibleState.None);
-    item.contextValue = 'brokenFile';
+    item.contextValue = "brokenFile";
     item.id = `broken:${element.filePath}`;
-    item.iconPath = new vscode.ThemeIcon('error', new vscode.ThemeColor('errorForeground'));
+    item.iconPath = new vscode.ThemeIcon("error", new vscode.ThemeColor("errorForeground"));
     // Show truncated error as inline description
-    const shortError = element.error.length > 60 ? element.error.slice(0, 57) + '...' : element.error;
+    const shortError = element.error.length > 60 ? element.error.slice(0, 57) + "..." : element.error;
     item.description = shortError;
     item.tooltip = new vscode.MarkdownString(
-      `**$(error) Broken ${element.fileType} file**\n\n` +
-      `**File:** \`${element.filePath}\`\n\n` +
-      `**Error:** ${element.error}`
+      `**$(error) Broken ${element.fileType} file**\n\n` + `**File:** \`${element.filePath}\`\n\n` + `**Error:** ${element.error}`,
     );
     item.tooltip.supportThemeIcons = true;
     // Click opens the file so the user can fix it
     item.command = {
-      command: 'vscode.open',
-      title: 'Open file',
-      arguments: [vscode.Uri.file(element.filePath)]
+      command: "vscode.open",
+      title: "Open file",
+      arguments: [vscode.Uri.file(element.filePath)],
     };
     return item;
   }
 
   private createThemeTreeItem(element: Theme): vscode.TreeItem {
     if (element.id === NO_THEME_ID) {
-      const item = new vscode.TreeItem('No Theme', vscode.TreeItemCollapsibleState.Expanded);
-      item.contextValue = 'noTheme';
+      const item = new vscode.TreeItem("No Theme", vscode.TreeItemCollapsibleState.Expanded);
+      item.contextValue = "noTheme";
       item.id = NO_THEME_ID;
-      item.iconPath = new vscode.ThemeIcon('folder');
-      item.description = 'Epics without a theme';
-      item.tooltip = 'Epics not assigned to any theme';
+      item.iconPath = new vscode.ThemeIcon("folder");
+      item.description = "Epics without a theme";
+      item.tooltip = "Epics not assigned to any theme";
       return item;
     }
 
     const label = `${element.id}: ${element.title}`;
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Expanded);
-    item.contextValue = 'theme';
+    item.contextValue = "theme";
     item.id = element.id;
-    item.iconPath = this.getIconPath('epic') ?? new vscode.ThemeIcon('symbol-namespace');
+    item.iconPath = this.getIconPath("epic") ?? new vscode.ThemeIcon("symbol-namespace");
     item.description = element.status ? `${this.getStatusIndicator(element.status)} ${element.status}` : undefined;
     const epicCount = this.store.getEpicsByTheme(element.id).length;
-    const createdDate = element.created.toISOString().split('T')[0];
+    const createdDate = element.created.toISOString().split("T")[0];
     item.tooltip = new vscode.MarkdownString(
-      `**${element.id}**: ${element.title}\n\n` +
-      `Status: ${element.status}\n` +
-      `Created: ${createdDate}\n` +
-      `Epics: ${epicCount}`
+      `**${element.id}**: ${element.title}\n\n` + `Status: ${element.status}\n` + `Created: ${createdDate}\n` + `Epics: ${epicCount}`,
     );
     if (element.filePath) {
       item.resourceUri = vscode.Uri.file(element.filePath);
@@ -684,28 +684,25 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
   private createEpicTreeItem(element: Epic): vscode.TreeItem {
     // "No Epic" sentinel node
     if (element.id === NO_EPIC_ID) {
-      const item = new vscode.TreeItem('No Epic', vscode.TreeItemCollapsibleState.Collapsed);
-      item.contextValue = 'noEpic';
+      const item = new vscode.TreeItem("No Epic", vscode.TreeItemCollapsibleState.Collapsed);
+      item.contextValue = "noEpic";
       item.id = NO_EPIC_ID;
-      item.iconPath = new vscode.ThemeIcon('inbox');
-      item.description = 'Stories without an epic';
-      item.tooltip = 'Stories not assigned to any epic';
+      item.iconPath = new vscode.ThemeIcon("inbox");
+      item.description = "Stories without an epic";
+      item.tooltip = "Stories not assigned to any epic";
       return item;
     }
 
     const label = `${element.id}: ${element.title}`;
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
-    item.contextValue = 'epic';
+    item.contextValue = "epic";
     item.id = element.id;
-    item.iconPath = this.getIconPath('epic');
+    item.iconPath = this.getIconPath("epic");
     item.description = `${this.getStatusIndicator(element.status)} ${element.status}`;
     const storyCount = this.store.getStoriesByEpic(element.id).length;
-    const createdDate = element.created.toISOString().split('T')[0];
+    const createdDate = element.created.toISOString().split("T")[0];
     item.tooltip = new vscode.MarkdownString(
-      `**${element.id}**: ${element.title}\n\n` +
-      `Status: ${element.status}\n` +
-      `Created: ${createdDate}\n` +
-      `Stories: ${storyCount}`
+      `**${element.id}**: ${element.title}\n\n` + `Status: ${element.status}\n` + `Created: ${createdDate}\n` + `Stories: ${storyCount}`,
     );
     if (element.filePath) {
       item.resourceUri = vscode.Uri.file(element.filePath);
@@ -716,21 +713,21 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
   private createStoryTreeItem(element: Story): vscode.TreeItem {
     const label = `${element.id}: ${element.title}`;
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
-    item.contextValue = 'story';
+    item.contextValue = "story";
     item.id = element.id;
     item.iconPath = this.getStoryIcon(element.type);
     item.description = `${this.getStatusIndicator(element.status)} ${element.status}`;
     item.tooltip = new vscode.MarkdownString(
       `**${element.id}**: ${element.title}\n\n` +
-      `Type: ${element.type}\n` +
-      `Status: ${element.status}\n` +
-      `Size: ${element.size || 'N/A'}`
+        `Type: ${element.type}\n` +
+        `Status: ${element.status}\n` +
+        `Size: ${element.size || "N/A"}`,
     );
     if (element.filePath) {
       item.command = {
-        command: 'vscode.open',
-        title: 'Open Story',
-        arguments: [vscode.Uri.file(element.filePath)]
+        command: "vscode.open",
+        title: "Open Story",
+        arguments: [vscode.Uri.file(element.filePath)],
       };
     }
     return item;

@@ -32,6 +32,7 @@ import { updateStoryEpic, updateEpicTheme, clearStoryEpic } from './storiesDragA
 import { handleBacklogDrop } from './backlogDropHandler';
 import { handleInboxDropOnBacklog, handleInboxDropOnBreakdown, BreakdownTarget } from './inboxDropHandler';
 import { getLogger } from '../core/logger';
+import { StorydocsService } from '../core/storydocsService';
 
 /** MIME type used to identify items dragged from this tree view. */
 const MIME_TYPE = 'application/vnd.code.tree.devstories.views.explorer';
@@ -83,6 +84,7 @@ export class StoriesDragAndDropController
     private readonly getViewMode: () => ViewMode = () => 'backlog',
     private readonly sortService?: SortService,
     private readonly configService?: ConfigService,
+    private readonly storydocsService?: StorydocsService,
   ) {}
 
   // ─── handleDrag ────────────────────────────────────────────────────────────
@@ -171,6 +173,7 @@ export class StoriesDragAndDropController
           store: this.store,
           configService: this.configService,
           sortService: this.sortService,
+          storydocsService: this.storydocsService,
         });
         return;
       }
@@ -238,6 +241,7 @@ export class StoriesDragAndDropController
         target: breakdownTarget,
         store: this.store,
         configService: this.configService,
+        storydocsService: this.storydocsService,
       });
       return;
     }
@@ -336,7 +340,7 @@ async function moveStoryToEpic(story: Story, targetEpic: Epic): Promise<void> {
 
 async function moveEpicToTheme(
   epic: Epic,
-  newThemeId: string | undefined
+  newThemeId: string | undefined,
 ): Promise<void> {
   if (!epic.filePath) {
     return;

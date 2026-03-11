@@ -10,27 +10,6 @@ suite('CreateStory Command Integration Test', () => {
 		assert.ok(commands.includes('devstories.createStory'), 'devstories.createStory command should be registered');
 	});
 
-	test('parseConfigJson should parse config', async () => {
-		const { parseConfigJson } = await import('../../commands/createStoryUtils');
-
-		const json = JSON.stringify({
-			version: 1,
-			project: 'TestProject',
-			idPrefix: {
-				epic: 'PROJ',
-				story: 'FEAT',
-			},
-			statuses: [
-				{ id: 'todo', label: 'To Do' },
-				{ id: 'done', label: 'Done' },
-			],
-		});
-		const config = parseConfigJson(json);
-
-		assert.strictEqual(config.storyPrefix, 'FEAT');
-		assert.strictEqual(config.epicPrefix, 'PROJ');
-	});
-
 	test('findNextStoryId should find correct next ID', async () => {
 		const { findNextStoryId } = await import('../../commands/createStoryUtils');
 

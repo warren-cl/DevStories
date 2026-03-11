@@ -57,3 +57,39 @@ export async function showSprintValidationErrorNotification(error: string): Prom
     await vscode.window.showTextDocument(doc);
   }
 }
+
+export const CONFIG_UPGRADE_MESSAGE = 'DevStories config.json upgraded — new fields added:';
+export const OPEN_BACKUP_ACTION = 'Open Backup';
+
+/**
+ * Show info notification when config.json has been auto-upgraded.
+ * Offers "Open Config" and "Open Backup" actions.
+ */
+export async function showConfigUpgradeNotification(fieldsAdded: string[]): Promise<void> {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+  const fieldList = fieldsAdded.join(', ');
+
+  const action = await vscode.window.showInformationMessage(
+    `${CONFIG_UPGRADE_MESSAGE} ${fieldList}`,
+    OPEN_CONFIG_ACTION,
+    OPEN_BACKUP_ACTION,
+  );
+
+  if (!workspaceFolder) {
+    return;
+  }
+
+  if (action === OPEN_CONFIG_ACTION) {
+    const configPath = getConfigFilePath(workspaceFolder);
+    const doc = await vscode.workspace.openTextDocument(configPath);
+    await vscode.window.showTextDocument(doc);
+  } else if (action === OPEN_BACKUP_ACTION) {
+    const backupPath = vscode.Uri.joinPath(
+      workspaceFolder.uri,
+      '.devstories',
+      'config.json.bak'
+    );
+    const doc = await vscode.workspace.openTextDocument(backupPath);
+    await vscode.window.showTextDocument(doc);
+  }
+}

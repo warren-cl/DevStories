@@ -84,6 +84,41 @@ Use quick capture for fast ideas or the full form for detailed stories with temp
 - **Diagnostics** — Real-time validation of story/epic/theme frontmatter against JSON Schema (missing fields, invalid values, broken references)
 - **Autocomplete** — IntelliSense suggestions for `status`, `type`, `size`, `sprint`, `epic`, `theme`, and `[[ID]]` references
 
+### 📂 StoryDocs
+Maintain flat, type-based document folders that mirror your `.devstories/` directory layout — perfect for storing design docs, meeting notes, screenshots, or any files related to a theme, epic, or story.
+
+Enable StoryDocs in `.devstories/config.json`:
+
+```json
+{
+  "storydocs": {
+    "enabled": true,
+    "root": "docs/storydocs"
+  }
+}
+```
+
+Once enabled:
+- **Folders are created automatically** when you create a theme, epic, or story (e.g. `docs/storydocs/stories/DS-00001/`)
+- **No folder moves on drag-and-drop** — the flat layout means reparenting a node doesn't affect its storydocs folder
+- **Empty folders are cleaned up** when the corresponding node is deleted
+- **Reconcile command** — run `DevStories: Reconcile StoryDocs Folders` from the Command Palette to rebuild the full folder structure on demand
+
+Example folder structure:
+
+```
+docs/storydocs/
+├── themes/
+│   ├── THEME-001/
+│   └── THEME-002/
+├── epics/
+│   ├── EPIC-0001/
+│   └── EPIC-0002/
+└── stories/
+    ├── DS-00001/
+    └── DS-00002/
+```
+
 ### More Features
 - **Story Templates** — Different templates per type (feature/bug/task/chore/spike)
 - **Auto-timestamps** — `updated` field auto-updates on save
@@ -144,7 +179,11 @@ DevStories stores configuration in `.devstories/config.json`:
   "quickCapture": {
     "defaultToCurrentSprint": false
   },
-  "autoFilterCurrentSprint": true
+  "autoFilterCurrentSprint": true,
+  "storydocs": {
+    "enabled": true,
+    "root": "docs/storydocs"
+  }
 }
 ```
 
@@ -152,7 +191,7 @@ DevStories stores configuration in `.devstories/config.json`:
 
 | Field | Description |
 |-------|-------------|
-| `version` | Schema version (always `1`) |
+| `version` | Schema version (always `1` or `2`) |
 | `idMode` | `"auto"` for sequential IDs, `"manual"` for user-entered IDs |
 | `idPrefix.theme` | Prefix for theme IDs (e.g., `THEME`) |
 | `idPrefix.epic` | Prefix for epic IDs (e.g., `EPIC`) |
@@ -165,6 +204,8 @@ DevStories stores configuration in `.devstories/config.json`:
 | `storypoints` | Point values parallel to `sizes` (index-aligned) — used for status bar progress and burndown |
 | `quickCapture.defaultToCurrentSprint` | When `true`, quick captures use current sprint; when `false`, they go to backlog |
 | `autoFilterCurrentSprint` | When `true`, automatically filter the tree view to the current sprint on load |
+| `storydocs.enabled` | When `true`, maintains flat, type-based document folders mirroring the `.devstories/` layout |
+| `storydocs.root` | Root folder for StoryDocs, relative to the repository root (e.g., `docs/storydocs`) |
 
 ## File Structure
 

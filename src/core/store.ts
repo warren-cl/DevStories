@@ -1,14 +1,14 @@
-import * as vscode from 'vscode';
-import * as path from 'path';
-import { BrokenFile } from '../types/brokenFile';
-import { Epic } from '../types/epic';
-import { InboxSpikeFile, InboxSpikeFolderType } from '../types/inboxSpikeNode';
-import { Story } from '../types/story';
-import { Theme } from '../types/theme';
-import { Parser } from './parser';
-import { Watcher } from './watcher';
-import { getLogger } from './logger';
-import { sortEpicsBySprintOrder } from '../view/storiesProviderUtils';
+import * as vscode from "vscode";
+import * as path from "path";
+import { BrokenFile } from "../types/brokenFile";
+import { Epic } from "../types/epic";
+import { InboxSpikeFile, InboxSpikeFolderType } from "../types/inboxSpikeNode";
+import { Story } from "../types/story";
+import { Theme } from "../types/theme";
+import { Parser } from "./parser";
+import { Watcher } from "./watcher";
+import { getLogger } from "./logger";
+import { sortEpicsBySprintOrder } from "../view/storiesProviderUtils";
 
 export class Store {
   private stories = new Map<string, Story>();
@@ -20,19 +20,28 @@ export class Store {
   private _onDidUpdate = new vscode.EventEmitter<void>();
   readonly onDidUpdate = this._onDidUpdate.event;
 
+  /** Fires before a node is removed from the store (on file deletion), carrying its info. */
+  private _onWillDeleteNode = new vscode.EventEmitter<{
+    id: string;
+    nodeType: "story" | "epic" | "theme";
+    epicId?: string;
+    themeId?: string;
+  }>();
+  readonly onWillDeleteNode = this._onWillDeleteNode.event;
+
   constructor(private watcher: Watcher) {
     // Listen to watcher events
-    this.watcher.onDidCreate(uri => this.onFileChanged(uri));
-    this.watcher.onDidChange(uri => this.onFileChanged(uri));
-    this.watcher.onDidDelete(uri => this.onFileDeleted(uri));
+    this.watcher.onDidCreate((uri) => this.onFileChanged(uri));
+    this.watcher.onDidChange((uri) => this.onFileChanged(uri));
+    this.watcher.onDidDelete((uri) => this.onFileDeleted(uri));
   }
 
   async load() {
-    const storyFiles = await vscode.workspace.findFiles('**/.devstories/stories/*.md');
-    const epicFiles = await vscode.workspace.findFiles('**/.devstories/epics/*.md');
-    const themeFiles = await vscode.workspace.findFiles('**/.devstories/themes/*.md');
-    const inboxFiles = await vscode.workspace.findFiles('**/.devstories/inbox/*.md');
-    const spikeFiles = await vscode.workspace.findFiles('**/.devstories/spikes/*.md');
+    const storyFiles = await vscode.workspace.findFiles("**/.devstories/stories/*.md");
+    const epicFiles = await vscode.workspace.findFiles("**/.devstories/epics/*.md");
+    const themeFiles = await vscode.workspace.findFiles("**/.devstories/themes/*.md");
+    const inboxFiles = await vscode.workspace.findFiles("**/.devstories/inbox/*.md");
+    const spikeFiles = await vscode.workspace.findFiles("**/.devstories/spikes/*.md");
 
     this.stories.clear();
     this.epics.clear();
@@ -41,11 +50,15 @@ export class Store {
     this.inboxFiles.clear();
     this.spikeFiles.clear();
 
-    await Promise.all(storyFiles.map(uri => this.parseAndAddStory(uri)));
-    await Promise.all(epicFiles.map(uri => this.parseAndAddEpic(uri)));
-    await Promise.all(themeFiles.map(uri => this.parseAndAddTheme(uri)));
-    for (const uri of inboxFiles) { this.addInboxSpikeFile(uri, 'inbox'); }
-    for (const uri of spikeFiles) { this.addInboxSpikeFile(uri, 'spikes'); }
+    await Promise.all(storyFiles.map((uri) => this.parseAndAddStory(uri)));
+    await Promise.all(epicFiles.map((uri) => this.parseAndAddEpic(uri)));
+    await Promise.all(themeFiles.map((uri) => this.parseAndAddTheme(uri)));
+    for (const uri of inboxFiles) {
+      this.addInboxSpikeFile(uri, "inbox");
+    }
+    for (const uri of spikeFiles) {
+      this.addInboxSpikeFile(uri, "spikes");
+    }
 
     // Notify listeners that data has been loaded
     this._onDidUpdate.fire();
@@ -64,15 +77,15 @@ export class Store {
   }
 
   getStoriesByEpic(epicId: string): Story[] {
-    return Array.from(this.stories.values()).filter(story => story.epic === epicId);
+    return Array.from(this.stories.values()).filter((story) => story.epic === epicId);
   }
 
   getEpicsByTheme(themeId: string): Epic[] {
-    return Array.from(this.epics.values()).filter(epic => epic.theme === themeId);
+    return Array.from(this.epics.values()).filter((epic) => epic.theme === themeId);
   }
 
   getEpicsWithoutTheme(): Epic[] {
-    return Array.from(this.epics.values()).filter(epic => !epic.theme);
+    return Array.from(this.epics.values()).filter((epic) => !epic.theme);
   }
 
   /**
@@ -80,24 +93,22 @@ export class Store {
    * These are orphaned stories that appear under the "No Epic" sentinel node.
    */
   getStoriesWithoutEpic(): Story[] {
-    return Array.from(this.stories.values()).filter(
-      story => !story.epic || !this.epics.has(story.epic)
-    );
+    return Array.from(this.stories.values()).filter((story) => !story.epic || !this.epics.has(story.epic));
   }
 
   /** Epic files that failed to parse — shown under the "No Theme" sentinel. */
   getBrokenEpics(): BrokenFile[] {
-    return Array.from(this.brokenFiles.values()).filter(f => f.fileType === 'epic');
+    return Array.from(this.brokenFiles.values()).filter((f) => f.fileType === "epic");
   }
 
   /** Story files that failed to parse — shown under the "No Epic" sentinel. */
   getBrokenStories(): BrokenFile[] {
-    return Array.from(this.brokenFiles.values()).filter(f => f.fileType === 'story');
+    return Array.from(this.brokenFiles.values()).filter((f) => f.fileType === "story");
   }
 
   /** Theme files that failed to parse — shown at the root of the Breakdown view. */
   getBrokenThemes(): BrokenFile[] {
-    return Array.from(this.brokenFiles.values()).filter(f => f.fileType === 'theme');
+    return Array.from(this.brokenFiles.values()).filter((f) => f.fileType === "theme");
   }
 
   getEpics(): Epic[] {
@@ -122,17 +133,25 @@ export class Store {
     return Array.from(this.spikeFiles.values());
   }
 
+  /** Returns true if the store has any content (stories, epics, themes, broken files, inbox, or spikes). */
+  hasContent(): boolean {
+    return (
+      this.stories.size > 0 ||
+      this.epics.size > 0 ||
+      this.themes.size > 0 ||
+      this.brokenFiles.size > 0 ||
+      this.inboxFiles.size > 0 ||
+      this.spikeFiles.size > 0
+    );
+  }
+
   /**
    * Get epics sorted by their earliest story's sprint position.
    * Epics with earlier sprints appear first.
    */
   getEpicsBySprintOrder(sprintSequence: string[]): Epic[] {
     const allEpics = this.getEpics();
-    return sortEpicsBySprintOrder(
-      allEpics,
-      sprintSequence,
-      (epicId) => this.getStoriesByEpic(epicId)
-    );
+    return sortEpicsBySprintOrder(allEpics, sprintSequence, (epicId) => this.getStoriesByEpic(epicId));
   }
 
   private async onFileChanged(uri: vscode.Uri) {
@@ -145,16 +164,16 @@ export class Store {
    * without relying solely on the FileSystemWatcher (which can be delayed on Windows).
    */
   async reloadFile(uri: vscode.Uri): Promise<void> {
-    if (uri.path.includes('/stories/')) {
+    if (uri.path.includes("/stories/")) {
       await this.parseAndAddStory(uri);
-    } else if (uri.path.includes('/epics/')) {
+    } else if (uri.path.includes("/epics/")) {
       await this.parseAndAddEpic(uri);
-    } else if (uri.path.includes('/themes/')) {
+    } else if (uri.path.includes("/themes/")) {
       await this.parseAndAddTheme(uri);
-    } else if (uri.path.includes('/inbox/')) {
-      this.addInboxSpikeFile(uri, 'inbox');
-    } else if (uri.path.includes('/spikes/')) {
-      this.addInboxSpikeFile(uri, 'spikes');
+    } else if (uri.path.includes("/inbox/")) {
+      this.addInboxSpikeFile(uri, "inbox");
+    } else if (uri.path.includes("/spikes/")) {
+      this.addInboxSpikeFile(uri, "spikes");
     }
     this._onDidUpdate.fire();
   }
@@ -164,9 +183,15 @@ export class Store {
     // Or we can assume ID is filename? No, ID is in frontmatter.
     // But if file is deleted, we can't read it.
     // We have to search the map for the story with this filePath.
-    
+
     for (const [id, story] of this.stories) {
       if (story.filePath === uri.fsPath) {
+        this._onWillDeleteNode.fire({
+          id,
+          nodeType: "story",
+          epicId: story.epic || undefined,
+          themeId: story.epic ? this.epics.get(story.epic)?.theme : undefined,
+        });
         this.stories.delete(id);
         break;
       }
@@ -174,6 +199,7 @@ export class Store {
 
     for (const [id, epic] of this.epics) {
       if (epic.filePath === uri.fsPath) {
+        this._onWillDeleteNode.fire({ id, nodeType: "epic", themeId: epic.theme });
         this.epics.delete(id);
         break;
       }
@@ -181,6 +207,7 @@ export class Store {
 
     for (const [id, theme] of this.themes) {
       if (theme.filePath === uri.fsPath) {
+        this._onWillDeleteNode.fire({ id, nodeType: "theme" });
         this.themes.delete(id);
         break;
       }
@@ -205,10 +232,10 @@ export class Store {
       getLogger().error(`Failed to parse story ${uri.fsPath}:`, e);
       this.brokenFiles.set(uri.fsPath, {
         broken: true,
-        id: path.basename(uri.fsPath, '.md'),
+        id: path.basename(uri.fsPath, ".md"),
         filePath: uri.fsPath,
-        error: (e instanceof Error ? e.message : String(e)),
-        fileType: 'story',
+        error: e instanceof Error ? e.message : String(e),
+        fileType: "story",
       });
     }
   }
@@ -223,10 +250,10 @@ export class Store {
       getLogger().error(`Failed to parse epic ${uri.fsPath}:`, e);
       this.brokenFiles.set(uri.fsPath, {
         broken: true,
-        id: path.basename(uri.fsPath, '.md'),
+        id: path.basename(uri.fsPath, ".md"),
         filePath: uri.fsPath,
-        error: (e instanceof Error ? e.message : String(e)),
-        fileType: 'epic',
+        error: e instanceof Error ? e.message : String(e),
+        fileType: "epic",
       });
     }
   }
@@ -241,23 +268,23 @@ export class Store {
       getLogger().error(`Failed to parse theme ${uri.fsPath}:`, e);
       this.brokenFiles.set(uri.fsPath, {
         broken: true,
-        id: path.basename(uri.fsPath, '.md'),
+        id: path.basename(uri.fsPath, ".md"),
         filePath: uri.fsPath,
-        error: (e instanceof Error ? e.message : String(e)),
-        fileType: 'theme',
+        error: e instanceof Error ? e.message : String(e),
+        fileType: "theme",
       });
     }
   }
 
   private addInboxSpikeFile(uri: vscode.Uri, folderType: InboxSpikeFolderType): void {
-    const fileName = path.basename(uri.fsPath, '.md');
+    const fileName = path.basename(uri.fsPath, ".md");
     const file: InboxSpikeFile = {
-      _kind: 'inboxSpikeFile',
+      _kind: "inboxSpikeFile",
       fileName,
       filePath: uri.fsPath,
       folderType,
     };
-    if (folderType === 'inbox') {
+    if (folderType === "inbox") {
       this.inboxFiles.set(uri.fsPath, file);
     } else {
       this.spikeFiles.set(uri.fsPath, file);

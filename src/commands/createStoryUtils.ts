@@ -37,15 +37,6 @@ export function parseCustomTemplate(filename: string, content: string): CustomTe
   };
 }
 
-export interface DevStoriesConfig {
-  epicPrefix: string;
-  storyPrefix: string;
-  currentSprint?: string;
-  statuses: string[];
-  sizes: StorySize[];
-  quickCaptureDefaultToCurrentSprint: boolean;
-}
-
 export interface StoryData {
   id: string;
   title: string;
@@ -100,33 +91,6 @@ As a [user], I need [feature] so that [benefit].
 ## Findings
 `,
 };
-
-/**
- * Parse config.json content and extract relevant fields for story creation
- */
-export function parseConfigJson(content: string): DevStoriesConfig {
-  try {
-    const parsed = JSON.parse(content);
-
-    return {
-      epicPrefix: parsed?.idPrefix?.epic ?? 'EPIC',
-      storyPrefix: parsed?.idPrefix?.story ?? 'STORY',
-      currentSprint: parsed?.sprints?.current,
-      statuses: parsed?.statuses?.map((s: { id: string }) => s.id) ?? ['todo', 'in_progress', 'review', 'done'],
-      sizes: parsed?.sizes ?? ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'],
-      quickCaptureDefaultToCurrentSprint: parsed?.quickCapture?.defaultToCurrentSprint === true,
-    };
-  } catch {
-    return {
-      epicPrefix: 'EPIC',
-      storyPrefix: 'STORY',
-      currentSprint: undefined,
-      statuses: ['todo', 'in_progress', 'review', 'done'],
-      sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'],
-      quickCaptureDefaultToCurrentSprint: false,
-    };
-  }
-}
 
 /**
  * Find the next sequential story ID number

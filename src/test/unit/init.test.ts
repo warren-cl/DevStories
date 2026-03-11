@@ -15,7 +15,7 @@ describe('Init Command', () => {
       const json = generateConfigJson(config);
       const parsed = JSON.parse(json);
 
-      expect(parsed.version).toBe(1);
+      expect(parsed.version).toBe(2);
       expect(parsed.project).toBe('my-project');
       expect(parsed.idPrefix.epic).toBe('EPIC');
       expect(parsed.idPrefix.story).toBe('DS');
@@ -27,6 +27,9 @@ describe('Init Command', () => {
       expect(parsed.statuses[3].id).toBe('done');
       expect(parsed.sizes).toEqual(['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL']);
       expect(parsed.storypoints).toEqual([1, 2, 4, 8, 16, 32, 64]);
+      expect(parsed.autoFilterCurrentSprint).toBe(true);
+      expect(parsed.quickCapture).toEqual({ defaultToCurrentSprint: false });
+      expect(parsed.storydocs).toEqual({ enabled: false, root: 'docs/storydocs' });
     });
 
     it('should handle custom prefixes', () => {

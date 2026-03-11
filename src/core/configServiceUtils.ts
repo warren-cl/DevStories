@@ -39,6 +39,7 @@ export interface TemplateData {
 export interface ConfigData {
   epicPrefix: string;
   storyPrefix: string;
+  themePrefix: string;
   currentSprint?: string;
   sprintSequence: string[];
   statuses: StatusDef[];
@@ -50,14 +51,25 @@ export interface ConfigData {
   sprintLength?: number;
   /** ISO date (YYYY-MM-DD) of the first day of the first sprint (for burndown charts) */
   firstSprintStartDate?: string;
+  /** When true, storydocs hierarchical document folders are enabled */
+  storydocsEnabled?: boolean;
+  /** Root folder for storydocs, relative to workspace root */
+  storydocsRoot?: string;
 }
 
 /**
  * Default configuration values
  */
+/**
+ * Current config schema version.
+ * Bump this when adding new fields that should be auto-populated in existing configs.
+ */
+export const CURRENT_CONFIG_SCHEMA_VERSION = 2;
+
 export const DEFAULT_CONFIG: ConfigData = {
   epicPrefix: 'EPIC',
   storyPrefix: 'STORY',
+  themePrefix: 'THEME',
   sprintSequence: [],
   statuses: [
     { id: 'todo', label: 'To Do' },
@@ -128,6 +140,9 @@ export function parseConfigJsonContent(content: string): Partial<ConfigData> {
     if (parsed.idPrefix?.story) {
       result.storyPrefix = parsed.idPrefix.story;
     }
+    if (parsed.idPrefix?.theme) {
+      result.themePrefix = parsed.idPrefix.theme;
+    }
 
     // Sprint
     if (parsed.sprints?.current) {
@@ -175,6 +190,14 @@ export function parseConfigJsonContent(content: string): Partial<ConfigData> {
       result.firstSprintStartDate = parsed.sprints.firstSprintStartDate;
     }
 
+    // StoryDocs config
+    if (typeof parsed.storydocs?.enabled === 'boolean') {
+      result.storydocsEnabled = parsed.storydocs.enabled;
+    }
+    if (typeof parsed.storydocs?.root === 'string' && parsed.storydocs.root.trim()) {
+      result.storydocsRoot = parsed.storydocs.root.trim();
+    }
+
     return result;
   } catch {
     // Invalid JSON config - return empty to use defaults
@@ -205,6 +228,7 @@ export function mergeConfigWithDefaults(parsed: Partial<ConfigData>): ConfigData
   return {
     epicPrefix: parsed.epicPrefix ?? DEFAULT_CONFIG.epicPrefix,
     storyPrefix: parsed.storyPrefix ?? DEFAULT_CONFIG.storyPrefix,
+    themePrefix: parsed.themePrefix ?? DEFAULT_CONFIG.themePrefix,
     currentSprint: parsed.currentSprint,
     sprintSequence: parsed.sprintSequence ?? DEFAULT_CONFIG.sprintSequence,
     statuses: parsed.statuses ?? DEFAULT_CONFIG.statuses,
@@ -214,6 +238,8 @@ export function mergeConfigWithDefaults(parsed: Partial<ConfigData>): ConfigData
     autoFilterCurrentSprint: parsed.autoFilterCurrentSprint ?? DEFAULT_CONFIG.autoFilterCurrentSprint,
     sprintLength: parsed.sprintLength,
     firstSprintStartDate: parsed.firstSprintStartDate,
+    storydocsEnabled: parsed.storydocsEnabled,
+    storydocsRoot: parsed.storydocsRoot,
   };
 }
 
@@ -308,4 +334,98 @@ export function debounce<T extends (...args: unknown[]) => void>(
       fn(...args);
     }, delay);
   };
+}
+
+/**
+ * Result of computing a config upgrade.
+ */
+export interface ConfigUpgradeResult {
+  upgraded: Record<string, unknown>;
+  fieldsAdded: string[];
+}
+
+/**
+ * Compute config upgrades needed to bring a raw config.json object up to the
+ * current schema version. Returns null if no changes are needed.
+ *
+ * Rules:
+ * - Add `idMode` → "auto" if missing
+ * - Add `autoFilterCurrentSprint` → true if missing
+ * - Add `quickCapture` → { defaultToCurrentSprint: false } if entirely missing
+ * - Add `quickCapture.defaultToCurrentSprint` → false if quickCapture exists but field missing
+ * - Add `idPrefix.theme` → "THEME" if idPrefix exists but theme missing
+ * - Add `storypoints` → [1,2,4,8,16,32,64] only if sizes has 7 items AND storypoints missing
+ * - Add `storydocs` → { enabled: false, root: "docs/storydocs" } if missing
+ * - Never add: sprints (user-specific)
+ * - Always: bump `version` to CURRENT_CONFIG_SCHEMA_VERSION
+ */
+export function computeConfigUpgrade(raw: Record<string, unknown>): ConfigUpgradeResult | null {
+  const version = typeof raw.version === 'number' ? raw.version : 0;
+  if (version >= CURRENT_CONFIG_SCHEMA_VERSION) {
+    return null;
+  }
+
+  // Deep-clone to avoid mutating the input
+  const upgraded = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>;
+  const fieldsAdded: string[] = [];
+
+  // idMode
+  if (upgraded.idMode === undefined) {
+    upgraded.idMode = 'auto';
+    fieldsAdded.push('idMode');
+  }
+
+  // autoFilterCurrentSprint
+  if (upgraded.autoFilterCurrentSprint === undefined) {
+    upgraded.autoFilterCurrentSprint = true;
+    fieldsAdded.push('autoFilterCurrentSprint');
+  }
+
+  // quickCapture
+  if (upgraded.quickCapture === undefined) {
+    upgraded.quickCapture = { defaultToCurrentSprint: false };
+    fieldsAdded.push('quickCapture');
+  } else if (
+    typeof upgraded.quickCapture === 'object' &&
+    upgraded.quickCapture !== null &&
+    (upgraded.quickCapture as Record<string, unknown>).defaultToCurrentSprint === undefined
+  ) {
+    (upgraded.quickCapture as Record<string, unknown>).defaultToCurrentSprint = false;
+    fieldsAdded.push('quickCapture.defaultToCurrentSprint');
+  }
+
+  // idPrefix.theme
+  if (typeof upgraded.idPrefix === 'object' && upgraded.idPrefix !== null) {
+    const idPrefix = upgraded.idPrefix as Record<string, unknown>;
+    if (idPrefix.theme === undefined) {
+      idPrefix.theme = 'THEME';
+      fieldsAdded.push('idPrefix.theme');
+    }
+  }
+
+  // storypoints (only if sizes has 7 items and storypoints missing)
+  if (
+    upgraded.storypoints === undefined &&
+    Array.isArray(upgraded.sizes) &&
+    upgraded.sizes.length === 7
+  ) {
+    upgraded.storypoints = [1, 2, 4, 8, 16, 32, 64];
+    fieldsAdded.push('storypoints');
+  }
+
+  // storydocs (default disabled so users discover the option)
+  if (upgraded.storydocs === undefined) {
+    upgraded.storydocs = { enabled: false, root: 'docs/storydocs' };
+    fieldsAdded.push('storydocs');
+  }
+
+  // Always bump version
+  upgraded.version = CURRENT_CONFIG_SCHEMA_VERSION;
+
+  if (fieldsAdded.length === 0 && version < CURRENT_CONFIG_SCHEMA_VERSION) {
+    // Only version bump needed — still counts as an upgrade
+    return { upgraded, fieldsAdded: ['version'] };
+  }
+
+  return { upgraded, fieldsAdded };
 }

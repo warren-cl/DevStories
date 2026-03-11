@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { Store } from '../core/store';
+import { ConfigService } from '../core/configService';
+import { ConfigData, parseConfigJsonContent, mergeConfigWithDefaults } from '../core/configServiceUtils';
 import { getLogger } from '../core/logger';
-import { parseConfigJson, DevStoriesConfig } from './createEpicUtils';
+import { StorydocsService } from '../core/storydocsService';
 import { findNextThemeId, generateThemeMarkdown } from './createThemeUtils';
 import { validateThemeName } from '../utils/inputValidation';
 import { toKebabCase } from '../utils/filenameUtils';
@@ -10,13 +12,14 @@ import { toKebabCase } from '../utils/filenameUtils';
 export { findNextThemeId, generateThemeMarkdown } from './createThemeUtils';
 
 /**
- * Read and parse config.json from workspace
+ * Read config.json from workspace as fallback when ConfigService is not available
  */
-async function readConfig(workspaceUri: vscode.Uri): Promise<DevStoriesConfig | undefined> {
+async function readConfigFallback(workspaceUri: vscode.Uri): Promise<ConfigData | undefined> {
   const configUri = vscode.Uri.joinPath(workspaceUri, '.devstories', 'config.json');
   try {
     const content = await vscode.workspace.fs.readFile(configUri);
-    return parseConfigJson(Buffer.from(content).toString('utf8'));
+    const parsed = parseConfigJsonContent(Buffer.from(content).toString('utf8'));
+    return mergeConfigWithDefaults(parsed);
   } catch (error) {
     getLogger().debug('Config not found or unreadable', error);
     return undefined;
@@ -39,7 +42,7 @@ function findSimilarTheme(title: string, store: Store): string | undefined {
 /**
  * Execute the createTheme command
  */
-export async function executeCreateTheme(store: Store): Promise<boolean> {
+export async function executeCreateTheme(store: Store, storydocsService?: StorydocsService, configService?: ConfigService): Promise<boolean> {
   // Check for workspace
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -49,8 +52,8 @@ export async function executeCreateTheme(store: Store): Promise<boolean> {
 
   const workspaceUri = workspaceFolders[0].uri;
 
-  // Read config
-  const config = await readConfig(workspaceUri);
+  // Use ConfigService if available, otherwise read from file
+  const config = configService ? configService.config : await readConfigFallback(workspaceUri);
   if (!config) {
     const action = await vscode.window.showErrorMessage(
       'DevStories: No config.json found. Initialize DevStories first.',
@@ -96,10 +99,9 @@ export async function executeCreateTheme(store: Store): Promise<boolean> {
   });
 
   // Generate ID
-  const themePrefix = config.themePrefix ?? 'THEME';
   const existingIds = store.getThemes().map(t => t.id);
-  const nextNum = findNextThemeId(existingIds, themePrefix);
-  const themeId = `${themePrefix}-${String(nextNum).padStart(4, '0')}`;
+  const nextNum = findNextThemeId(existingIds, config.themePrefix);
+  const themeId = `${config.themePrefix}-${String(nextNum).padStart(4, '0')}`;
 
   // Generate markdown
   const markdown = generateThemeMarkdown({
@@ -118,6 +120,9 @@ export async function executeCreateTheme(store: Store): Promise<boolean> {
 
   await vscode.workspace.fs.writeFile(themeUri, Buffer.from(markdown));
   await store.reloadFile(themeUri);
+
+  // Create storydocs folder (best-effort, non-blocking)
+  void storydocsService?.ensureFolder(themeId, 'theme');
 
   // Open the file
   const doc = await vscode.workspace.openTextDocument(themeUri);
