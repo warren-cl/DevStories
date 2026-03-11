@@ -2,7 +2,7 @@
   "name": "devstories",
   "displayName": "DevStories",
   "description": "Stories as markdown files, version-controlled with your code. AI-readable. Git-tracked.",
-  "version": "1.0.0",
+  "version": "2.3.0",
   "publisher": "DhavalSavalia",
   "author": {
     "name": "Dhaval Savalia",
@@ -148,6 +148,10 @@
         "command": "devstories.clearTextFilter",
         "title": "DevStories: Clear Search",
         "icon": "$(search-stop)"
+      },
+      {
+        "command": "devstories.reconcileStorydocs",
+        "title": "DevStories: Reconcile StoryDocs Folders"
       }
     ],
     "menus": {

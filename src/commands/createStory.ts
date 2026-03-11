@@ -1,17 +1,18 @@
 import * as vscode from 'vscode';
 import { Store } from '../core/store';
+import { ConfigService } from '../core/configService';
+import { ConfigData, parseConfigJsonContent, mergeConfigWithDefaults } from '../core/configServiceUtils';
 import { getLogger } from '../core/logger';
+import { StorydocsService } from '../core/storydocsService';
 import { StoryType, StorySize } from '../types/story';
 import { toKebabCase } from '../utils/filenameUtils';
 import {
-  parseConfigJson,
   findNextStoryId,
   getSuggestedSize,
   calculateTitleSimilarity,
   generateStoryMarkdown,
   generateStoryLink,
   appendStoryToEpic,
-  DevStoriesConfig,
   DEFAULT_TEMPLATES,
   parseCustomTemplate,
   CustomTemplate,
@@ -20,7 +21,6 @@ import { validateStoryTitle, validateSprintName } from '../utils/inputValidation
 
 // Re-export for convenience
 export {
-  parseConfigJson,
   findNextStoryId,
   getSuggestedSize,
   calculateTitleSimilarity,
@@ -61,13 +61,14 @@ async function collectExistingStoryIds(
 }
 
 /**
- * Read and parse config.json from workspace
+ * Read config.json from workspace as fallback when ConfigService is not available
  */
-async function readConfig(workspaceUri: vscode.Uri): Promise<DevStoriesConfig | undefined> {
+async function readConfigFallback(workspaceUri: vscode.Uri): Promise<ConfigData | undefined> {
   const configUri = vscode.Uri.joinPath(workspaceUri, '.devstories', 'config.json');
   try {
     const content = await vscode.workspace.fs.readFile(configUri);
-    return parseConfigJson(Buffer.from(content).toString('utf8'));
+    const parsed = parseConfigJsonContent(Buffer.from(content).toString('utf8'));
+    return mergeConfigWithDefaults(parsed);
   } catch (error) {
     getLogger().debug('Config not found or unreadable', error);
     return undefined;
@@ -101,7 +102,7 @@ async function loadCustomTemplates(workspaceUri: vscode.Uri): Promise<CustomTemp
 /**
  * Get existing sprints from config and store
  */
-function getExistingSprints(config: DevStoriesConfig, store: Store): string[] {
+function getExistingSprints(config: ConfigData, store: Store): string[] {
   const sprints = new Set<string>();
 
   if (config.currentSprint) {
@@ -150,7 +151,7 @@ interface TemplateQuickPickItem extends vscode.QuickPickItem {
  * @param preselectedEpicId When called from a tree item context menu, the epic
  *   is pre-selected and the QuickPick is skipped entirely.
  */
-export async function executeCreateStory(store: Store, preselectedEpicId?: string): Promise<boolean> {
+export async function executeCreateStory(store: Store, preselectedEpicId?: string, storydocsService?: StorydocsService, configService?: ConfigService): Promise<boolean> {
   // Check for workspace
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -160,8 +161,8 @@ export async function executeCreateStory(store: Store, preselectedEpicId?: strin
 
   const workspaceUri = workspaceFolders[0].uri;
 
-  // Read config
-  const config = await readConfig(workspaceUri);
+  // Use ConfigService if available, otherwise read from file
+  const config = configService ? configService.config : await readConfigFallback(workspaceUri);
   if (!config) {
     const action = await vscode.window.showErrorMessage(
       'DevStories: No config.json found. Initialize DevStories first.',
@@ -429,6 +430,9 @@ export async function executeCreateStory(store: Store, preselectedEpicId?: strin
 
   await vscode.workspace.fs.writeFile(storyUri, Buffer.from(markdown));
   await store.reloadFile(storyUri);
+
+  // Create storydocs folder (best-effort, non-blocking)
+  void storydocsService?.ensureFolder(storyId, 'story');
 
   // Auto-link to epic (Enhanced feature)
   const epic = epics.find(e => e.id === selectedEpic.id);

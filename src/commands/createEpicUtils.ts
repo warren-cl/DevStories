@@ -6,44 +6,11 @@
  
 const matter = require('gray-matter');
 
-export interface DevStoriesConfig {
-  epicPrefix: string;
-  storyPrefix: string;
-  themePrefix: string;
-  currentSprint?: string;
-  statuses: string[];
-}
-
 export interface EpicData {
   id: string;
   title: string;
   goal?: string;
   theme?: string;
-}
-
-/**
- * Parse config.json content and extract relevant fields
- */
-export function parseConfigJson(content: string): DevStoriesConfig {
-  try {
-    const parsed = JSON.parse(content);
-
-    return {
-      epicPrefix: parsed?.idPrefix?.epic ?? 'EPIC',
-      storyPrefix: parsed?.idPrefix?.story ?? 'STORY',
-      themePrefix: parsed?.idPrefix?.theme ?? 'THEME',
-      currentSprint: parsed?.sprints?.current,
-      statuses: parsed?.statuses?.map((s: { id: string }) => s.id) ?? ['todo', 'in_progress', 'review', 'done'],
-    };
-  } catch {
-    return {
-      epicPrefix: 'EPIC',
-      storyPrefix: 'STORY',
-      themePrefix: 'THEME',
-      currentSprint: undefined,
-      statuses: ['todo', 'in_progress', 'review', 'done'],
-    };
-  }
 }
 
 /**

@@ -1,7 +1,9 @@
 {
-  "version": 1,
+  "version": 2,
   "project": "Test Project",
+  "idMode": "auto",
   "idPrefix": {
+    "theme": "THEME",
     "epic": "EPIC",
     "story": "STORY"
   },

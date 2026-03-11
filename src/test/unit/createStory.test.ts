@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  parseConfigJson,
   findNextStoryId,
   getSuggestedSize,
   calculateTitleSimilarity,
@@ -13,76 +12,6 @@ import {
 } from '../../commands/createStoryUtils';
 
 describe('createStory Utils', () => {
-  describe('parseConfigJson', () => {
-    it('should parse complete config', () => {
-      const json = JSON.stringify({
-        version: 1,
-        project: 'Test Project',
-        idPrefix: {
-          epic: 'EPIC',
-          story: 'STORY',
-        },
-        statuses: [
-          { id: 'todo', label: 'To Do' },
-          { id: 'done', label: 'Done' },
-        ],
-        sprints: {
-          current: 'sprint-1',
-        },
-        sizes: ['XS', 'S', 'M', 'L', 'XL'],
-      });
-      const config = parseConfigJson(json);
-
-      expect(config.storyPrefix).toBe('STORY');
-      expect(config.epicPrefix).toBe('EPIC');
-      expect(config.currentSprint).toBe('sprint-1');
-      expect(config.statuses).toEqual(['todo', 'done']);
-      expect(config.sizes).toEqual(['XS', 'S', 'M', 'L', 'XL']);
-    });
-
-    it('should use defaults for missing fields', () => {
-      const json = JSON.stringify({ version: 1 });
-      const config = parseConfigJson(json);
-
-      expect(config.storyPrefix).toBe('STORY');
-      expect(config.epicPrefix).toBe('EPIC');
-    });
-
-    it('should parse quickCapture.defaultToCurrentSprint option', () => {
-      const json = JSON.stringify({
-        version: 1,
-        quickCapture: {
-          defaultToCurrentSprint: true,
-        },
-      });
-      const config = parseConfigJson(json);
-      expect(config.quickCaptureDefaultToCurrentSprint).toBe(true);
-    });
-
-    it('should default quickCapture.defaultToCurrentSprint to false when not specified', () => {
-      const json = JSON.stringify({ version: 1 });
-      const config = parseConfigJson(json);
-      expect(config.quickCaptureDefaultToCurrentSprint).toBe(false);
-    });
-
-    it('should handle quickCapture.defaultToCurrentSprint set to false explicitly', () => {
-      const json = JSON.stringify({
-        version: 1,
-        quickCapture: {
-          defaultToCurrentSprint: false,
-        },
-      });
-      const config = parseConfigJson(json);
-      expect(config.quickCaptureDefaultToCurrentSprint).toBe(false);
-    });
-
-    it('should handle invalid JSON', () => {
-      const config = parseConfigJson('{ invalid json');
-      expect(config.storyPrefix).toBe('STORY');
-      expect(config.epicPrefix).toBe('EPIC');
-    });
-  });
-
   describe('findNextStoryId', () => {
     it('should return 1 for empty list', () => {
       expect(findNextStoryId([], 'STORY')).toBe(1);

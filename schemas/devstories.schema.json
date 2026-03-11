@@ -7,7 +7,7 @@
   "properties": {
     "version": {
       "type": "integer",
-      "const": 1,
+      "enum": [1, 2],
       "description": "Configuration schema version"
     },
     "project": {
@@ -136,6 +136,24 @@
       "type": "boolean",
       "default": true,
       "description": "When true, automatically filter to current sprint on extension load"
+    },
+    "storydocs": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, maintains a hierarchy of document folders mirroring the breakdown tree view"
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Root folder for storydocs, relative to the repository root (e.g., 'docs/storydocs')"
+        }
+      },
+      "required": ["enabled", "root"],
+      "additionalProperties": false,
+      "description": "StoryDocs: hierarchical document folders mirroring the breakdown tree view"
     }
   },
   "additionalProperties": false

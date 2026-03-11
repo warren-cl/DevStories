@@ -15,6 +15,8 @@ import {
   mergeConfigWithDefaults,
   validateSprintConfig,
   DEFAULT_CONFIG,
+  computeConfigUpgrade,
+  CURRENT_CONFIG_SCHEMA_VERSION,
 } from './configServiceUtils';
 import { showConfigErrorNotification, showSprintValidationErrorNotification } from './configServiceNotifications';
 
@@ -284,6 +286,62 @@ export class ConfigService implements vscode.Disposable {
   private onConfigDeleted(): void {
     this._config = DEFAULT_CONFIG;
     this._onDidConfigChange.fire(this._config);
+  }
+
+  /**
+   * Upgrade config.json to the current schema version if needed.
+   * Creates a .bak backup before writing changes.
+   * Returns list of fields added, or empty array if no upgrade was needed.
+   */
+  async upgradeConfigIfNeeded(): Promise<string[]> {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (!workspaceFolder) {
+      return [];
+    }
+
+    const configUri = vscode.Uri.joinPath(
+      workspaceFolder.uri,
+      '.devstories',
+      'config.json'
+    );
+
+    try {
+      const content = await vscode.workspace.fs.readFile(configUri);
+      const contentStr = new TextDecoder().decode(content);
+      const raw: Record<string, unknown> = JSON.parse(contentStr);
+
+      const result = computeConfigUpgrade(raw);
+      if (!result) {
+        return [];
+      }
+
+      // Create backup before modifying
+      const backupUri = vscode.Uri.joinPath(
+        workspaceFolder.uri,
+        '.devstories',
+        'config.json.bak'
+      );
+      await vscode.workspace.fs.writeFile(backupUri, content);
+
+      // Write upgraded config
+      const upgraded = JSON.stringify(result.upgraded, null, 2);
+      await vscode.workspace.fs.writeFile(configUri, new TextEncoder().encode(upgraded));
+
+      getLogger().info(
+        `Config upgraded to v${CURRENT_CONFIG_SCHEMA_VERSION}. Fields added: ${result.fieldsAdded.join(', ')}`
+      );
+
+      // Reload config so the in-memory state reflects the upgrade
+      await this.reloadConfig();
+
+      return result.fieldsAdded;
+    } catch (err) {
+      getLogger().error(
+        'Failed to upgrade config.json',
+        err instanceof Error ? err.message : String(err)
+      );
+      return [];
+    }
   }
 
   dispose(): void {

@@ -38,6 +38,7 @@ import {
 import { findNextStoryId } from '../commands/createStoryUtils';
 import { findNextEpicId } from '../commands/createEpicUtils';
 import { getLogger } from '../core/logger';
+import { StorydocsService } from '../core/storydocsService';
 
 const NO_THEME_ID = '__NO_THEME__';
 const NO_EPIC_ID = '__NO_EPIC__';
@@ -80,6 +81,7 @@ export interface InboxBacklogDropParams {
   store: InboxDropStore;
   configService: InboxDropConfigService;
   sortService: InboxDropSortService;
+  storydocsService?: StorydocsService;
 }
 
 export type BreakdownTarget =
@@ -94,6 +96,7 @@ export interface InboxBreakdownDropParams {
   target: BreakdownTarget;
   store: InboxDropStore;
   configService: InboxDropConfigService;
+  storydocsService?: StorydocsService;
 }
 
 // ─── Shared helpers ─────────────────────────────────────────────────────────
@@ -174,7 +177,7 @@ function getStoriesInSprint(
 // ─── Backlog view drop handler ──────────────────────────────────────────────
 
 export async function handleInboxDropOnBacklog(params: InboxBacklogDropParams): Promise<void> {
-  const { sourceFile, target, store, configService, sortService } = params;
+  const { sourceFile, target, store, configService, sortService, storydocsService } = params;
   const config = configService.config;
   const workspaceUri = getWorkspaceUri();
   if (!workspaceUri) { return; }
@@ -269,7 +272,10 @@ export async function handleInboxDropOnBacklog(params: InboxBacklogDropParams): 
     // 9. Reload store
     await store.reloadFile(newUri);
 
-    // 10. Bump sibling priorities
+    // 10. Create storydocs folder (best-effort, non-blocking)
+    void storydocsService?.ensureFolder(storyId, 'story');
+
+    // 11. Bump sibling priorities
     if (bumpSiblings) {
       const siblings = getStoriesInSprint(store, bumpSprint, config.sprintSequence)
         .filter(s => s.id !== storyId);
@@ -299,7 +305,7 @@ export async function handleInboxDropOnBacklog(params: InboxBacklogDropParams): 
 // ─── Breakdown view drop handler ────────────────────────────────────────────
 
 export async function handleInboxDropOnBreakdown(params: InboxBreakdownDropParams): Promise<void> {
-  const { sourceFile, target, store, configService } = params;
+  const { sourceFile, target, store, configService, storydocsService } = params;
   const config = configService.config;
   const workspaceUri = getWorkspaceUri();
   if (!workspaceUri) { return; }
@@ -330,6 +336,7 @@ export async function handleInboxDropOnBreakdown(params: InboxBreakdownDropParam
           config,
           workspaceUri,
           sourceFilePath: sourceFile.filePath,
+          storydocsService,
         });
         break;
       }
@@ -356,6 +363,7 @@ export async function handleInboxDropOnBreakdown(params: InboxBreakdownDropParam
           config,
           workspaceUri,
           sourceFilePath: sourceFile.filePath,
+          storydocsService,
         });
         break;
       }
@@ -381,6 +389,7 @@ export async function handleInboxDropOnBreakdown(params: InboxBreakdownDropParam
           sourceFilePath: sourceFile.filePath,
           bumpAtPriority: targetPriority,
           bumpEpicId: epicId,
+          storydocsService,
         });
         break;
       }
@@ -409,13 +418,14 @@ interface ConvertToStoryParams {
   /** When set, bump all siblings in the same epic with priority >= this value. */
   bumpAtPriority?: number;
   bumpEpicId?: string;
+  storydocsService?: StorydocsService;
 }
 
 async function convertToStory(params: ConvertToStoryParams): Promise<void> {
   const {
     originalContent, existingData, strippedName, defaultTitle, today,
     epicId, sprint, priority, store, config, workspaceUri, sourceFilePath,
-    bumpAtPriority, bumpEpicId,
+    bumpAtPriority, bumpEpicId, storydocsService,
   } = params;
 
   // Generate next story ID
@@ -453,6 +463,9 @@ async function convertToStory(params: ConvertToStoryParams): Promise<void> {
   // Reload store
   await store.reloadFile(newUri);
 
+  // Create storydocs folder (best-effort, non-blocking)
+  void storydocsService?.ensureFolder(storyId, 'story');
+
   // Bump sibling priorities if needed
   if (bumpAtPriority !== undefined) {
     const siblings = bumpEpicId
@@ -480,12 +493,13 @@ interface ConvertToEpicParams {
   config: InboxDropConfigService['config'];
   workspaceUri: vscode.Uri;
   sourceFilePath: string;
+  storydocsService?: StorydocsService;
 }
 
 async function convertToEpic(params: ConvertToEpicParams): Promise<void> {
   const {
     originalContent, existingData, strippedName, defaultTitle, today,
-    themeId, store, config, workspaceUri, sourceFilePath,
+    themeId, store, config, workspaceUri, sourceFilePath, storydocsService,
   } = params;
 
   // Generate next epic ID
@@ -524,6 +538,9 @@ async function convertToEpic(params: ConvertToEpicParams): Promise<void> {
 
   // Reload store
   await store.reloadFile(newUri);
+
+  // Create storydocs folder (best-effort, non-blocking)
+  void storydocsService?.ensureFolder(epicId, 'epic');
 
   void vscode.window.showInformationMessage(`Converted to epic: ${epicId}`);
 }

@@ -12,6 +12,8 @@ import {
   isCompletedStatus,
   isExcludedStatus,
   StatusDef,
+  computeConfigUpgrade,
+  CURRENT_CONFIG_SCHEMA_VERSION,
 } from '../../core/configServiceUtils';
 
 describe('ConfigService Utils', () => {
@@ -544,6 +546,204 @@ Some content`;
       const merged = mergeConfigWithDefaults({});
       expect(merged.sprintLength).toBeUndefined();
       expect(merged.firstSprintStartDate).toBeUndefined();
+    });
+  });
+
+  describe('themePrefix', () => {
+    it('parseConfigJsonContent parses idPrefix.theme', () => {
+      const json = JSON.stringify({
+        version: 2,
+        idPrefix: { theme: 'TH', epic: 'EP', story: 'ST' },
+      });
+      const result = parseConfigJsonContent(json);
+      expect(result.themePrefix).toBe('TH');
+    });
+
+    it('parseConfigJsonContent leaves themePrefix undefined when not set', () => {
+      const json = JSON.stringify({
+        version: 2,
+        idPrefix: { epic: 'EP', story: 'ST' },
+      });
+      const result = parseConfigJsonContent(json);
+      expect(result.themePrefix).toBeUndefined();
+    });
+
+    it('mergeConfigWithDefaults uses THEME as default themePrefix', () => {
+      const merged = mergeConfigWithDefaults({});
+      expect(merged.themePrefix).toBe('THEME');
+    });
+
+    it('mergeConfigWithDefaults preserves parsed themePrefix', () => {
+      const merged = mergeConfigWithDefaults({ themePrefix: 'TH' });
+      expect(merged.themePrefix).toBe('TH');
+    });
+  });
+
+  describe('computeConfigUpgrade', () => {
+    it('returns null when config is already at current version', () => {
+      const raw = { version: CURRENT_CONFIG_SCHEMA_VERSION, idMode: 'auto' };
+      expect(computeConfigUpgrade(raw)).toBeNull();
+    });
+
+    it('returns null when config is ahead of current version', () => {
+      const raw = { version: CURRENT_CONFIG_SCHEMA_VERSION + 1 };
+      expect(computeConfigUpgrade(raw)).toBeNull();
+    });
+
+    it('adds idMode when missing', () => {
+      const raw = { version: 1, idPrefix: { epic: 'EP', story: 'ST', theme: 'TH' } };
+      const result = computeConfigUpgrade(raw);
+      expect(result).not.toBeNull();
+      expect(result!.upgraded.idMode).toBe('auto');
+      expect(result!.fieldsAdded).toContain('idMode');
+    });
+
+    it('does not overwrite existing idMode', () => {
+      const raw = { version: 1, idMode: 'manual', idPrefix: { epic: 'E', story: 'S', theme: 'T' } };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.idMode).toBe('manual');
+      expect(result!.fieldsAdded).not.toContain('idMode');
+    });
+
+    it('adds autoFilterCurrentSprint when missing', () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.autoFilterCurrentSprint).toBe(true);
+      expect(result!.fieldsAdded).toContain('autoFilterCurrentSprint');
+    });
+
+    it('does not overwrite existing autoFilterCurrentSprint', () => {
+      const raw = { version: 1, autoFilterCurrentSprint: false };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.autoFilterCurrentSprint).toBe(false);
+      expect(result!.fieldsAdded).not.toContain('autoFilterCurrentSprint');
+    });
+
+    it('adds quickCapture when entirely missing', () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.quickCapture).toEqual({ defaultToCurrentSprint: false });
+      expect(result!.fieldsAdded).toContain('quickCapture');
+    });
+
+    it('adds quickCapture.defaultToCurrentSprint when quickCapture exists but field missing', () => {
+      const raw = { version: 1, quickCapture: {} };
+      const result = computeConfigUpgrade(raw);
+      expect((result!.upgraded.quickCapture as Record<string, unknown>).defaultToCurrentSprint).toBe(false);
+      expect(result!.fieldsAdded).toContain('quickCapture.defaultToCurrentSprint');
+    });
+
+    it('does not overwrite existing quickCapture.defaultToCurrentSprint', () => {
+      const raw = { version: 1, quickCapture: { defaultToCurrentSprint: true } };
+      const result = computeConfigUpgrade(raw);
+      expect((result!.upgraded.quickCapture as Record<string, unknown>).defaultToCurrentSprint).toBe(true);
+      expect(result!.fieldsAdded).not.toContain('quickCapture');
+      expect(result!.fieldsAdded).not.toContain('quickCapture.defaultToCurrentSprint');
+    });
+
+    it('adds idPrefix.theme when idPrefix exists but theme missing', () => {
+      const raw = { version: 1, idPrefix: { epic: 'EPIC', story: 'DS' } };
+      const result = computeConfigUpgrade(raw);
+      expect((result!.upgraded.idPrefix as Record<string, unknown>).theme).toBe('THEME');
+      expect(result!.fieldsAdded).toContain('idPrefix.theme');
+    });
+
+    it('does not add idPrefix.theme when idPrefix is absent', () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.fieldsAdded).not.toContain('idPrefix.theme');
+    });
+
+    it('does not overwrite existing idPrefix.theme', () => {
+      const raw = { version: 1, idPrefix: { epic: 'EP', story: 'ST', theme: 'TH' } };
+      const result = computeConfigUpgrade(raw);
+      expect((result!.upgraded.idPrefix as Record<string, unknown>).theme).toBe('TH');
+      expect(result!.fieldsAdded).not.toContain('idPrefix.theme');
+    });
+
+    it('adds storypoints when sizes has 7 items and storypoints missing', () => {
+      const raw = { version: 1, sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'] };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.storypoints).toEqual([1, 2, 4, 8, 16, 32, 64]);
+      expect(result!.fieldsAdded).toContain('storypoints');
+    });
+
+    it('does not add storypoints when sizes has non-7 items', () => {
+      const raw = { version: 1, sizes: ['S', 'M', 'L'] };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.storypoints).toBeUndefined();
+      expect(result!.fieldsAdded).not.toContain('storypoints');
+    });
+
+    it('does not overwrite existing storypoints', () => {
+      const raw = { version: 1, sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'], storypoints: [1, 1, 2, 3, 5, 8, 13] };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.storypoints).toEqual([1, 1, 2, 3, 5, 8, 13]);
+      expect(result!.fieldsAdded).not.toContain('storypoints');
+    });
+
+    it('bumps version to CURRENT_CONFIG_SCHEMA_VERSION', () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.version).toBe(CURRENT_CONFIG_SCHEMA_VERSION);
+    });
+
+    it('handles version-only upgrade when all fields already present', () => {
+      const raw = {
+        version: 1,
+        idMode: 'auto',
+        autoFilterCurrentSprint: true,
+        quickCapture: { defaultToCurrentSprint: false },
+        idPrefix: { epic: 'EP', story: 'ST', theme: 'TH' },
+        storypoints: [1, 2, 4, 8, 16, 32, 64],
+        sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'],
+        storydocs: { enabled: false, root: 'docs/storydocs' },
+      };
+      const result = computeConfigUpgrade(raw);
+      expect(result).not.toBeNull();
+      expect(result!.upgraded.version).toBe(CURRENT_CONFIG_SCHEMA_VERSION);
+      expect(result!.fieldsAdded).toEqual(['version']);
+    });
+
+    it('does not mutate the input object', () => {
+      const raw = { version: 1 };
+      const originalStr = JSON.stringify(raw);
+      computeConfigUpgrade(raw);
+      expect(JSON.stringify(raw)).toBe(originalStr);
+    });
+
+    it('handles missing version field (treats as v0)', () => {
+      const raw = { idPrefix: { epic: 'EP', story: 'ST' } };
+      const result = computeConfigUpgrade(raw);
+      expect(result).not.toBeNull();
+      expect(result!.upgraded.version).toBe(CURRENT_CONFIG_SCHEMA_VERSION);
+    });
+
+    it('preserves fields not managed by upgrade (e.g. sprints)', () => {
+      const raw = {
+        version: 1,
+        sprints: { current: 'sprint-1', sequence: ['sprint-1'] },
+        storydocs: { enabled: true, root: 'docs' },
+        project: 'My Project',
+      };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.sprints).toEqual({ current: 'sprint-1', sequence: ['sprint-1'] });
+      expect(result!.upgraded.storydocs).toEqual({ enabled: true, root: 'docs' });
+      expect(result!.upgraded.project).toBe('My Project');
+    });
+
+    it('adds storydocs with enabled:false when missing', () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.storydocs).toEqual({ enabled: false, root: 'docs/storydocs' });
+      expect(result!.fieldsAdded).toContain('storydocs');
+    });
+
+    it('does not overwrite existing storydocs config', () => {
+      const raw = { version: 1, storydocs: { enabled: true, root: 'my-docs' } };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.storydocs).toEqual({ enabled: true, root: 'my-docs' });
+      expect(result!.fieldsAdded).not.toContain('storydocs');
     });
   });
 });
