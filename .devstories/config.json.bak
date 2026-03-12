@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "project": "DevStories",
+  "idMode": "manual",
+  "idPrefix": {
+    "epic": "EPIC",
+    "story": "DS"
+  },
+  "statuses": [
+    { "id": "todo", "label": "To Do" },
+    { "id": "in_progress", "label": "In Progress" },
+    { "id": "review", "label": "Review" },
+    { "id": "done", "label": "Done" }
+  ],
+  "sprints": {
+    "current": "1.1.0-intellisense",
+    "sequence": [
+      "phase-1",
+      "phase-2",
+      "phase-3",
+      "phase-4",
+      "phase-5",
+      "foundation-1",
+      "housekeeping",
+      "polish-1",
+      "polish-2",
+      "polish-3",
+      "polish-4",
+      "cleanup-1.0.0",
+      "pre-launch",
+      "release-1.0.0",
+      "osh-sprint",
+      "1.1.0-intellisense",
+      "1.2.0-mcp",
+      "backlog"
+    ]
+  },
+  "sizes": ["XXS", "XS", "S", "M", "L", "XL", "XXL"],
+  "storypoints": [1, 2, 4, 8, 16, 32, 64],
+  "autoFilterCurrentSprint": true
+}

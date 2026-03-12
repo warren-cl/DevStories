@@ -17,22 +17,15 @@
  *   - Sprint filter change (user picks a different sprint)
  */
 
-import * as vscode from 'vscode';
-import { Store } from '../core/store';
-import { ConfigService } from '../core/configService';
-import { SprintFilterService } from '../core/sprintFilterService';
-import {
-  isBurndownConfigured,
-  getSprintDateRange,
-  calculateBurndown,
-} from './burndownUtils';
-import {
-  renderBurndownHtml,
-  renderPlaceholderHtml,
-} from './burndownSvgRenderer';
+import * as vscode from "vscode";
+import { Store } from "../core/store";
+import { ConfigService } from "../core/configService";
+import { SprintFilterService } from "../core/sprintFilterService";
+import { isBurndownConfigured, getSprintDateRange, calculateBurndown, findStoriesMissingCompletedOn } from "./burndownUtils";
+import { renderBurndownHtml, renderPlaceholderHtml } from "./burndownSvgRenderer";
 
 export class BurndownViewProvider implements vscode.WebviewViewProvider {
-  public static readonly viewId = 'devstories.views.burndown';
+  public static readonly viewId = "devstories.views.burndown";
 
   private _view?: vscode.WebviewView;
   private _disposables: vscode.Disposable[] = [];
@@ -43,11 +36,7 @@ export class BurndownViewProvider implements vscode.WebviewViewProvider {
     private readonly sprintFilterService: SprintFilterService,
   ) {}
 
-  resolveWebviewView(
-    webviewView: vscode.WebviewView,
-    _context: vscode.WebviewViewResolveContext,
-    _token: vscode.CancellationToken,
-  ): void {
+  resolveWebviewView(webviewView: vscode.WebviewView, _context: vscode.WebviewViewResolveContext, _token: vscode.CancellationToken): void {
     this._view = webviewView;
 
     webviewView.webview.options = {
@@ -88,43 +77,41 @@ export class BurndownViewProvider implements vscode.WebviewViewProvider {
 
     // Check if burndown is configured
     if (!isBurndownConfigured(config)) {
-      this._view.webview.html = renderPlaceholderHtml(
-        'Configure sprints.length and sprints.firstSprintStartDate in config.json',
-      );
+      this._view.webview.html = renderPlaceholderHtml("Configure sprints.length and sprints.firstSprintStartDate in config.json");
       return;
     }
 
     // Determine which sprint to show
     const selectedSprint = this._resolveSprintName();
     if (!selectedSprint) {
-      this._view.webview.html = renderPlaceholderHtml('No sprint selected');
+      this._view.webview.html = renderPlaceholderHtml("No sprint selected");
       return;
     }
 
     // Get sprint date range
-    const dateRange = getSprintDateRange(
-      selectedSprint,
-      config.sprintSequence,
-      config.firstSprintStartDate!,
-      config.sprintLength!,
-    );
+    const dateRange = getSprintDateRange(selectedSprint, config.sprintSequence, config.firstSprintStartDate!, config.sprintLength!);
     if (!dateRange) {
-      this._view.webview.html = renderPlaceholderHtml(
-        `Sprint "${selectedSprint}" not found in sequence`,
-      );
+      this._view.webview.html = renderPlaceholderHtml(`Sprint "${selectedSprint}" not found in sequence`);
       return;
     }
 
     // Filter stories for this sprint
     const allStories = this.store.getStories();
-    const sprintStories = allStories.filter(s => s.sprint === selectedSprint);
+    const sprintStories = allStories.filter((s) => s.sprint === selectedSprint);
 
     if (sprintStories.length === 0) {
-      this._view.webview.html = renderPlaceholderHtml(
-        `No stories in ${selectedSprint}`,
-      );
+      this._view.webview.html = renderPlaceholderHtml(`No stories in ${selectedSprint}`);
       return;
     }
+
+    // Detect done stories missing completed_on
+    const missingIds = findStoriesMissingCompletedOn(sprintStories, config.statuses);
+    const warnings =
+      missingIds.length > 0
+        ? [
+            `${missingIds.length} done ${missingIds.length === 1 ? "story" : "stories"} missing completed_on: ${missingIds.join(", ")}. Right-click \u2192 Change Status to fix.`,
+          ]
+        : undefined;
 
     // Calculate burndown
     const dataPoints = calculateBurndown(
@@ -137,7 +124,7 @@ export class BurndownViewProvider implements vscode.WebviewViewProvider {
     );
 
     // Render
-    this._view.webview.html = renderBurndownHtml(dataPoints, selectedSprint, vscode.env.language);
+    this._view.webview.html = renderBurndownHtml(dataPoints, selectedSprint, vscode.env.language, warnings);
   }
 
   /**
@@ -149,7 +136,7 @@ export class BurndownViewProvider implements vscode.WebviewViewProvider {
     const filter = this.sprintFilterService.currentSprint;
 
     // If a real sprint is selected (not null, not 'backlog'), use it
-    if (filter && filter !== 'backlog') {
+    if (filter && filter !== "backlog") {
       return filter;
     }
 

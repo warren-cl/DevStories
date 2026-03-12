@@ -3,12 +3,12 @@
  * These can be unit tested with Vitest
  */
 
- 
-const matter = require('gray-matter');
+const matter = require("gray-matter");
 
-import { StatusDef, isCompletedStatus } from '../core/configServiceUtils';
+import { StatusDef, isCompletedStatus } from "../core/configServiceUtils";
+import { localToday } from "../utils/dateUtils";
 
-const DEFAULT_STATUSES = ['todo', 'in_progress', 'review', 'done'];
+const DEFAULT_STATUSES = ["todo", "in_progress", "review", "done"];
 
 /**
  * Parse statuses from config.json content
@@ -58,7 +58,7 @@ export function getNextWorkflowStatus(currentStatus: string, statuses: string[])
  */
 export function updateStoryStatus(content: string, newStatus: string, statuses?: StatusDef[]): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   // Update status and timestamp
   parsed.data.status = newStatus;
@@ -83,7 +83,7 @@ export function updateStoryStatus(content: string, newStatus: string, statuses?:
  */
 export function updateThemeStatus(content: string, newStatus: string): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   // Update status and timestamp
   parsed.data.status = newStatus;
@@ -99,7 +99,7 @@ export function updateThemeStatus(content: string, newStatus: string): string {
  */
 export function updateEpicStatus(content: string, newStatus: string): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   // Update status and timestamp
   parsed.data.status = newStatus;
@@ -115,7 +115,7 @@ export function updateEpicStatus(content: string, newStatus: string): string {
  */
 export function updateStoryPriority(content: string, newPriority: number): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   // Update priority and timestamp
   parsed.data.priority = newPriority;

@@ -3,7 +3,9 @@
  * No VS Code dependencies — these can be unit tested with Vitest.
  */
 
-const matter = require('gray-matter');
+const matter = require("gray-matter");
+
+import { localToday } from "../utils/dateUtils";
 
 /**
  * Strip a leading YYYY-MM-DD- date prefix from a filename (without extension).
@@ -27,11 +29,13 @@ export function stripDatePrefix(fileName: string): string {
  *   ""                     → ""
  */
 export function titleFromKebabCase(slug: string): string {
-  if (!slug) { return ''; }
+  if (!slug) {
+    return "";
+  }
   return slug
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 // ─── Default value helpers ──────────────────────────────────────────────────
@@ -45,7 +49,7 @@ export interface StoryDefaults {
   sprint: string;
   size: string;
   priority: number;
-  created: string;   // ISO date string YYYY-MM-DD
+  created: string; // ISO date string YYYY-MM-DD
   updated: string;
 }
 
@@ -66,10 +70,7 @@ export interface EpicDefaults {
  * The caller is responsible for providing the correct id, epic, sprint,
  * and priority values based on the drop target.
  */
-export function fillMissingStoryFrontmatter(
-  existingData: Record<string, unknown>,
-  defaults: StoryDefaults,
-): Record<string, unknown> {
+export function fillMissingStoryFrontmatter(existingData: Record<string, unknown>, defaults: StoryDefaults): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...existingData };
 
   // Always overwrite id / sprint / priority / epic — these are determined by the conversion context
@@ -79,13 +80,27 @@ export function fillMissingStoryFrontmatter(
   merged.epic = defaults.epic;
 
   // Fill remaining fields only when missing
-  if (!merged.title) { merged.title = defaults.title; }
-  if (!merged.type) { merged.type = defaults.type; }
-  if (!merged.status) { merged.status = defaults.status; }
-  if (!merged.size) { merged.size = defaults.size; }
-  if (merged.assignee === undefined) { merged.assignee = ''; }
-  if (!merged.dependencies) { merged.dependencies = []; }
-  if (!merged.created) { merged.created = defaults.created; }
+  if (!merged.title) {
+    merged.title = defaults.title;
+  }
+  if (!merged.type) {
+    merged.type = defaults.type;
+  }
+  if (!merged.status) {
+    merged.status = defaults.status;
+  }
+  if (!merged.size) {
+    merged.size = defaults.size;
+  }
+  if (merged.assignee === undefined) {
+    merged.assignee = "";
+  }
+  if (!merged.dependencies) {
+    merged.dependencies = [];
+  }
+  if (!merged.created) {
+    merged.created = defaults.created;
+  }
   merged.updated = defaults.updated;
 
   return merged;
@@ -95,10 +110,7 @@ export function fillMissingStoryFrontmatter(
  * Merge existing frontmatter data with epic defaults.
  * Existing fields are preserved; only missing fields are filled from defaults.
  */
-export function fillMissingEpicFrontmatter(
-  existingData: Record<string, unknown>,
-  defaults: EpicDefaults,
-): Record<string, unknown> {
+export function fillMissingEpicFrontmatter(existingData: Record<string, unknown>, defaults: EpicDefaults): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...existingData };
 
   // Always overwrite id / priority / theme — determined by conversion context
@@ -107,13 +119,19 @@ export function fillMissingEpicFrontmatter(
   if (defaults.theme) {
     merged.theme = defaults.theme;
   } else {
-    delete merged.theme;   // No Theme sentinel → clear theme
+    delete merged.theme; // No Theme sentinel → clear theme
   }
 
   // Fill remaining fields only when missing
-  if (!merged.title) { merged.title = defaults.title; }
-  if (!merged.status) { merged.status = defaults.status; }
-  if (!merged.created) { merged.created = defaults.created; }
+  if (!merged.title) {
+    merged.title = defaults.title;
+  }
+  if (!merged.status) {
+    merged.status = defaults.status;
+  }
+  if (!merged.created) {
+    merged.created = defaults.created;
+  }
 
   return merged;
 }
@@ -124,10 +142,7 @@ export function fillMissingEpicFrontmatter(
  *
  * Uses gray-matter to parse and re-serialize so existing body content is kept.
  */
-export function buildConvertedFileContent(
-  originalContent: string,
-  mergedData: Record<string, unknown>,
-): string {
+export function buildConvertedFileContent(originalContent: string, mergedData: Record<string, unknown>): string {
   const parsed = matter(originalContent);
   return matter.stringify(parsed.content, mergedData);
 }
@@ -137,7 +152,9 @@ export function buildConvertedFileContent(
  * Uses the middle size from the config sizes array (same logic as createStoryUtils.getSuggestedSize for features).
  */
 export function getDefaultSize(sizes: string[]): string {
-  if (sizes.length === 0) { return 'M'; }
+  if (sizes.length === 0) {
+    return "M";
+  }
   return sizes[Math.floor(sizes.length / 2)];
 }
 
@@ -145,7 +162,9 @@ export function getDefaultSize(sizes: string[]): string {
  * Get the first (default) status from config statuses.
  */
 export function getDefaultStatus(statuses: { id: string }[]): string {
-  if (statuses.length === 0) { return 'todo'; }
+  if (statuses.length === 0) {
+    return "todo";
+  }
   return statuses[0].id;
 }
 
@@ -153,7 +172,7 @@ export function getDefaultStatus(statuses: { id: string }[]): string {
  * Get today's date as YYYY-MM-DD string.
  */
 export function todayString(): string {
-  return new Date().toISOString().split('T')[0];
+  return localToday();
 }
 
 /**
@@ -161,6 +180,8 @@ export function todayString(): string {
  * Returns 0 if the array is empty (so max + 1 = 1 for the first item).
  */
 export function maxPriority(items: { priority: number }[]): number {
-  if (items.length === 0) { return 0; }
-  return Math.max(...items.map(i => i.priority));
+  if (items.length === 0) {
+    return 0;
+  }
+  return Math.max(...items.map((i) => i.priority));
 }

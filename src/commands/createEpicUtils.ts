@@ -3,8 +3,9 @@
  * These can be unit tested with Vitest
  */
 
- 
-const matter = require('gray-matter');
+const matter = require("gray-matter");
+
+import { localToday } from "../utils/dateUtils";
 
 export interface EpicData {
   id: string;
@@ -38,10 +39,10 @@ export function findNextEpicId(existingIds: string[], prefix: string): number {
  * Generate epic markdown content from EpicData
  */
 export function generateEpicMarkdown(data: EpicData): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
   const escapedTitle = data.title.replace(/"/g, '\\"');
-  const description = data.goal ?? '[Add epic description here]';
-  const themeLine = data.theme ? `theme: ${data.theme}\n` : '';
+  const description = data.goal ?? "[Add epic description here]";
+  const themeLine = data.theme ? `theme: ${data.theme}\n` : "";
 
   return `---
 id: ${data.id}

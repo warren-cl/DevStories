@@ -3,7 +3,9 @@
  * These can be unit tested with Vitest
  */
 
-const matter = require('gray-matter');
+const matter = require("gray-matter");
+
+import { localToday } from "../utils/dateUtils";
 
 export interface ThemeData {
   id: string;
@@ -36,9 +38,9 @@ export function findNextThemeId(existingIds: string[], prefix: string): number {
  * Generate theme markdown content from ThemeData
  */
 export function generateThemeMarkdown(data: ThemeData): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
   const escapedTitle = data.title.replace(/"/g, '\\"');
-  const description = data.goal ?? '[Add theme description here]';
+  const description = data.goal ?? "[Add theme description here]";
 
   return `---
 id: ${data.id}
@@ -82,7 +84,7 @@ export function appendEpicToTheme(themeContent: string, epicLink: string): strin
 
   if (!match || match.index === undefined) {
     // No Epics section found, append at end
-    return themeContent.trimEnd() + '\n\n## Epics\n' + epicLink + '\n';
+    return themeContent.trimEnd() + "\n\n## Epics\n" + epicLink + "\n";
   }
 
   // Find where to insert (after ## Epics and any existing content before next ##)
@@ -91,9 +93,7 @@ export function appendEpicToTheme(themeContent: string, epicLink: string): strin
 
   // Find the next ## section
   const nextSectionMatch = restContent.match(/^## /m);
-  const insertPoint = nextSectionMatch?.index !== undefined
-    ? afterEpicsIdx + nextSectionMatch.index
-    : themeContent.length;
+  const insertPoint = nextSectionMatch?.index !== undefined ? afterEpicsIdx + nextSectionMatch.index : themeContent.length;
 
   // Get content between ## Epics and next section
   const epicsContent = themeContent.slice(afterEpicsIdx, insertPoint).trimEnd();
@@ -103,9 +103,7 @@ export function appendEpicToTheme(themeContent: string, epicLink: string): strin
   const after = themeContent.slice(insertPoint);
 
   // Append link after existing epics content
-  const newEpicsContent = epicsContent
-    ? epicsContent + '\n' + epicLink
-    : '\n' + epicLink;
+  const newEpicsContent = epicsContent ? epicsContent + "\n" + epicLink : "\n" + epicLink;
 
-  return before + newEpicsContent + '\n\n' + after.trimStart();
+  return before + newEpicsContent + "\n\n" + after.trimStart();
 }

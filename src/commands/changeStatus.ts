@@ -2,20 +2,15 @@
  * Change Status command - allows changing status via context menu
  */
 
-import * as vscode from 'vscode';
-import * as path from 'path';
-import { ConfigService } from '../core/configService';
-import { Store } from '../core/store';
-import { getLogger } from '../core/logger';
-import { Story } from '../types/story';
-import { Epic } from '../types/epic';
-import { Theme } from '../types/theme';
-import {
-  parseStatusesFromConfig,
-  updateStoryStatus,
-  updateEpicStatus,
-  updateThemeStatus,
-} from './changeStatusUtils';
+import * as vscode from "vscode";
+import * as path from "path";
+import { ConfigService } from "../core/configService";
+import { Store } from "../core/store";
+import { getLogger } from "../core/logger";
+import { Story } from "../types/story";
+import { Epic } from "../types/epic";
+import { Theme } from "../types/theme";
+import { parseStatusesFromConfig, updateStoryStatus, updateEpicStatus, updateThemeStatus } from "./changeStatusUtils";
 
 /**
  * Read config.json from workspace
@@ -26,18 +21,14 @@ async function readConfigJson(): Promise<string | undefined> {
     return undefined;
   }
 
-  const configPath = path.join(
-    workspaceFolders[0].uri.fsPath,
-    '.devstories',
-    'config.json'
-  );
+  const configPath = path.join(workspaceFolders[0].uri.fsPath, ".devstories", "config.json");
 
   try {
     const configUri = vscode.Uri.file(configPath);
     const bytes = await vscode.workspace.fs.readFile(configUri);
     return new TextDecoder().decode(bytes);
   } catch (error) {
-    getLogger().debug('Config not found or unreadable', error);
+    getLogger().debug("Config not found or unreadable", error);
     return undefined;
   }
 }
@@ -47,18 +38,14 @@ async function readConfigJson(): Promise<string | undefined> {
  * Shows a QuickPick with available statuses
  * @param configService - Optional ConfigService for live-reloaded config
  */
-export async function executeChangeStatus(
-  store: Store,
-  item: Story | Epic | Theme,
-  configService?: ConfigService
-): Promise<boolean> {
+export async function executeChangeStatus(store: Store, item: Story | Epic | Theme, configService?: ConfigService): Promise<boolean> {
   // DS-035: Use ConfigService if available, otherwise read from file
   let statuses: string[];
   if (configService) {
-    statuses = configService.config.statuses.map(s => s.id);
+    statuses = configService.config.statuses.map((s) => s.id);
   } else {
     const configContent = await readConfigJson();
-    statuses = parseStatusesFromConfig(configContent ?? '');
+    statuses = parseStatusesFromConfig(configContent ?? "");
   }
 
   // Determine current status
@@ -67,7 +54,7 @@ export async function executeChangeStatus(
   // Build QuickPick items with checkmark for current
   const items: vscode.QuickPickItem[] = statuses.map((status) => ({
     label: status === currentStatus ? `$(check) ${status}` : status,
-    description: status === currentStatus ? '(current)' : undefined,
+    description: status === currentStatus ? "(current)" : undefined,
     picked: status === currentStatus,
   }));
 
@@ -81,7 +68,7 @@ export async function executeChangeStatus(
   }
 
   // Extract status (remove checkmark prefix if present)
-  const newStatus = selected.label.replace(/^\$\(check\) /, '');
+  const newStatus = selected.label.replace(/^\$\(check\) /, "");
 
   if (newStatus === currentStatus) {
     return false; // No change
@@ -89,7 +76,7 @@ export async function executeChangeStatus(
 
   // Update the file
   if (!item.filePath) {
-    void vscode.window.showErrorMessage('Cannot update: file path unknown');
+    void vscode.window.showErrorMessage("Cannot update: file path unknown");
     return false;
   }
 
@@ -100,7 +87,7 @@ export async function executeChangeStatus(
 
     // Determine if story, epic, or theme.
     // Use the store's theme map for a structural check — avoids relying on the configurable ID prefix.
-    const isStory = 'type' in item;
+    const isStory = "type" in item;
     const isTheme = !isStory && store.getTheme(item.id) !== undefined;
     let updatedContent: string;
     if (isStory) {
@@ -112,14 +99,12 @@ export async function executeChangeStatus(
     }
 
     // Write back
-    await vscode.workspace.fs.writeFile(
-      fileUri,
-      new TextEncoder().encode(updatedContent)
-    );
+    await vscode.workspace.fs.writeFile(fileUri, new TextEncoder().encode(updatedContent));
 
-    void vscode.window.showInformationMessage(
-      `Updated ${item.id} status to "${newStatus}"`
-    );
+    // Immediate store refresh — avoids Windows FileSystemWatcher delay
+    await store.reloadFile(fileUri);
+
+    void vscode.window.showInformationMessage(`Updated ${item.id} status to "${newStatus}"`);
 
     return true;
   } catch (err) {

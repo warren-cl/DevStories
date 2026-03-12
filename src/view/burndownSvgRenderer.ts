@@ -3,7 +3,7 @@
  * No VS Code dependencies — fully unit testable with Vitest.
  */
 
-import { BurndownDataPoint, formatShortDate, parseISODate, addDays } from './burndownUtils';
+import { BurndownDataPoint, formatShortDate, parseISODate, addDays } from "./burndownUtils";
 
 // ─── SVG layout constants ───────────────────────────────────────────────────
 
@@ -21,12 +21,18 @@ const PLOT_HEIGHT = VIEWBOX_HEIGHT - CHART_PADDING_TOP - CHART_PADDING_BOTTOM;
 /**
  * Render the full burndown chart HTML (self-contained, VS Code theme-aware).
  */
-export function renderBurndownHtml(
-  dataPoints: BurndownDataPoint[],
-  sprintName: string,
-  locale?: string,
-): string {
+export function renderBurndownHtml(dataPoints: BurndownDataPoint[], sprintName: string, locale?: string, warnings?: string[]): string {
   const svg = renderBurndownSvg(dataPoints, sprintName, locale);
+
+  const warningHtml =
+    warnings && warnings.length > 0
+      ? warnings
+          .map(
+            (w) =>
+              `<p style="margin: 4px 0 0; padding: 4px 6px; font-size: 11px; line-height: 1.3; color: var(--vscode-editorWarning-foreground, #cca700); border-left: 2px solid var(--vscode-editorWarning-foreground, #cca700);">\u26A0 ${escapeXml(w)}</p>`,
+          )
+          .join("")
+      : "";
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -38,11 +44,10 @@ export function renderBurndownHtml(
       margin: 0;
       padding: 8px;
       background: transparent;
-      overflow: hidden;
     }
   </style>
 </head>
-<body>${svg}</body>
+<body>${svg}${warningHtml}</body>
 </html>`;
 }
 
@@ -50,16 +55,12 @@ export function renderBurndownHtml(
  * Render an inline SVG for the burndown chart.
  * Uses VS Code CSS variables for theme compatibility.
  */
-export function renderBurndownSvg(
-  dataPoints: BurndownDataPoint[],
-  sprintName: string,
-  locale?: string,
-): string {
+export function renderBurndownSvg(dataPoints: BurndownDataPoint[], sprintName: string, locale?: string): string {
   if (dataPoints.length === 0) {
-    return renderPlaceholderSvg('No data for this sprint');
+    return renderPlaceholderSvg("No data for this sprint");
   }
 
-  const maxPoints = Math.max(...dataPoints.map(d => d.ideal), ...dataPoints.filter(d => d.actual !== null).map(d => d.actual!), 1);
+  const maxPoints = Math.max(...dataPoints.map((d) => d.ideal), ...dataPoints.filter((d) => d.actual !== null).map((d) => d.actual!), 1);
   const numDays = dataPoints.length;
 
   // Helper: data coords → SVG coords
@@ -67,13 +68,15 @@ export function renderBurndownSvg(
   const y = (points: number) => CHART_PADDING_TOP + (1 - points / maxPoints) * PLOT_HEIGHT;
 
   // Build paths
-  const idealPath = dataPoints.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(d.ideal).toFixed(1)}`).join(' ');
+  const idealPath = dataPoints.map((d, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(d.ideal).toFixed(1)}`).join(" ");
 
-  const actualPoints = dataPoints.filter(d => d.actual !== null);
-  const actualPath = actualPoints.map((d, i) => {
-    const dayIndex = dataPoints.indexOf(d);
-    return `${i === 0 ? 'M' : 'L'}${x(dayIndex).toFixed(1)},${y(d.actual!).toFixed(1)}`;
-  }).join(' ');
+  const actualPoints = dataPoints.filter((d) => d.actual !== null);
+  const actualPath = actualPoints
+    .map((d, i) => {
+      const dayIndex = dataPoints.indexOf(d);
+      return `${i === 0 ? "M" : "L"}${x(dayIndex).toFixed(1)},${y(d.actual!).toFixed(1)}`;
+    })
+    .join(" ");
 
   // Gridlines (horizontal)
   const gridLines: string[] = [];
@@ -81,8 +84,12 @@ export function renderBurndownSvg(
   for (const val of gridSteps) {
     if (val > 0 && val < maxPoints) {
       const gy = y(val).toFixed(1);
-      gridLines.push(`<line x1="${CHART_PADDING_LEFT}" y1="${gy}" x2="${VIEWBOX_WIDTH - CHART_PADDING_RIGHT}" y2="${gy}" stroke="var(--vscode-editorWidget-border, #444)" stroke-width="0.5" stroke-dasharray="3,3" />`);
-      gridLines.push(`<text x="${CHART_PADDING_LEFT - 4}" y="${gy}" text-anchor="end" dominant-baseline="middle" fill="var(--vscode-descriptionForeground, #888)" font-size="8">${val}</text>`);
+      gridLines.push(
+        `<line x1="${CHART_PADDING_LEFT}" y1="${gy}" x2="${VIEWBOX_WIDTH - CHART_PADDING_RIGHT}" y2="${gy}" stroke="var(--vscode-editorWidget-border, #444)" stroke-width="0.5" stroke-dasharray="3,3" />`,
+      );
+      gridLines.push(
+        `<text x="${CHART_PADDING_LEFT - 4}" y="${gy}" text-anchor="end" dominant-baseline="middle" fill="var(--vscode-descriptionForeground, #888)" font-size="8">${val}</text>`,
+      );
     }
   }
 
@@ -92,16 +99,20 @@ export function renderBurndownSvg(
   for (let i = 0; i < numDays; i += labelStep) {
     const date = parseISODate(dataPoints[i].date);
     const label = formatShortDate(date, locale);
-    xLabels.push(`<text x="${x(i).toFixed(1)}" y="${VIEWBOX_HEIGHT - CHART_PADDING_BOTTOM + 14}" text-anchor="middle" fill="var(--vscode-descriptionForeground, #888)" font-size="7">${label}</text>`);
+    xLabels.push(
+      `<text x="${x(i).toFixed(1)}" y="${VIEWBOX_HEIGHT - CHART_PADDING_BOTTOM + 14}" text-anchor="middle" fill="var(--vscode-descriptionForeground, #888)" font-size="7">${label}</text>`,
+    );
   }
   // Always show last label if not already shown
   if ((numDays - 1) % labelStep !== 0 && numDays > 1) {
     const lastDate = parseISODate(dataPoints[numDays - 1].date);
-    xLabels.push(`<text x="${x(numDays - 1).toFixed(1)}" y="${VIEWBOX_HEIGHT - CHART_PADDING_BOTTOM + 14}" text-anchor="middle" fill="var(--vscode-descriptionForeground, #888)" font-size="7">${formatShortDate(lastDate, locale)}</text>`);
+    xLabels.push(
+      `<text x="${x(numDays - 1).toFixed(1)}" y="${VIEWBOX_HEIGHT - CHART_PADDING_BOTTOM + 14}" text-anchor="middle" fill="var(--vscode-descriptionForeground, #888)" font-size="7">${formatShortDate(lastDate, locale)}</text>`,
+    );
   }
 
   // Today marker (vertical dashed line)
-  let todayMarker = '';
+  let todayMarker = "";
   if (actualPoints.length > 0 && actualPoints.length < numDays) {
     const todayIdx = dataPoints.indexOf(actualPoints[actualPoints.length - 1]);
     const tx = x(todayIdx).toFixed(1);
@@ -110,10 +121,12 @@ export function renderBurndownSvg(
   }
 
   // Actual data point dots
-  const actualDots = actualPoints.map(d => {
-    const dayIndex = dataPoints.indexOf(d);
-    return `<circle cx="${x(dayIndex).toFixed(1)}" cy="${y(d.actual!).toFixed(1)}" r="2.5" fill="var(--vscode-charts-red, #f14c4c)" />`;
-  }).join('\n    ');
+  const actualDots = actualPoints
+    .map((d) => {
+      const dayIndex = dataPoints.indexOf(d);
+      return `<circle cx="${x(dayIndex).toFixed(1)}" cy="${y(d.actual!).toFixed(1)}" r="2.5" fill="var(--vscode-charts-red, #f14c4c)" />`;
+    })
+    .join("\n    ");
 
   // Y-axis label
   const yAxisLabel = `<text x="6" y="${CHART_PADDING_TOP + PLOT_HEIGHT / 2}" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90, 6, ${CHART_PADDING_TOP + PLOT_HEIGHT / 2})" fill="var(--vscode-descriptionForeground, #888)" font-size="8">Points</text>`;
@@ -139,7 +152,7 @@ export function renderBurndownSvg(
     <text x="${VIEWBOX_WIDTH / 2}" y="12" text-anchor="middle" fill="var(--vscode-foreground, #ccc)" font-size="10" font-weight="600">${escapeXml(sprintName)}</text>
 
     <!-- Grid -->
-    ${gridLines.join('\n    ')}
+    ${gridLines.join("\n    ")}
 
     <!-- Axes -->
     ${axes}
@@ -147,7 +160,7 @@ export function renderBurndownSvg(
     ${yAxisLabel}
 
     <!-- X labels -->
-    ${xLabels.join('\n    ')}
+    ${xLabels.join("\n    ")}
 
     <!-- Today marker -->
     ${todayMarker}
@@ -156,7 +169,7 @@ export function renderBurndownSvg(
     <path d="${idealPath}" fill="none" stroke="var(--vscode-foreground, #ccc)" stroke-width="1.5" stroke-dasharray="4,2" />
 
     <!-- Actual line (solid red) -->
-    ${actualPath ? `<path d="${actualPath}" fill="none" stroke="var(--vscode-charts-red, #f14c4c)" stroke-width="1.5" />` : ''}
+    ${actualPath ? `<path d="${actualPath}" fill="none" stroke="var(--vscode-charts-red, #f14c4c)" stroke-width="1.5" />` : ""}
 
     <!-- Actual data dots -->
     ${actualDots}
@@ -204,7 +217,9 @@ export function renderPlaceholderHtml(message: string): string {
  * Calculate nice grid step values for the Y axis.
  */
 function niceGridSteps(maxVal: number): number[] {
-  if (maxVal <= 0) { return []; }
+  if (maxVal <= 0) {
+    return [];
+  }
 
   // Target ~4 gridlines
   const rough = maxVal / 4;
@@ -212,10 +227,15 @@ function niceGridSteps(maxVal: number): number[] {
   const residual = rough / magnitude;
 
   let step: number;
-  if (residual <= 1.5) { step = 1 * magnitude; }
-  else if (residual <= 3.5) { step = 2 * magnitude; }
-  else if (residual <= 7.5) { step = 5 * magnitude; }
-  else { step = 10 * magnitude; }
+  if (residual <= 1.5) {
+    step = 1 * magnitude;
+  } else if (residual <= 3.5) {
+    step = 2 * magnitude;
+  } else if (residual <= 7.5) {
+    step = 5 * magnitude;
+  } else {
+    step = 10 * magnitude;
+  }
 
   const steps: number[] = [];
   for (let v = step; v < maxVal; v += step) {
@@ -228,10 +248,5 @@ function niceGridSteps(maxVal: number): number[] {
  * Escape XML special characters for safe SVG text content.
  */
 function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }

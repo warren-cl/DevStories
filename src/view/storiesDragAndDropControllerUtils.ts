@@ -3,7 +3,9 @@
  * These can be unit tested with Vitest.
  */
 
-const matter = require('gray-matter');
+const matter = require("gray-matter");
+
+import { localToday } from "../utils/dateUtils";
 
 /**
  * Update the `epic` field in a story's YAML frontmatter.
@@ -11,7 +13,7 @@ const matter = require('gray-matter');
  */
 export function updateStoryEpic(content: string, newEpicId: string): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   parsed.data.epic = newEpicId;
   parsed.data.updated = today;
@@ -26,7 +28,7 @@ export function updateStoryEpic(content: string, newEpicId: string): string {
  */
 export function clearStoryEpic(content: string): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   delete parsed.data.epic;
   parsed.data.updated = today;
@@ -43,7 +45,7 @@ export function clearStoryEpic(content: string): string {
  */
 export function updateEpicTheme(content: string, newThemeId: string | undefined): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   if (newThemeId === undefined) {
     delete parsed.data.theme;
@@ -63,7 +65,7 @@ export function updateEpicTheme(content: string, newThemeId: string | undefined)
  */
 export function updateStorySprintAndPriority(content: string, newSprint: string, newPriority: number): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   parsed.data.sprint = newSprint;
   parsed.data.priority = newPriority;
@@ -79,7 +81,7 @@ export function updateStorySprintAndPriority(content: string, newSprint: string,
  */
 export function updateStoryPriorityOnly(content: string, newPriority: number): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   parsed.data.priority = newPriority;
   parsed.data.updated = today;

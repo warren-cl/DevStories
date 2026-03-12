@@ -3,21 +3,21 @@
  * These can be unit tested with Vitest
  */
 
-import { StoryType, StorySize } from '../types/story';
-import { substituteTemplateVariables, resolveTemplateReference } from './templateUtils';
+import { StoryType, StorySize } from "../types/story";
+import { substituteTemplateVariables, resolveTemplateReference } from "./templateUtils";
+import { localToday } from "../utils/dateUtils";
 
- 
-const matter = require('gray-matter');
+const matter = require("gray-matter");
 
 /**
  * Custom template parsed from .devstories/templates/ folder
  */
 export interface CustomTemplate {
-  name: string;           // Filename without .md (e.g., "api-endpoint")
-  displayName: string;    // From frontmatter title or fallback to name
-  description?: string;   // From frontmatter description
-  types?: StoryType[];    // Filter by story type (if specified)
-  content: string;        // Template body (without frontmatter)
+  name: string; // Filename without .md (e.g., "api-endpoint")
+  displayName: string; // From frontmatter title or fallback to name
+  description?: string; // From frontmatter description
+  types?: StoryType[]; // Filter by story type (if specified)
+  content: string; // Template body (without frontmatter)
 }
 
 /**
@@ -25,7 +25,7 @@ export interface CustomTemplate {
  * Extracts frontmatter metadata (title, description, types) and body content
  */
 export function parseCustomTemplate(filename: string, content: string): CustomTemplate {
-  const name = filename.replace(/\.md$/, '');
+  const name = filename.replace(/\.md$/, "");
   const parsed = matter(content);
 
   return {
@@ -119,22 +119,22 @@ export function findNextStoryId(existingIds: string[], prefix: string): number {
  */
 export function getSuggestedSize(type: StoryType, sizes: StorySize[]): StorySize {
   if (sizes.length === 0) {
-    return 'M' as StorySize; // Fallback for edge case (shouldn't happen with valid config)
+    return "M" as StorySize; // Fallback for edge case (shouldn't happen with valid config)
   }
 
   const middleIndex = Math.floor(sizes.length / 2);
   const secondIndex = Math.min(1, sizes.length - 1);
 
   switch (type) {
-    case 'bug':
+    case "bug":
       return sizes[0];
-    case 'feature':
+    case "feature":
       return sizes[middleIndex];
-    case 'task':
+    case "task":
       return sizes[secondIndex];
-    case 'chore':
+    case "chore":
       return sizes[0];
-    case 'spike':
+    case "spike":
       return sizes[secondIndex];
     default:
       return sizes[middleIndex];
@@ -146,8 +146,18 @@ export function getSuggestedSize(type: StoryType, sizes: StorySize[]): StorySize
  * Returns similarity score 0-1
  */
 export function calculateTitleSimilarity(title1: string, title2: string): number {
-  const words1 = new Set(title1.toLowerCase().split(/\s+/).filter(w => w.length > 2));
-  const words2 = new Set(title2.toLowerCase().split(/\s+/).filter(w => w.length > 2));
+  const words1 = new Set(
+    title1
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 2),
+  );
+  const words2 = new Set(
+    title2
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 2),
+  );
 
   if (words1.size === 0 || words2.size === 0) {
     return 0;
@@ -174,16 +184,10 @@ export interface GenerateOptions {
  * Generate story markdown content from StoryData
  * Applies variable substitution to template: {{DATE}}, {{TITLE}}, {{ID}}, {{PROJECT}}, {{AUTHOR}}
  */
-export function generateStoryMarkdown(
-  data: StoryData,
-  template: string,
-  options?: GenerateOptions
-): string {
-  const today = new Date().toISOString().split('T')[0];
+export function generateStoryMarkdown(data: StoryData, template: string, options?: GenerateOptions): string {
+  const today = localToday();
   const escapedTitle = data.title.replace(/"/g, '\\"');
-  const deps = data.dependencies && data.dependencies.length > 0
-    ? `\n  - ${data.dependencies.map(d => `[[${d}]]`).join('\n  - ')}`
-    : '';
+  const deps = data.dependencies && data.dependencies.length > 0 ? `\n  - ${data.dependencies.map((d) => `[[${d}]]`).join("\n  - ")}` : "";
 
   // Resolve library reference if template is like "@library/api-endpoint"
   const resolvedTemplate = resolveTemplateReference(template) ?? template;
@@ -237,7 +241,7 @@ export function appendStoryToEpic(epicContent: string, storyLink: string): strin
 
   if (!match || match.index === undefined) {
     // No Stories section found, append at end
-    return epicContent.trimEnd() + '\n\n## Stories\n' + storyLink + '\n';
+    return epicContent.trimEnd() + "\n\n## Stories\n" + storyLink + "\n";
   }
 
   // Find where to insert (after ## Stories and any existing content before next ##)
@@ -246,9 +250,7 @@ export function appendStoryToEpic(epicContent: string, storyLink: string): strin
 
   // Find the next ## section
   const nextSectionMatch = restContent.match(/^## /m);
-  const insertPoint = nextSectionMatch?.index !== undefined
-    ? afterStoriesIdx + nextSectionMatch.index
-    : epicContent.length;
+  const insertPoint = nextSectionMatch?.index !== undefined ? afterStoriesIdx + nextSectionMatch.index : epicContent.length;
 
   // Get content between ## Stories and next section
   const storiesContent = epicContent.slice(afterStoriesIdx, insertPoint).trimEnd();
@@ -258,9 +260,7 @@ export function appendStoryToEpic(epicContent: string, storyLink: string): strin
   const after = epicContent.slice(insertPoint);
 
   // Append link after existing stories content
-  const newStoriesContent = storiesContent
-    ? storiesContent + '\n' + storyLink
-    : '\n' + storyLink;
+  const newStoriesContent = storiesContent ? storiesContent + "\n" + storyLink : "\n" + storyLink;
 
-  return before + newStoriesContent + '\n\n' + after.trimStart();
+  return before + newStoriesContent + "\n\n" + after.trimStart();
 }
