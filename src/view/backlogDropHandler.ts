@@ -20,13 +20,19 @@
  *   discarded regardless of the user's answer.
  */
 
-import * as vscode from 'vscode';
-import { SortState } from '../core/sortService';
-import { Story } from '../types/story';
-import { SprintNode, BACKLOG_SPRINT_ID, isSprintNode } from '../types/sprintNode';
-import { isBacklogStory } from './storiesProviderUtils';
-import { updateStorySprintAndPriority, updateStoryPriorityOnly } from './storiesDragAndDropControllerUtils';
-import { getLogger } from '../core/logger';
+import * as vscode from "vscode";
+import { SortState } from "../core/sortService";
+import { Story } from "../types/story";
+import { SprintNode, BACKLOG_SPRINT_ID, isSprintNode } from "../types/sprintNode";
+import { isBacklogStory } from "./storiesProviderUtils";
+import {
+  updateStorySprintAndPriority,
+  updateStoryPriorityOnly,
+  cascadeBumpIfNeeded,
+  computeSprintNodeDropPriority,
+  type PrioritySibling,
+} from "./storiesDragAndDropControllerUtils";
+import { getLogger } from "../core/logger";
 
 // ─── Public parameter type ──────────────────────────────────────────────────
 
@@ -58,7 +64,7 @@ export interface BacklogDropParams {
 // ─── Sort-guard ─────────────────────────────────────────────────────────────
 
 function isSortedByPriorityAsc(state: SortState): boolean {
-  return state.key === 'priority' && state.direction === 'asc';
+  return state.key === "priority" && state.direction === "asc";
 }
 
 /**
@@ -66,15 +72,14 @@ function isSortedByPriorityAsc(state: SortState): boolean {
  * Returns `true` when the user chose to switch (the drop is still invalid).
  */
 async function showSortGuardDialog(sortService: BacklogDropSortService): Promise<boolean> {
-  const switchBtn = 'Switch to Priority Sort';
+  const switchBtn = "Switch to Priority Sort";
   const choice = await vscode.window.showWarningMessage(
-    'Drag-and-drop reordering only works when stories are sorted by priority (ascending). '
-    + 'Would you like to switch to priority sort?',
+    "Drag-and-drop reordering only works when stories are sorted by priority (ascending). " + "Would you like to switch to priority sort?",
     { modal: true },
     switchBtn,
   );
   if (choice === switchBtn) {
-    sortService.setState({ key: 'priority', direction: 'asc' });
+    sortService.setState({ key: "priority", direction: "asc" });
     return true;
   }
   return false;
@@ -88,44 +93,35 @@ async function showSortGuardDialog(sortService: BacklogDropSortService): Promise
  * - Backlog sentinel   → 'backlog'.
  * - Story target       → the target story's sprint (or 'backlog' if backlog story).
  */
-function resolveTargetSprint(
-  target: SprintNode | Story,
-  sprintSequence: string[],
-): string {
+function resolveTargetSprint(target: SprintNode | Story, sprintSequence: string[]): string {
   if (isSprintNode(target)) {
-    return target.isBacklog ? 'backlog' : target.sprintId;
+    return target.isBacklog ? "backlog" : target.sprintId;
   }
   // Story target — always return the canonical 'backlog' value when the story belongs to
   // the backlog bucket (covers unrecognised sprint values such as 'sprint-43' that are
   // not in sprintSequence, in addition to the obvious undefined/''/backlog cases).
   const story = target as Story;
-  return isBacklogStory(story, sprintSequence) ? 'backlog' : (story.sprint ?? 'backlog');
+  return isBacklogStory(story, sprintSequence) ? "backlog" : (story.sprint ?? "backlog");
 }
 
 /**
  * Collect every story that belongs to *targetSprint*, according to the same
  * grouping rules the tree view uses.
  */
-function getStoriesInSprint(
-  store: BacklogDropStore,
-  targetSprint: string,
-  sprintSequence: string[],
-): Story[] {
+function getStoriesInSprint(store: BacklogDropStore, targetSprint: string, sprintSequence: string[]): Story[] {
   const all = store.getStories();
-  if (targetSprint.toLowerCase() === 'backlog' || targetSprint === BACKLOG_SPRINT_ID) {
-    return all.filter(s => isBacklogStory(s, sprintSequence));
+  if (targetSprint.toLowerCase() === "backlog" || targetSprint === BACKLOG_SPRINT_ID) {
+    return all.filter((s) => isBacklogStory(s, sprintSequence));
   }
-  return all.filter(s => s.sprint === targetSprint);
+  return all.filter((s) => s.sprint === targetSprint);
 }
 
 // ─── File write helpers ─────────────────────────────────────────────────────
 
-async function writeStorySprintAndPriority(
-  story: Story,
-  newSprint: string,
-  newPriority: number,
-): Promise<void> {
-  if (!story.filePath) { return; }
+async function writeStorySprintAndPriority(story: Story, newSprint: string, newPriority: number): Promise<void> {
+  if (!story.filePath) {
+    return;
+  }
   try {
     const uri = vscode.Uri.file(story.filePath);
     const bytes = await vscode.workspace.fs.readFile(uri);
@@ -137,11 +133,10 @@ async function writeStorySprintAndPriority(
   }
 }
 
-async function writeStoryPriority(
-  story: Story,
-  newPriority: number,
-): Promise<void> {
-  if (!story.filePath) { return; }
+async function writeStoryPriority(story: Story, newPriority: number): Promise<void> {
+  if (!story.filePath) {
+    return;
+  }
   try {
     const uri = vscode.Uri.file(story.filePath);
     const bytes = await vscode.workspace.fs.readFile(uri);
@@ -166,7 +161,9 @@ export async function handleBacklogDrop(params: BacklogDropParams): Promise<void
   }
 
   const draggedStory = store.getStory(draggedStoryId);
-  if (!draggedStory) { return; }
+  if (!draggedStory) {
+    return;
+  }
 
   if (isSprintNode(target)) {
     // ── Story → SprintNode ────────────────────────────────────────────────
@@ -174,7 +171,9 @@ export async function handleBacklogDrop(params: BacklogDropParams): Promise<void
   } else {
     // ── Story → Story ─────────────────────────────────────────────────────
     const targetStory = target as Story;
-    if (targetStory.id === draggedStory.id) { return; } // no-op: self-drop
+    if (targetStory.id === draggedStory.id) {
+      return;
+    } // no-op: self-drop
     await handleDropOnStory(draggedStory, targetStory, store, sprintSequence);
   }
 }
@@ -187,26 +186,32 @@ async function handleDropOnSprintNode(
   store: BacklogDropStore,
   sprintSequence: string[],
 ): Promise<void> {
-  const targetSprint = targetNode.isBacklog ? 'backlog' : targetNode.sprintId;
-
-  // No-op: already in this sprint at priority 1
-  if (draggedStory.priority === 1) {
-    const alreadyInSprint = targetNode.isBacklog
-      ? isBacklogStory(draggedStory, sprintSequence)
-      : draggedStory.sprint === targetSprint;
-    if (alreadyInSprint) { return; }
-  }
+  const targetSprint = targetNode.isBacklog ? "backlog" : targetNode.sprintId;
 
   // Collect stories currently in the target sprint (excluding the dragged story)
-  const siblings = getStoriesInSprint(store, targetSprint, sprintSequence)
-    .filter(s => s.id !== draggedStory.id);
+  const siblings = getStoriesInSprint(store, targetSprint, sprintSequence).filter((s) => s.id !== draggedStory.id);
 
-  // 1. Set dragged story to sprint + priority 1
-  await writeStorySprintAndPriority(draggedStory, targetSprint, 1);
+  const siblingData: PrioritySibling[] = siblings.map((s) => ({ id: s.id, priority: s.priority }));
+  const { draggedPriority, bumps } = computeSprintNodeDropPriority(siblingData);
 
-  // 2. Bump every sibling by +1
-  for (const sibling of siblings) {
-    await writeStoryPriority(sibling, sibling.priority + 1);
+  // No-op: already in this sprint and already the highest-priority story
+  const alreadyInSprint = targetNode.isBacklog ? isBacklogStory(draggedStory, sprintSequence) : draggedStory.sprint === targetSprint;
+  if (alreadyInSprint) {
+    const minSiblingPriority = siblings.length > 0 ? Math.min(...siblings.map((s) => s.priority)) : Infinity;
+    if (draggedStory.priority < minSiblingPriority) {
+      return;
+    }
+  }
+
+  // 1. Set dragged story to sprint + computed priority
+  await writeStorySprintAndPriority(draggedStory, targetSprint, draggedPriority);
+
+  // 2. Apply only the cascade bumps (may be empty if there was room before min)
+  for (const bump of bumps) {
+    const sibling = siblings.find((s) => s.id === bump.id);
+    if (sibling) {
+      await writeStoryPriority(sibling, bump.newPriority);
+    }
   }
 }
 
@@ -222,16 +227,18 @@ async function handleDropOnStory(
   const targetPriority = targetStory.priority;
 
   // Collect stories currently in the target sprint (excluding the dragged story)
-  const siblings = getStoriesInSprint(store, targetSprint, sprintSequence)
-    .filter(s => s.id !== draggedStory.id);
+  const siblings = getStoriesInSprint(store, targetSprint, sprintSequence).filter((s) => s.id !== draggedStory.id);
 
   // 1. Set dragged story to target's sprint + priority
   await writeStorySprintAndPriority(draggedStory, targetSprint, targetPriority);
 
-  // 2. Bump every sibling whose priority >= targetPriority by +1
-  for (const sibling of siblings) {
-    if (sibling.priority >= targetPriority) {
-      await writeStoryPriority(sibling, sibling.priority + 1);
+  // 2. Cascade-bump only the siblings that actually collide
+  const siblingData: PrioritySibling[] = siblings.map((s) => ({ id: s.id, priority: s.priority }));
+  const bumps = cascadeBumpIfNeeded(siblingData, targetPriority);
+  for (const bump of bumps) {
+    const sibling = siblings.find((s) => s.id === bump.id);
+    if (sibling) {
+      await writeStoryPriority(sibling, bump.newPriority);
     }
   }
 }

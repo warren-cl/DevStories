@@ -88,3 +88,89 @@ export function updateStoryPriorityOnly(content: string, newPriority: number): s
 
   return matter.stringify(parsed.content, parsed.data);
 }
+
+// ─── Priority cascade helpers ───────────────────────────────────────────────
+
+/** Lightweight representation of a story for cascade computation. */
+export interface PrioritySibling {
+  id: string;
+  priority: number;
+}
+
+/** A priority bump that needs to be written to disk. */
+export interface PriorityBump {
+  id: string;
+  newPriority: number;
+}
+
+/**
+ * Compute the minimal set of priority bumps needed after a story is inserted
+ * at `insertedPriority`.  Only siblings whose priority actually collides with
+ * the inserted value (or with a previously-bumped sibling) are affected — the
+ * cascade stops as soon as a natural gap is found.
+ *
+ * @param siblings       All stories in the target sprint **excluding** the
+ *                       dragged story, in any order.
+ * @param insertedPriority The priority the dragged story will receive.
+ * @returns Array of bumps (may be empty if no collisions).
+ */
+export function cascadeBumpIfNeeded(siblings: PrioritySibling[], insertedPriority: number): PriorityBump[] {
+  // Sort ascending by priority, then by id for deterministic order on ties
+  const sorted = [...siblings]
+    .filter((s) => s.priority >= insertedPriority)
+    .sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
+
+  const bumps: PriorityBump[] = [];
+  let nextRequired = insertedPriority + 1;
+
+  for (const sibling of sorted) {
+    if (sibling.priority < nextRequired) {
+      // Collision — this sibling needs to move down
+      bumps.push({ id: sibling.id, newPriority: nextRequired });
+      nextRequired++;
+    } else {
+      // Gap found — no more collisions possible
+      break;
+    }
+  }
+
+  return bumps;
+}
+
+/** Result of computing the priority for a sprint-node drop. */
+export interface SprintNodeDropResult {
+  draggedPriority: number;
+  bumps: PriorityBump[];
+}
+
+/**
+ * Compute the priority for a story dropped onto a sprint node (i.e. the story
+ * should become the highest-priority item in that sprint).
+ *
+ * Strategy:
+ * - Empty sprint → priority 100 (conventional default spacing).
+ * - Room before the current minimum (min ≥ 2) → `min - 1`, zero bumps.
+ * - No room (min == 1) → priority 1, cascade-bump the consecutive block.
+ *
+ * @param siblings All stories in the target sprint **excluding** the dragged
+ *                 story, in any order.
+ */
+export function computeSprintNodeDropPriority(siblings: PrioritySibling[]): SprintNodeDropResult {
+  if (siblings.length === 0) {
+    return { draggedPriority: 100, bumps: [] };
+  }
+
+  const sorted = [...siblings].sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
+  const minPriority = sorted[0].priority;
+
+  if (minPriority >= 2) {
+    // There's room before the current minimum — no bumps needed
+    return { draggedPriority: minPriority - 1, bumps: [] };
+  }
+
+  // minPriority is 1 (or theoretically 0/negative) — must cascade
+  return {
+    draggedPriority: 1,
+    bumps: cascadeBumpIfNeeded(siblings, 1),
+  };
+}
