@@ -464,7 +464,7 @@ describe("Story → SprintNode", () => {
 // ─── Story → Story ──────────────────────────────────────────────────────────
 
 describe("Story → Story (same sprint)", () => {
-  it("sets dragged story to target sprint and priority", async () => {
+  it("inserts dragged story immediately below target (target+1)", async () => {
     const dragged = makeStory({ id: "DS-001", sprint: "sprint-1", priority: 10 });
     const target = makeStory({ id: "DS-002", sprint: "sprint-1", priority: 3 });
     const store = makeStore([dragged, target]);
@@ -488,13 +488,20 @@ describe("Story → Story (same sprint)", () => {
       configService: makeConfigService(),
     });
 
-    expect(mockWriteFile).toHaveBeenCalled();
+    // Dragged gets target+1=4, target (3) is untouched — no collision
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
     const draggedWrite = new TextDecoder().decode(mockWriteFile.mock.calls[0][1]);
     expect(draggedWrite).toContain("sprint: sprint-1");
-    expect(draggedWrite).toContain("priority: 3");
+    expect(draggedWrite).toContain("priority: 4");
   });
 
-  it("cascade-bumps only colliding siblings and stops at gap", async () => {
+  it("cascade-bumps only colliding siblings below target and stops at gap", async () => {
+    // Priorities: DS-003=1, DS-002(target)=3, DS-004=3, DS-005=7, DS-001(dragged)=10
+    // Drop DS-001 onto DS-002 → insert at 3+1=4
+    // Cascade from 4: DS-004(3) is < 4 so not in range. DS-005(7) ≥ 4 but no collision at 4.
+    // Actually: siblings ≥ 4 are just DS-005(7), and 7 ≥ 5 → gap → no bumps.
+    // But DS-004 at 3 < 4, so not bumped.
+    // Net result: only dragged written at priority 4. No bumps.
     const dragged = makeStory({ id: "DS-001", sprint: "sprint-1", priority: 10 });
     const target = makeStory({ id: "DS-002", sprint: "sprint-1", priority: 3 });
     const above = makeStory({ id: "DS-003", sprint: "sprint-1", priority: 1 });
@@ -530,21 +537,73 @@ describe("Story → Story (same sprint)", () => {
       configService: makeConfigService(),
     });
 
-    // Cascade: DS-002(3)→4, DS-004(3)→5. DS-005(7) has gap (>=6) → NOT bumped.
-    // DS-003 (priority 1) is NOT bumped (< 3)
-    // Writes: dragged (1) + DS-002 (1) + DS-004 (1) = 3
-    expect(mockWriteFile).toHaveBeenCalledTimes(3);
+    // Insert at 4: no sibling at 4, gap exists → zero bumps
+    // DS-003(1) < 4, DS-002(3) < 4, DS-004(3) < 4, DS-005(7) has gap
+    // Only 1 write: the dragged story
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
 
-    // DS-002 (target, priority 3) → 4
-    const targetWrite = new TextDecoder().decode(mockWriteFile.mock.calls[1][1]);
-    expect(targetWrite).toContain("priority: 4");
-
-    // DS-004 (priority 3) → 5 (cascaded past DS-002)
-    const ds004Write = new TextDecoder().decode(mockWriteFile.mock.calls[2][1]);
-    expect(ds004Write).toContain("priority: 5");
+    const draggedWrite = new TextDecoder().decode(mockWriteFile.mock.calls[0][1]);
+    expect(draggedWrite).toContain("priority: 4");
   });
 
-  it("does NOT bump story with priority < target priority", async () => {
+  it("cascade-bumps when insert slot is occupied", async () => {
+    // Priorities: DS-003=1, DS-002(target)=3, DS-004=4, DS-005=5, DS-006=10
+    // Drop DS-001 onto DS-002 → insert at 4
+    // Siblings ≥ 4: DS-004(4), DS-005(5), DS-006(10)
+    // Cascade: DS-004(4)→5, DS-005(5)→6, DS-006(10) ≥ 7 → STOP
+    const dragged = makeStory({ id: "DS-001", sprint: "sprint-1", priority: 20 });
+    const target = makeStory({ id: "DS-002", sprint: "sprint-1", priority: 3 });
+    const above = makeStory({ id: "DS-003", sprint: "sprint-1", priority: 1 });
+    const atSlot = makeStory({ id: "DS-004", sprint: "sprint-1", priority: 4 });
+    const afterSlot = makeStory({ id: "DS-005", sprint: "sprint-1", priority: 5 });
+    const gapStory = makeStory({ id: "DS-006", sprint: "sprint-1", priority: 10 });
+    const store = makeStore([dragged, target, above, atSlot, afterSlot, gapStory]);
+
+    mockReadFile.mockImplementation((uri: MockUri) => {
+      const path = uri.fsPath || uri.path || "";
+      if (path.includes("DS-001")) {
+        return Promise.resolve(storyFileContent("DS-001", "sprint-1", 20));
+      }
+      if (path.includes("DS-002")) {
+        return Promise.resolve(storyFileContent("DS-002", "sprint-1", 3));
+      }
+      if (path.includes("DS-003")) {
+        return Promise.resolve(storyFileContent("DS-003", "sprint-1", 1));
+      }
+      if (path.includes("DS-004")) {
+        return Promise.resolve(storyFileContent("DS-004", "sprint-1", 4));
+      }
+      if (path.includes("DS-005")) {
+        return Promise.resolve(storyFileContent("DS-005", "sprint-1", 5));
+      }
+      if (path.includes("DS-006")) {
+        return Promise.resolve(storyFileContent("DS-006", "sprint-1", 10));
+      }
+      return Promise.resolve(storyFileContent("DEFAULT", "sprint-1", 500));
+    });
+
+    await handleBacklogDrop({
+      draggedStoryId: "DS-001",
+      target,
+      store,
+      sortService: makeSortService(),
+      configService: makeConfigService(),
+    });
+
+    // Writes: dragged(→4) + DS-004(4→5) + DS-005(5→6) = 3. DS-006(10) has gap.
+    expect(mockWriteFile).toHaveBeenCalledTimes(3);
+
+    const draggedWrite = new TextDecoder().decode(mockWriteFile.mock.calls[0][1]);
+    expect(draggedWrite).toContain("priority: 4");
+
+    const ds004Write = new TextDecoder().decode(mockWriteFile.mock.calls[1][1]);
+    expect(ds004Write).toContain("priority: 5");
+
+    const ds005Write = new TextDecoder().decode(mockWriteFile.mock.calls[2][1]);
+    expect(ds005Write).toContain("priority: 6");
+  });
+
+  it("does NOT bump story with priority < insert priority", async () => {
     const dragged = makeStory({ id: "DS-001", sprint: "sprint-1", priority: 10 });
     const target = makeStory({ id: "DS-002", sprint: "sprint-1", priority: 5 });
     const higher = makeStory({ id: "DS-003", sprint: "sprint-1", priority: 2 });
@@ -572,8 +631,9 @@ describe("Story → Story (same sprint)", () => {
       configService: makeConfigService(),
     });
 
-    // Only dragged + target bumped = 2 writes (DS-003 at priority 2 < 5 not bumped)
-    expect(mockWriteFile).toHaveBeenCalledTimes(2);
+    // Insert at 6 (target 5 + 1). No sibling at 6 → only dragged written.
+    // DS-002(5) and DS-003(2) are both < 6, untouched.
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
   });
 
   it("is a no-op when dropping story onto itself", async () => {
@@ -593,7 +653,7 @@ describe("Story → Story (same sprint)", () => {
 });
 
 describe("Story → Story (cross-sprint)", () => {
-  it("moves story to target sprint and takes target priority", async () => {
+  it("moves story to target sprint at target+1 priority", async () => {
     const dragged = makeStory({ id: "DS-001", sprint: "sprint-1", priority: 500 });
     const target = makeStory({ id: "DS-002", sprint: "sprint-2", priority: 3 });
     const store = makeStore([dragged, target]);
@@ -617,12 +677,14 @@ describe("Story → Story (cross-sprint)", () => {
       configService: makeConfigService(),
     });
 
+    // Inserted below target: 3+1=4, target(3) untouched
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
     const draggedWrite = new TextDecoder().decode(mockWriteFile.mock.calls[0][1]);
     expect(draggedWrite).toContain("sprint: sprint-2");
-    expect(draggedWrite).toContain("priority: 3");
+    expect(draggedWrite).toContain("priority: 4");
   });
 
-  it("bumps only colliding stories in target sprint without affecting source sprint", async () => {
+  it("bumps only colliding stories in target sprint without affecting source or target", async () => {
     const dragged = makeStory({ id: "DS-001", sprint: "sprint-1", priority: 500 });
     const target = makeStory({ id: "DS-002", sprint: "sprint-2", priority: 3 });
     const sourceSibling = makeStory({ id: "DS-003", sprint: "sprint-1", priority: 5 });
@@ -654,15 +716,16 @@ describe("Story → Story (cross-sprint)", () => {
       configService: makeConfigService(),
     });
 
-    // Cascade: DS-002(3)→4. DS-004(5) has gap (>=5) → NOT bumped.
-    // DS-003 is in sprint-1 (source), should NOT be touched
-    // Writes: dragged (1) + DS-002 bump (1) = 2
-    expect(mockWriteFile).toHaveBeenCalledTimes(2);
+    // Insert at 4 (target 3+1). DS-002(3) untouched. DS-004(5) has gap (>=5). No bumps.
+    // DS-003 is in sprint-1 (source), should NOT be touched.
+    // Writes: dragged only = 1
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
 
     const paths = mockWriteFile.mock.calls.map((c) => {
       const uri = c[0] as MockUri;
       return uri.fsPath || uri.path || "";
     });
+    expect(paths.some((p: string) => p.includes("DS-002"))).toBe(false);
     expect(paths.some((p: string) => p.includes("DS-003"))).toBe(false);
     expect(paths.some((p: string) => p.includes("DS-004"))).toBe(false);
   });

@@ -16,14 +16,19 @@
  *   7. Calls store.reloadFile() to avoid Windows watcher race.
  */
 
-import * as vscode from 'vscode';
-import { Story } from '../types/story';
-import { Epic } from '../types/epic';
-import { Theme } from '../types/theme';
-import { SprintNode, BACKLOG_SPRINT_ID, isSprintNode } from '../types/sprintNode';
-import { InboxSpikeFile } from '../types/inboxSpikeNode';
-import { isBacklogStory } from './storiesProviderUtils';
-import { updateStoryPriorityOnly } from './storiesDragAndDropControllerUtils';
+import * as vscode from "vscode";
+import { Story } from "../types/story";
+import { Epic } from "../types/epic";
+import { Theme } from "../types/theme";
+import { SprintNode, BACKLOG_SPRINT_ID, isSprintNode } from "../types/sprintNode";
+import { InboxSpikeFile } from "../types/inboxSpikeNode";
+import { isBacklogStory } from "./storiesProviderUtils";
+import {
+  updateStoryPriorityOnly,
+  cascadeBumpIfNeeded,
+  computeSprintNodeDropPriority,
+  type PrioritySibling,
+} from "./storiesDragAndDropControllerUtils";
 import {
   stripDatePrefix,
   titleFromKebabCase,
@@ -34,14 +39,14 @@ import {
   getDefaultStatus,
   todayString,
   maxPriority,
-} from './inboxConversionUtils';
-import { findNextStoryId } from '../commands/createStoryUtils';
-import { findNextEpicId } from '../commands/createEpicUtils';
-import { getLogger } from '../core/logger';
-import { StorydocsService } from '../core/storydocsService';
+} from "./inboxConversionUtils";
+import { findNextStoryId } from "../commands/createStoryUtils";
+import { findNextEpicId } from "../commands/createEpicUtils";
+import { getLogger } from "../core/logger";
+import { StorydocsService } from "../core/storydocsService";
 
-const NO_THEME_ID = '__NO_THEME__';
-const NO_EPIC_ID = '__NO_EPIC__';
+const NO_THEME_ID = "__NO_THEME__";
+const NO_EPIC_ID = "__NO_EPIC__";
 
 // ─── Public parameter types ─────────────────────────────────────────────────
 
@@ -85,11 +90,11 @@ export interface InboxBacklogDropParams {
 }
 
 export type BreakdownTarget =
-  | { kind: 'theme'; theme: Theme }
-  | { kind: 'epic'; epic: Epic }
-  | { kind: 'story'; story: Story }
-  | { kind: 'noTheme' }
-  | { kind: 'noEpic' };
+  | { kind: "theme"; theme: Theme }
+  | { kind: "epic"; epic: Epic }
+  | { kind: "story"; story: Story }
+  | { kind: "noTheme" }
+  | { kind: "noEpic" };
 
 export interface InboxBreakdownDropParams {
   sourceFile: InboxSpikeFile;
@@ -120,36 +125,31 @@ function getWorkspaceUri(): vscode.Uri | undefined {
 }
 
 /** Collect existing story IDs from both disk and store (guards against watcher race). */
-async function collectStoryIds(
-  workspaceUri: vscode.Uri,
-  storyPrefix: string,
-  store: InboxDropStore,
-): Promise<string[]> {
-  const pattern = new vscode.RelativePattern(
-    workspaceUri,
-    `.devstories/stories/${storyPrefix}-*.md`,
-  );
+async function collectStoryIds(workspaceUri: vscode.Uri, storyPrefix: string, store: InboxDropStore): Promise<string[]> {
+  const pattern = new vscode.RelativePattern(workspaceUri, `.devstories/stories/${storyPrefix}-*.md`);
   const files = await vscode.workspace.findFiles(pattern);
   const diskIds = files
-    .map(uri => {
-      const filename = uri.path.split('/').pop() ?? '';
+    .map((uri) => {
+      const filename = uri.path.split("/").pop() ?? "";
       const match = filename.match(new RegExp(`^(${storyPrefix}-\\d+)`));
       return match ? match[1] : null;
     })
     .filter((id): id is string => id !== null);
 
-  const storeIds = store.getStories().map(s => s.id);
+  const storeIds = store.getStories().map((s) => s.id);
   return [...new Set([...diskIds, ...storeIds])];
 }
 
 /** Collect existing epic IDs from store. */
 function collectEpicIds(store: InboxDropStore): string[] {
-  return store.getEpics().map(e => e.id);
+  return store.getEpics().map((e) => e.id);
 }
 
 /** Write updated priority to a story's file on disk. */
 async function writeStoryPriority(story: Story, newPriority: number): Promise<void> {
-  if (!story.filePath) { return; }
+  if (!story.filePath) {
+    return;
+  }
   try {
     const content = await readFileContent(story.filePath);
     const updated = updateStoryPriorityOnly(content, newPriority);
@@ -162,16 +162,12 @@ async function writeStoryPriority(story: Story, newPriority: number): Promise<vo
 /**
  * Get stories belonging to a specific sprint (mirrors backlogDropHandler logic).
  */
-function getStoriesInSprint(
-  store: InboxDropStore,
-  targetSprint: string,
-  sprintSequence: string[],
-): Story[] {
+function getStoriesInSprint(store: InboxDropStore, targetSprint: string, sprintSequence: string[]): Story[] {
   const all = store.getStories();
-  if (targetSprint.toLowerCase() === 'backlog' || targetSprint === BACKLOG_SPRINT_ID) {
-    return all.filter(s => isBacklogStory(s, sprintSequence));
+  if (targetSprint.toLowerCase() === "backlog" || targetSprint === BACKLOG_SPRINT_ID) {
+    return all.filter((s) => isBacklogStory(s, sprintSequence));
   }
-  return all.filter(s => s.sprint === targetSprint);
+  return all.filter((s) => s.sprint === targetSprint);
 }
 
 // ─── Backlog view drop handler ──────────────────────────────────────────────
@@ -180,19 +176,21 @@ export async function handleInboxDropOnBacklog(params: InboxBacklogDropParams): 
   const { sourceFile, target, store, configService, sortService, storydocsService } = params;
   const config = configService.config;
   const workspaceUri = getWorkspaceUri();
-  if (!workspaceUri) { return; }
+  if (!workspaceUri) {
+    return;
+  }
 
   // Sort guard (same as backlogDropHandler)
-  if (sortService.state.key !== 'priority' || sortService.state.direction !== 'asc') {
-    const switchBtn = 'Switch to Priority Sort';
+  if (sortService.state.key !== "priority" || sortService.state.direction !== "asc") {
+    const switchBtn = "Switch to Priority Sort";
     const choice = await vscode.window.showWarningMessage(
-      'Drag-and-drop reordering only works when stories are sorted by priority (ascending). '
-      + 'Would you like to switch to priority sort?',
+      "Drag-and-drop reordering only works when stories are sorted by priority (ascending). " +
+        "Would you like to switch to priority sort?",
       { modal: true },
       switchBtn,
     );
     if (choice === switchBtn) {
-      sortService.setState({ key: 'priority', direction: 'asc' });
+      sortService.setState({ key: "priority", direction: "asc" });
     }
     return; // drop is always invalid when sort is wrong
   }
@@ -200,42 +198,50 @@ export async function handleInboxDropOnBacklog(params: InboxBacklogDropParams): 
   try {
     // 1. Read source file
     const originalContent = await readFileContent(sourceFile.filePath);
-    const matter = require('gray-matter');
+    const matter = require("gray-matter");
     const parsed = matter(originalContent);
-    const existingData = parsed.data as Record<string, unknown> ?? {};
+    const existingData = (parsed.data as Record<string, unknown>) ?? {};
 
     // 2. Generate next story ID
     const existingIds = await collectStoryIds(workspaceUri, config.storyPrefix, store);
     const nextNum = findNextStoryId(existingIds, config.storyPrefix);
-    const storyId = `${config.storyPrefix}-${String(nextNum).padStart(5, '0')}`;
+    const storyId = `${config.storyPrefix}-${String(nextNum).padStart(5, "0")}`;
 
     // 3. Determine sprint and priority based on target
     let sprint: string;
     let priority: number;
     let bumpSiblings = false;
     let bumpTargetPriority = 0;
-    let bumpSprint = '';
+    let bumpSprint = "";
 
     if (isSprintNode(target)) {
       // Drop on sprint node or backlog sentinel
-      sprint = target.isBacklog ? 'backlog' : target.sprintId;
-      // Priority 1 = top of sprint; bump all existing siblings by +1
-      priority = 1;
-      bumpSiblings = true;
+      sprint = target.isBacklog ? "backlog" : target.sprintId;
+      // Use cascade algorithm to compute optimal priority
+      const sprintSiblings: PrioritySibling[] = getStoriesInSprint(store, sprint, config.sprintSequence).map((s) => ({
+        id: s.id,
+        priority: s.priority,
+      }));
+      const sprintDrop = computeSprintNodeDropPriority(sprintSiblings);
+      priority = sprintDrop.draggedPriority;
+      bumpSiblings = sprintDrop.bumps.length > 0;
       bumpSprint = sprint;
     } else {
       // Drop on a story node
       const targetStory = target as Story;
       const sprintSequence = config.sprintSequence;
-      sprint = targetStory.sprint && targetStory.sprint !== ''
-        ? (isBacklogStory(targetStory, sprintSequence) && targetStory.sprint.toLowerCase() !== 'backlog'
-          ? targetStory.sprint
-          : targetStory.sprint)
-        : 'backlog';
-      if (!sprint || sprint === '') { sprint = 'backlog'; }
-      priority = targetStory.priority;
+      sprint =
+        targetStory.sprint && targetStory.sprint !== ""
+          ? isBacklogStory(targetStory, sprintSequence) && targetStory.sprint.toLowerCase() !== "backlog"
+            ? targetStory.sprint
+            : targetStory.sprint
+          : "backlog";
+      if (!sprint || sprint === "") {
+        sprint = "backlog";
+      }
+      priority = targetStory.priority + 1;
+      bumpTargetPriority = priority;
       bumpSiblings = true;
-      bumpTargetPriority = targetStory.priority;
       bumpSprint = sprint;
     }
 
@@ -249,8 +255,8 @@ export async function handleInboxDropOnBacklog(params: InboxBacklogDropParams): 
     const mergedData = fillMissingStoryFrontmatter(existingData, {
       id: storyId,
       title: defaultTitle,
-      type: 'feature',
-      epic: (existingData.epic as string) ?? '',
+      type: "feature",
+      epic: (existingData.epic as string) ?? "",
       status: getDefaultStatus(config.statuses),
       sprint,
       size: getDefaultSize(config.sizes),
@@ -263,7 +269,7 @@ export async function handleInboxDropOnBacklog(params: InboxBacklogDropParams): 
     const convertedContent = buildConvertedFileContent(originalContent, mergedData);
 
     // 7. Write new file to stories/
-    const newUri = vscode.Uri.joinPath(workspaceUri, '.devstories', 'stories', newFileName);
+    const newUri = vscode.Uri.joinPath(workspaceUri, ".devstories", "stories", newFileName);
     await writeFile(newUri, convertedContent);
 
     // 8. Delete original file
@@ -273,23 +279,30 @@ export async function handleInboxDropOnBacklog(params: InboxBacklogDropParams): 
     await store.reloadFile(newUri);
 
     // 10. Create storydocs folder (best-effort, non-blocking)
-    void storydocsService?.ensureFolder(storyId, 'story');
+    void storydocsService?.ensureFolder(storyId, "story");
 
-    // 11. Bump sibling priorities
+    // 11. Bump sibling priorities (cascade — only bump on actual collision)
     if (bumpSiblings) {
-      const siblings = getStoriesInSprint(store, bumpSprint, config.sprintSequence)
-        .filter(s => s.id !== storyId);
+      const siblings = getStoriesInSprint(store, bumpSprint, config.sprintSequence).filter((s) => s.id !== storyId);
 
       if (isSprintNode(target)) {
-        // Dropped on sprint node → all siblings bumped by +1
-        for (const sibling of siblings) {
-          await writeStoryPriority(sibling, sibling.priority + 1);
+        // Sprint-node drop: bumps already computed by computeSprintNodeDropPriority
+        const sprintSiblings: PrioritySibling[] = siblings.map((s) => ({ id: s.id, priority: s.priority }));
+        const sprintDrop = computeSprintNodeDropPriority(sprintSiblings);
+        for (const bump of sprintDrop.bumps) {
+          const sibling = siblings.find((s) => s.id === bump.id);
+          if (sibling) {
+            await writeStoryPriority(sibling, bump.newPriority);
+          }
         }
       } else {
-        // Dropped on story → bump siblings with priority >= target priority
-        for (const sibling of siblings) {
-          if (sibling.priority >= bumpTargetPriority) {
-            await writeStoryPriority(sibling, sibling.priority + 1);
+        // Story drop: cascade from insert priority
+        const siblingData: PrioritySibling[] = siblings.map((s) => ({ id: s.id, priority: s.priority }));
+        const bumps = cascadeBumpIfNeeded(siblingData, bumpTargetPriority);
+        for (const bump of bumps) {
+          const sibling = siblings.find((s) => s.id === bump.id);
+          if (sibling) {
+            await writeStoryPriority(sibling, bump.newPriority);
           }
         }
       }
@@ -297,8 +310,8 @@ export async function handleInboxDropOnBacklog(params: InboxBacklogDropParams): 
 
     void vscode.window.showInformationMessage(`Converted to story: ${storyId}`);
   } catch (err) {
-    getLogger().error('Failed to convert inbox/spike file to story (backlog)', err);
-    void vscode.window.showErrorMessage('DevStories: Failed to convert file to story.');
+    getLogger().error("Failed to convert inbox/spike file to story (backlog)", err);
+    void vscode.window.showErrorMessage("DevStories: Failed to convert file to story.");
   }
 }
 
@@ -308,23 +321,25 @@ export async function handleInboxDropOnBreakdown(params: InboxBreakdownDropParam
   const { sourceFile, target, store, configService, storydocsService } = params;
   const config = configService.config;
   const workspaceUri = getWorkspaceUri();
-  if (!workspaceUri) { return; }
+  if (!workspaceUri) {
+    return;
+  }
 
   try {
     // 1. Read source file
     const originalContent = await readFileContent(sourceFile.filePath);
-    const matter = require('gray-matter');
+    const matter = require("gray-matter");
     const parsed = matter(originalContent);
-    const existingData = parsed.data as Record<string, unknown> ?? {};
+    const existingData = (parsed.data as Record<string, unknown>) ?? {};
     const strippedName = stripDatePrefix(sourceFile.fileName);
     const defaultTitle = titleFromKebabCase(strippedName);
     const today = todayString();
 
     switch (target.kind) {
       // ── Theme / No Theme → create Epic ────────────────────────────────
-      case 'theme':
-      case 'noTheme': {
-        const themeId = target.kind === 'theme' ? target.theme.id : '';
+      case "theme":
+      case "noTheme": {
+        const themeId = target.kind === "theme" ? target.theme.id : "";
         await convertToEpic({
           originalContent,
           existingData,
@@ -342,12 +357,10 @@ export async function handleInboxDropOnBreakdown(params: InboxBreakdownDropParam
       }
 
       // ── Epic / No Epic → create Story (lowest priority in epic) ───────
-      case 'epic':
-      case 'noEpic': {
-        const epicId = target.kind === 'epic' ? target.epic.id : '';
-        const siblings = epicId
-          ? store.getStoriesByEpic(epicId)
-          : store.getStoriesWithoutEpic();
+      case "epic":
+      case "noEpic": {
+        const epicId = target.kind === "epic" ? target.epic.id : "";
+        const siblings = epicId ? store.getStoriesByEpic(epicId) : store.getStoriesWithoutEpic();
         const priority = maxPriority(siblings) + 1 || 1;
 
         await convertToStory({
@@ -357,7 +370,7 @@ export async function handleInboxDropOnBreakdown(params: InboxBreakdownDropParam
           defaultTitle,
           today,
           epicId,
-          sprint: '',
+          sprint: "",
           priority,
           store,
           config,
@@ -368,11 +381,11 @@ export async function handleInboxDropOnBreakdown(params: InboxBreakdownDropParam
         break;
       }
 
-      // ── Story → create Story (insert at target priority, bump siblings)
-      case 'story': {
+      // ── Story → create Story (insert below target, cascade bump)
+      case "story": {
         const targetStory = target.story;
-        const epicId = targetStory.epic ?? '';
-        const targetPriority = targetStory.priority;
+        const epicId = targetStory.epic ?? "";
+        const insertPriority = targetStory.priority + 1;
 
         await convertToStory({
           originalContent,
@@ -381,13 +394,13 @@ export async function handleInboxDropOnBreakdown(params: InboxBreakdownDropParam
           defaultTitle,
           today,
           epicId,
-          sprint: targetStory.sprint ?? '',
-          priority: targetPriority,
+          sprint: targetStory.sprint ?? "",
+          priority: insertPriority,
           store,
           config,
           workspaceUri,
           sourceFilePath: sourceFile.filePath,
-          bumpAtPriority: targetPriority,
+          bumpAtPriority: insertPriority,
           bumpEpicId: epicId,
           storydocsService,
         });
@@ -395,8 +408,8 @@ export async function handleInboxDropOnBreakdown(params: InboxBreakdownDropParam
       }
     }
   } catch (err) {
-    getLogger().error('Failed to convert inbox/spike file (breakdown)', err);
-    void vscode.window.showErrorMessage('DevStories: Failed to convert file.');
+    getLogger().error("Failed to convert inbox/spike file (breakdown)", err);
+    void vscode.window.showErrorMessage("DevStories: Failed to convert file.");
   }
 }
 
@@ -412,7 +425,7 @@ interface ConvertToStoryParams {
   sprint: string;
   priority: number;
   store: InboxDropStore;
-  config: InboxDropConfigService['config'];
+  config: InboxDropConfigService["config"];
   workspaceUri: vscode.Uri;
   sourceFilePath: string;
   /** When set, bump all siblings in the same epic with priority >= this value. */
@@ -423,15 +436,27 @@ interface ConvertToStoryParams {
 
 async function convertToStory(params: ConvertToStoryParams): Promise<void> {
   const {
-    originalContent, existingData, strippedName, defaultTitle, today,
-    epicId, sprint, priority, store, config, workspaceUri, sourceFilePath,
-    bumpAtPriority, bumpEpicId, storydocsService,
+    originalContent,
+    existingData,
+    strippedName,
+    defaultTitle,
+    today,
+    epicId,
+    sprint,
+    priority,
+    store,
+    config,
+    workspaceUri,
+    sourceFilePath,
+    bumpAtPriority,
+    bumpEpicId,
+    storydocsService,
   } = params;
 
   // Generate next story ID
   const existingIds = await collectStoryIds(workspaceUri, config.storyPrefix, store);
   const nextNum = findNextStoryId(existingIds, config.storyPrefix);
-  const storyId = `${config.storyPrefix}-${String(nextNum).padStart(5, '0')}`;
+  const storyId = `${config.storyPrefix}-${String(nextNum).padStart(5, "0")}`;
 
   // Build filename
   const newFileName = `${storyId}-${strippedName}.md`;
@@ -440,7 +465,7 @@ async function convertToStory(params: ConvertToStoryParams): Promise<void> {
   const mergedData = fillMissingStoryFrontmatter(existingData, {
     id: storyId,
     title: defaultTitle,
-    type: 'feature',
+    type: "feature",
     epic: epicId,
     status: getDefaultStatus(config.statuses),
     sprint,
@@ -454,7 +479,7 @@ async function convertToStory(params: ConvertToStoryParams): Promise<void> {
   const convertedContent = buildConvertedFileContent(originalContent, mergedData);
 
   // Write new file
-  const newUri = vscode.Uri.joinPath(workspaceUri, '.devstories', 'stories', newFileName);
+  const newUri = vscode.Uri.joinPath(workspaceUri, ".devstories", "stories", newFileName);
   await writeFile(newUri, convertedContent);
 
   // Delete original
@@ -464,17 +489,18 @@ async function convertToStory(params: ConvertToStoryParams): Promise<void> {
   await store.reloadFile(newUri);
 
   // Create storydocs folder (best-effort, non-blocking)
-  void storydocsService?.ensureFolder(storyId, 'story');
+  void storydocsService?.ensureFolder(storyId, "story");
 
-  // Bump sibling priorities if needed
+  // Bump sibling priorities if needed (cascade — only bump on actual collision)
   if (bumpAtPriority !== undefined) {
-    const siblings = bumpEpicId
-      ? store.getStoriesByEpic(bumpEpicId)
-      : store.getStoriesWithoutEpic();
+    const siblings = bumpEpicId ? store.getStoriesByEpic(bumpEpicId) : store.getStoriesWithoutEpic();
 
-    for (const sibling of siblings) {
-      if (sibling.id !== storyId && sibling.priority >= bumpAtPriority) {
-        await writeStoryPriority(sibling, sibling.priority + 1);
+    const siblingData: PrioritySibling[] = siblings.filter((s) => s.id !== storyId).map((s) => ({ id: s.id, priority: s.priority }));
+    const bumps = cascadeBumpIfNeeded(siblingData, bumpAtPriority);
+    for (const bump of bumps) {
+      const sibling = siblings.find((s) => s.id === bump.id);
+      if (sibling) {
+        await writeStoryPriority(sibling, bump.newPriority);
       }
     }
   }
@@ -490,7 +516,7 @@ interface ConvertToEpicParams {
   today: string;
   themeId: string;
   store: InboxDropStore;
-  config: InboxDropConfigService['config'];
+  config: InboxDropConfigService["config"];
   workspaceUri: vscode.Uri;
   sourceFilePath: string;
   storydocsService?: StorydocsService;
@@ -498,19 +524,26 @@ interface ConvertToEpicParams {
 
 async function convertToEpic(params: ConvertToEpicParams): Promise<void> {
   const {
-    originalContent, existingData, strippedName, defaultTitle, today,
-    themeId, store, config, workspaceUri, sourceFilePath, storydocsService,
+    originalContent,
+    existingData,
+    strippedName,
+    defaultTitle,
+    today,
+    themeId,
+    store,
+    config,
+    workspaceUri,
+    sourceFilePath,
+    storydocsService,
   } = params;
 
   // Generate next epic ID
   const existingIds = collectEpicIds(store);
   const nextNum = findNextEpicId(existingIds, config.epicPrefix);
-  const epicId = `${config.epicPrefix}-${String(nextNum).padStart(4, '0')}`;
+  const epicId = `${config.epicPrefix}-${String(nextNum).padStart(4, "0")}`;
 
   // Determine priority (lowest among epics in this theme)
-  const siblings = themeId
-    ? store.getEpicsByTheme(themeId)
-    : store.getEpicsWithoutTheme();
+  const siblings = themeId ? store.getEpicsByTheme(themeId) : store.getEpicsWithoutTheme();
   const priority = maxPriority(siblings) + 1 || 1;
 
   // Build filename
@@ -530,7 +563,7 @@ async function convertToEpic(params: ConvertToEpicParams): Promise<void> {
   const convertedContent = buildConvertedFileContent(originalContent, mergedData);
 
   // Write new file
-  const newUri = vscode.Uri.joinPath(workspaceUri, '.devstories', 'epics', newFileName);
+  const newUri = vscode.Uri.joinPath(workspaceUri, ".devstories", "epics", newFileName);
   await writeFile(newUri, convertedContent);
 
   // Delete original
@@ -540,7 +573,7 @@ async function convertToEpic(params: ConvertToEpicParams): Promise<void> {
   await store.reloadFile(newUri);
 
   // Create storydocs folder (best-effort, non-blocking)
-  void storydocsService?.ensureFolder(epicId, 'epic');
+  void storydocsService?.ensureFolder(epicId, "epic");
 
   void vscode.window.showInformationMessage(`Converted to epic: ${epicId}`);
 }

@@ -224,17 +224,17 @@ async function handleDropOnStory(
   sprintSequence: string[],
 ): Promise<void> {
   const targetSprint = resolveTargetSprint(targetStory, sprintSequence);
-  const targetPriority = targetStory.priority;
+  const insertPriority = targetStory.priority + 1;
 
   // Collect stories currently in the target sprint (excluding the dragged story)
   const siblings = getStoriesInSprint(store, targetSprint, sprintSequence).filter((s) => s.id !== draggedStory.id);
 
-  // 1. Set dragged story to target's sprint + priority
-  await writeStorySprintAndPriority(draggedStory, targetSprint, targetPriority);
+  // 1. Set dragged story immediately below the target
+  await writeStorySprintAndPriority(draggedStory, targetSprint, insertPriority);
 
   // 2. Cascade-bump only the siblings that actually collide
   const siblingData: PrioritySibling[] = siblings.map((s) => ({ id: s.id, priority: s.priority }));
-  const bumps = cascadeBumpIfNeeded(siblingData, targetPriority);
+  const bumps = cascadeBumpIfNeeded(siblingData, insertPriority);
   for (const bump of bumps) {
     const sibling = siblings.find((s) => s.id === bump.id);
     if (sibling) {
