@@ -351,6 +351,44 @@ describe("calculateBurndown", () => {
     expect(result[2].actual).toBe(0); // Jan 8: done
   });
 
+  it("clamps story completed after sprint end to last sprint day", () => {
+    const stories = [
+      makeStory({ id: "DS-001", size: "M", status: "done", completedOn: new Date("2026-01-25") }), // 6 days after sprint end (Jan 19)
+      makeStory({ id: "DS-002", size: "S", status: "done", completedOn: new Date("2026-01-10") }),
+    ];
+    const result = calculateBurndown(stories, sprintStart, 14, DEFAULT_STATUSES, DEFAULT_SIZES, DEFAULT_STORYPOINTS, "2026-02-01");
+
+    // DS-001 (4pts) completed Jan 25 → clamped to Jan 19 (last sprint day)
+    // DS-002 (2pts) completed Jan 10 (day 4)
+    // Total = 6. Day 4 (Jan 10): 6 - 2 = 4. Last day (Jan 19): 6 - 6 = 0.
+    expect(result[4].actual).toBe(4);
+    expect(result[13].actual).toBe(0);
+  });
+
+  it("clamps story completed before sprint start to first sprint day", () => {
+    const stories = [
+      makeStory({ id: "DS-001", size: "M", status: "done", completedOn: new Date("2025-12-01") }), // well before sprint
+      makeStory({ id: "DS-002", size: "S", status: "todo" }),
+    ];
+    const result = calculateBurndown(stories, sprintStart, 14, DEFAULT_STATUSES, DEFAULT_SIZES, DEFAULT_STORYPOINTS, "2026-01-06");
+
+    // DS-001 (4pts) completed Dec 1 → clamped to Jan 6 (first sprint day)
+    // Total = 6. Day 0 (Jan 6): 6 - 4 = 2.
+    expect(result[0].actual).toBe(2);
+  });
+
+  it("clamps updated fallback date the same way as completedOn", () => {
+    const stories = [
+      makeStory({ id: "DS-001", size: "M", status: "done", completedOn: undefined, updated: new Date("2026-01-25") }), // after sprint end
+      makeStory({ id: "DS-002", size: "S", status: "todo" }),
+    ];
+    const result = calculateBurndown(stories, sprintStart, 14, DEFAULT_STATUSES, DEFAULT_SIZES, DEFAULT_STORYPOINTS, "2026-02-01");
+
+    // DS-001 (4pts) updated Jan 25 → clamped to Jan 19 (last sprint day)
+    // Total = 6. Last day (Jan 19): 6 - 4 = 2.
+    expect(result[13].actual).toBe(2);
+  });
+
   it("excludes done story from actual line when both completedOn and updated are missing", () => {
     const stories = [
       makeStory({ id: "DS-001", size: "M", status: "done", completedOn: undefined, updated: undefined }),

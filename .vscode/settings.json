@@ -1,3 +1,7 @@
 {
-    "i18n-ally.localesPaths": []
+  "i18n-ally.localesPaths": [],
+  "chat.tools.terminal.autoApprove": {
+    "npx vitest": true,
+    "npx tsc": true
+  }
 }

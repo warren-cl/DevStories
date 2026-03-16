@@ -155,6 +155,11 @@ export function findStoriesMissingCompletedOn(stories: Story[], statuses: Status
  * actual line (but still counted in planned points and flagged by
  * `findStoriesMissingCompletedOn`).
  *
+ * Effective completion dates are clamped to the sprint window: dates before
+ * the sprint start are treated as the first day, dates after the sprint end
+ * are treated as the last day.  This ensures the burndown reaches zero when
+ * all stories are done, even if some were completed outside the sprint window.
+ *
  * @param stories   All stories assigned to the sprint.
  * @param sprintStart  First day of the sprint (UTC midnight).
  * @param sprintLength Number of days in the sprint.
@@ -174,6 +179,7 @@ export function calculateBurndown(
   today?: string,
 ): BurndownDataPoint[] {
   const todayDate = parseISODate(today ?? localToday());
+  const sprintEnd = addDays(sprintStart, sprintLength - 1);
 
   // Filter out excluded stories (cancelled, deferred, etc.)
   const relevantStories = stories.filter((s) => !isExcludedStatus(s.status, statuses));
@@ -183,13 +189,20 @@ export function calculateBurndown(
 
   // Completed stories: use completedOn, fall back to updated.
   // Stories missing both dates are excluded from the actual line.
+  // Effective dates are clamped to the sprint window so that completions
+  // before the sprint start count from day 0 and completions after the
+  // sprint end count on the last day.
   const completedStories = relevantStories
     .filter((s) => isCompletedStatus(s.status, statuses))
     .map((s) => ({
       story: s,
       effectiveDate: s.completedOn ?? s.updated,
     }))
-    .filter((entry): entry is { story: Story; effectiveDate: Date } => entry.effectiveDate !== undefined);
+    .filter((entry): entry is { story: Story; effectiveDate: Date } => entry.effectiveDate !== undefined)
+    .map((entry) => ({
+      ...entry,
+      effectiveDate: entry.effectiveDate < sprintStart ? sprintStart : entry.effectiveDate > sprintEnd ? sprintEnd : entry.effectiveDate,
+    }));
 
   const dataPoints: BurndownDataPoint[] = [];
 
