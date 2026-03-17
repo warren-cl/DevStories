@@ -152,6 +152,10 @@
       {
         "command": "devstories.reconcileStorydocs",
         "title": "DevStories: Reconcile StoryDocs Folders"
+      },
+      {
+        "command": "devstories.browseStorydocs",
+        "title": "DevStories: Browse StoryDocs"
       }
     ],
     "menus": {
@@ -247,6 +251,21 @@
           "command": "devstories.saveAsTemplate",
           "when": "view == devstories.views.explorer && viewItem == story",
           "group": "devstories@2"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == story && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == epic && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == theme && devstories:storydocsEnabled",
+          "group": "devstories@3"
         }
       ],
       "editor/context": [
