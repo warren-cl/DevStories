@@ -1,42 +1,29 @@
-import * as vscode from 'vscode';
-import { Store } from '../core/store';
-import { getLogger } from '../core/logger';
-import {
-  parseQuickInput,
-  truncateForTitle,
-  cleanSelectionText,
-  OPEN_STORY_ACTION,
-} from './quickCaptureUtils';
-import {
-  parseConfigJson,
-  findNextStoryId,
-  generateStoryMarkdown,
-  generateStoryLink,
-  appendStoryToEpic,
-  DevStoriesConfig,
-  DEFAULT_TEMPLATES,
-} from './createStoryUtils';
-import { validateStoryTitle } from '../utils/inputValidation';
+import * as vscode from "vscode";
+import { Store } from "../core/store";
+import { ConfigService } from "../core/configService";
+import { ConfigData, parseConfigJsonContent, mergeConfigWithDefaults } from "../core/configServiceUtils";
+import { getLogger } from "../core/logger";
+import { StorydocsService } from "../core/storydocsService";
+import { localToday } from "../utils/dateUtils";
+import { parseQuickInput, truncateForTitle, cleanSelectionText, OPEN_STORY_ACTION } from "./quickCaptureUtils";
+import { findNextStoryId, generateStoryMarkdown, generateStoryLink, appendStoryToEpic, DEFAULT_TEMPLATES } from "./createStoryUtils";
+import { validateStoryTitle } from "../utils/inputValidation";
+import { toKebabCase } from "../utils/filenameUtils";
 
 // Re-export for testing
-export {
-  parseQuickInput,
-  truncateForTitle,
-  cleanSelectionText,
-  INBOX_EPIC_ID,
-  OPEN_STORY_ACTION,
-} from './quickCaptureUtils';
+export { parseQuickInput, truncateForTitle, cleanSelectionText, INBOX_EPIC_ID, OPEN_STORY_ACTION } from "./quickCaptureUtils";
 
 /**
- * Read and parse config.json from workspace
+ * Read config.json from workspace as fallback when ConfigService is not available
  */
-async function readConfig(workspaceUri: vscode.Uri): Promise<DevStoriesConfig | undefined> {
-  const configUri = vscode.Uri.joinPath(workspaceUri, '.devstories', 'config.json');
+async function readConfigFallback(workspaceUri: vscode.Uri): Promise<ConfigData | undefined> {
+  const configUri = vscode.Uri.joinPath(workspaceUri, ".devstories", "config.json");
   try {
     const content = await vscode.workspace.fs.readFile(configUri);
-    return parseConfigJson(Buffer.from(content).toString('utf8'));
+    const parsed = parseConfigJsonContent(Buffer.from(content).toString("utf8"));
+    return mergeConfigWithDefaults(parsed);
   } catch (error) {
-    getLogger().debug('Config not found or unreadable', error);
+    getLogger().debug("Config not found or unreadable", error);
     return undefined;
   }
 }
@@ -45,7 +32,7 @@ async function readConfig(workspaceUri: vscode.Uri): Promise<DevStoriesConfig | 
  * Generate inbox epic markdown content
  */
 function generateInboxEpicMarkdown(prefix: string): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
   return `---
 id: ${prefix}-INBOX
 title: "Inbox"
@@ -67,29 +54,22 @@ Quick captures and ideas to triage later.
  * Ensure inbox epic exists, create if missing
  * Returns the epic ID (e.g., EPIC-INBOX)
  */
-async function ensureInboxEpic(
-  workspaceUri: vscode.Uri,
-  config: DevStoriesConfig
-): Promise<string> {
+async function ensureInboxEpic(workspaceUri: vscode.Uri, config: ConfigData, store: Store): Promise<{ id: string; uri: vscode.Uri }> {
   const inboxId = `${config.epicPrefix}-INBOX`;
-  const epicUri = vscode.Uri.joinPath(
-    workspaceUri,
-    '.devstories',
-    'epics',
-    `${inboxId}.md`
-  );
 
-  try {
-    await vscode.workspace.fs.stat(epicUri);
-    // File exists
-    return inboxId;
-  } catch {
-    // Inbox epic doesn't exist - create it (expected scenario)
-    getLogger().debug('Creating inbox epic');
-    const markdown = generateInboxEpicMarkdown(config.epicPrefix);
-    await vscode.workspace.fs.writeFile(epicUri, Buffer.from(markdown));
-    return inboxId;
+  // Check store first — handles existing files regardless of filename suffix
+  const existing = store.getEpic(inboxId);
+  if (existing?.filePath) {
+    return { id: inboxId, uri: vscode.Uri.file(existing.filePath) };
   }
+
+  // Not in store — create it
+  getLogger().debug("Creating inbox epic");
+  const markdown = generateInboxEpicMarkdown(config.epicPrefix);
+  const epicUri = vscode.Uri.joinPath(workspaceUri, ".devstories", "epics", `${inboxId}-inbox.md`);
+  await vscode.workspace.fs.writeFile(epicUri, Buffer.from(markdown));
+  await store.reloadFile(epicUri);
+  return { id: inboxId, uri: epicUri };
 }
 
 /**
@@ -118,41 +98,42 @@ function getSelectedText(): string | undefined {
  * Execute the quickCapture command
  * Returns true if story was created, false otherwise
  */
-export async function executeQuickCapture(store: Store): Promise<boolean> {
+export async function executeQuickCapture(
+  store: Store,
+  storydocsService?: StorydocsService,
+  configService?: ConfigService,
+): Promise<boolean> {
   // Check for workspace
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
-    void vscode.window.showErrorMessage('DevStories: No workspace folder open');
+    void vscode.window.showErrorMessage("DevStories: No workspace folder open");
     return false;
   }
 
   const workspaceUri = workspaceFolders[0].uri;
 
-  // Read config
-  const config = await readConfig(workspaceUri);
+  // Use ConfigService if available, otherwise read from file
+  const config = configService ? configService.config : await readConfigFallback(workspaceUri);
   if (!config) {
-    const action = await vscode.window.showErrorMessage(
-      'DevStories: No config.json found. Initialize DevStories first.',
-      'Initialize'
-    );
-    if (action === 'Initialize') {
-      void vscode.commands.executeCommand('devstories.init');
+    const action = await vscode.window.showErrorMessage("DevStories: No config.json found. Initialize DevStories first.", "Initialize");
+    if (action === "Initialize") {
+      void vscode.commands.executeCommand("devstories.init");
     }
     return false;
   }
 
   // Get prefilled value from selection (if any)
-  const prefillValue = getSelectedText() || '';
+  const prefillValue = getSelectedText() || "";
 
   // Show input box with validation
   const rawInput = await vscode.window.showInputBox({
-    prompt: 'Quick capture (prefix: bug:|feat:|chore: | pipe: for notes)',
-    placeHolder: 'e.g., bug: Fix login | users report 500',
+    prompt: "Quick capture (prefix: bug:|feat:|chore: | pipe: for notes)",
+    placeHolder: "e.g., bug: Fix login | users report 500",
     value: prefillValue,
     valueSelection: prefillValue ? [0, prefillValue.length] : undefined,
     validateInput: (value) => {
       if (!value || !value.trim()) {
-        return 'Title is required';
+        return "Title is required";
       }
       // Parse to extract title, then validate
       const parsed = parseQuickInput(value);
@@ -169,17 +150,24 @@ export async function executeQuickCapture(store: Store): Promise<boolean> {
   const parsed = parseQuickInput(rawInput);
 
   // Ensure inbox epic exists
-  const inboxEpicId = await ensureInboxEpic(workspaceUri, config);
+  const { id: inboxEpicId, uri: inboxEpicUri } = await ensureInboxEpic(workspaceUri, config, store);
 
-  // Generate story ID
-  const existingIds = store.getStories().map(s => s.id);
-  const nextNum = findNextStoryId(existingIds, config.storyPrefix);
-  const storyId = `${config.storyPrefix}-${String(nextNum).padStart(3, '0')}`;
+  // Generate story ID — scan disk + store to guard against watcher race conditions
+  const storyFilePattern = new vscode.RelativePattern(workspaceUri, `.devstories/stories/${config.storyPrefix}-*.md`);
+  const storyFiles = await vscode.workspace.findFiles(storyFilePattern);
+  const diskIds = storyFiles
+    .map((uri) => {
+      const filename = uri.path.split("/").pop() ?? "";
+      const match = filename.match(new RegExp(`^(${config.storyPrefix}-\\d+)`));
+      return match ? match[1] : null;
+    })
+    .filter((id): id is string => id !== null);
+  const allExistingIds = [...new Set([...diskIds, ...store.getStories().map((s) => s.id)])];
+  const nextNum = findNextStoryId(allExistingIds, config.storyPrefix);
+  const storyId = `${config.storyPrefix}-${String(nextNum).padStart(5, "0")}`;
 
   // Determine sprint based on config option (default: backlog for inbox workflow)
-  const sprint = config.quickCaptureDefaultToCurrentSprint && config.currentSprint
-    ? config.currentSprint
-    : 'backlog';
+  const sprint = config.quickCaptureDefaultToCurrentSprint && config.currentSprint ? config.currentSprint : "backlog";
 
   // Get template and add notes if provided
   let template = DEFAULT_TEMPLATES[parsed.type];
@@ -199,43 +187,32 @@ export async function executeQuickCapture(store: Store): Promise<boolean> {
       sprint,
       size: middleSize,
     },
-    template
+    template,
   );
 
   // Write story file
-  const storyUri = vscode.Uri.joinPath(
-    workspaceUri,
-    '.devstories',
-    'stories',
-    `${storyId}.md`
-  );
+  const storyUri = vscode.Uri.joinPath(workspaceUri, ".devstories", "stories", `${storyId}-${toKebabCase(parsed.title)}.md`);
 
   await vscode.workspace.fs.writeFile(storyUri, Buffer.from(markdown));
+  await store.reloadFile(storyUri);
+
+  // Create storydocs folder (best-effort, non-blocking)
+  void storydocsService?.ensureFolder(storyId, "story");
 
   // Auto-link to inbox epic
-  const inboxEpicUri = vscode.Uri.joinPath(
-    workspaceUri,
-    '.devstories',
-    'epics',
-    `${inboxEpicId}.md`
-  );
-
   try {
-    const epicContent = Buffer.from(await vscode.workspace.fs.readFile(inboxEpicUri)).toString('utf8');
+    const epicContent = Buffer.from(await vscode.workspace.fs.readFile(inboxEpicUri)).toString("utf8");
     const storyLink = generateStoryLink(storyId, parsed.title);
     const updatedEpic = appendStoryToEpic(epicContent, storyLink);
     await vscode.workspace.fs.writeFile(inboxEpicUri, Buffer.from(updatedEpic));
   } catch {
     // Non-critical: epic auto-link failed
-    getLogger().warn('Failed to auto-link story to inbox epic');
+    getLogger().warn("Failed to auto-link story to inbox epic");
   }
 
   // Show notification with "Open Story" action button
   // Non-blocking: user can dismiss or click later without interrupting workflow
-  void vscode.window.showInformationMessage(
-    `Created ${storyId}: ${parsed.title}`,
-    OPEN_STORY_ACTION
-  ).then(async (action) => {
+  void vscode.window.showInformationMessage(`Created ${storyId}: ${parsed.title}`, OPEN_STORY_ACTION).then(async (action) => {
     if (action === OPEN_STORY_ACTION) {
       const doc = await vscode.workspace.openTextDocument(storyUri);
       await vscode.window.showTextDocument(doc);

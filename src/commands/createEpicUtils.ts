@@ -3,43 +3,15 @@
  * These can be unit tested with Vitest
  */
 
- 
-const matter = require('gray-matter');
+const matter = require("gray-matter");
 
-export interface DevStoriesConfig {
-  epicPrefix: string;
-  storyPrefix: string;
-  currentSprint?: string;
-  statuses: string[];
-}
+import { localToday } from "../utils/dateUtils";
 
 export interface EpicData {
   id: string;
   title: string;
   goal?: string;
-}
-
-/**
- * Parse config.json content and extract relevant fields
- */
-export function parseConfigJson(content: string): DevStoriesConfig {
-  try {
-    const parsed = JSON.parse(content);
-
-    return {
-      epicPrefix: parsed?.idPrefix?.epic ?? 'EPIC',
-      storyPrefix: parsed?.idPrefix?.story ?? 'STORY',
-      currentSprint: parsed?.sprints?.current,
-      statuses: parsed?.statuses?.map((s: { id: string }) => s.id) ?? ['todo', 'in_progress', 'review', 'done'],
-    };
-  } catch {
-    return {
-      epicPrefix: 'EPIC',
-      storyPrefix: 'STORY',
-      currentSprint: undefined,
-      statuses: ['todo', 'in_progress', 'review', 'done'],
-    };
-  }
+  theme?: string;
 }
 
 /**
@@ -67,15 +39,17 @@ export function findNextEpicId(existingIds: string[], prefix: string): number {
  * Generate epic markdown content from EpicData
  */
 export function generateEpicMarkdown(data: EpicData): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
   const escapedTitle = data.title.replace(/"/g, '\\"');
-  const description = data.goal ?? '[Add epic description here]';
+  const description = data.goal ?? "[Add epic description here]";
+  const themeLine = data.theme ? `theme: ${data.theme}\n` : "";
 
   return `---
 id: ${data.id}
 title: "${escapedTitle}"
 status: todo
-created: ${today}
+priority: 1
+${themeLine}created: ${today}
 ---
 
 # ${data.title}

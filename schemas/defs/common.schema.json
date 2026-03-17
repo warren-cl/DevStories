@@ -3,6 +3,11 @@
   "title": "DevStories Common Definitions",
   "description": "Shared type definitions for story and epic frontmatter schemas",
   "$defs": {
+    "themeId": {
+      "type": "string",
+      "pattern": "^[A-Z]+-\\d+$",
+      "description": "Theme identifier in PREFIX-NNN format (e.g., THEME-001)"
+    },
     "storyId": {
       "type": "string",
       "pattern": "^[A-Z]+-\\d+$",
@@ -25,13 +30,12 @@
     },
     "storyType": {
       "type": "string",
-      "enum": ["feature", "bug", "task", "chore"],
-      "description": "Story type: feature (new functionality), bug (fix), task (general work), chore (maintenance)"
+      "enum": ["feature", "bug", "task", "chore", "spike"],
+      "description": "Story type: feature (new functionality), bug (fix), task (general work), chore (maintenance), spike (time-boxed investigation)"
     },
     "storySize": {
       "type": "string",
-      "enum": ["XS", "S", "M", "L", "XL"],
-      "description": "T-shirt size estimate for story complexity"
+      "description": "T-shirt size estimate for story complexity (valid values defined in config.json sizes array)"
     }
   }
 }

@@ -25,11 +25,14 @@ export class StoryLinkProvider implements vscode.DocumentLinkProvider {
 
     const text = document.getText();
     const matches = findLinksInDocument(text);
-    const knownIds = this.getKnownIds();
     const links: vscode.DocumentLink[] = [];
 
     for (const match of matches) {
-      const resolved = createDocumentLink(match, basePath, knownIds);
+      const resolved = createDocumentLink(match, (id) =>
+        this.store.getStory(id)?.filePath ??
+        this.store.getEpic(id)?.filePath ??
+        this.store.getTheme(id)?.filePath
+      );
       if (resolved) {
         const startPos = document.positionAt(resolved.start);
         const endPos = document.positionAt(resolved.end);
@@ -54,20 +57,5 @@ export class StoryLinkProvider implements vscode.DocumentLinkProvider {
     return filePath.substring(0, devstoriesIndex + '.devstories'.length);
   }
 
-  /**
-   * Get all known story and epic IDs from the store
-   */
-  private getKnownIds(): Set<string> {
-    const ids = new Set<string>();
-
-    for (const story of this.store.getStories()) {
-      ids.add(story.id);
-    }
-
-    for (const epic of this.store.getEpics()) {
-      ids.add(epic.id);
-    }
-
-    return ids;
-  }
 }
+

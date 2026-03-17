@@ -186,7 +186,7 @@ types: [feature, task]
 	test('getConfigFilePath should return config.json path', () => {
 		const { getConfigFilePath } = require('../../core/configServiceNotifications');
 		const workspaceFolder = vscode.workspace.workspaceFolders![0];
-		const path = getConfigFilePath(workspaceFolder);
-		assert.ok(path.fsPath.endsWith('.devstories/config.json'));
+		const configUri = getConfigFilePath(workspaceFolder);
+		assert.ok(configUri.fsPath.endsWith(path.join('.devstories', 'config.json')));
 	});
 });

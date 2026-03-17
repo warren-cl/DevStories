@@ -3,10 +3,12 @@
  * These can be unit tested with Vitest
  */
 
- 
-const matter = require('gray-matter');
+const matter = require("gray-matter");
 
-const DEFAULT_STATUSES = ['todo', 'in_progress', 'review', 'done'];
+import { StatusDef, isCompletedStatus } from "../core/configServiceUtils";
+import { localToday } from "../utils/dateUtils";
+
+const DEFAULT_STATUSES = ["todo", "in_progress", "review", "done"];
 
 /**
  * Parse statuses from config.json content
@@ -48,12 +50,40 @@ export function getNextWorkflowStatus(currentStatus: string, statuses: string[])
 }
 
 /**
- * Update the status field in a story's frontmatter
+ * Update the status field in a story's frontmatter.
+ * When statuses are provided, also manages the completed_on field:
+ *   - Sets completed_on when transitioning to a completion status
+ *   - Removes completed_on when transitioning away from a completion status
  * Returns the updated markdown content
  */
-export function updateStoryStatus(content: string, newStatus: string): string {
+export function updateStoryStatus(content: string, newStatus: string, statuses?: StatusDef[]): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
+
+  // Update status and timestamp
+  parsed.data.status = newStatus;
+  parsed.data.updated = today;
+
+  // Manage completed_on field based on completion status
+  if (statuses) {
+    if (isCompletedStatus(newStatus, statuses)) {
+      parsed.data.completed_on = today;
+    } else {
+      delete parsed.data.completed_on;
+    }
+  }
+
+  // Stringify back to markdown
+  return matter.stringify(parsed.content, parsed.data);
+}
+
+/**
+ * Update the status field in a theme's frontmatter
+ * Returns the updated markdown content
+ */
+export function updateThemeStatus(content: string, newStatus: string): string {
+  const parsed = matter(content);
+  const today = localToday();
 
   // Update status and timestamp
   parsed.data.status = newStatus;
@@ -69,7 +99,7 @@ export function updateStoryStatus(content: string, newStatus: string): string {
  */
 export function updateEpicStatus(content: string, newStatus: string): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   // Update status and timestamp
   parsed.data.status = newStatus;
@@ -85,7 +115,7 @@ export function updateEpicStatus(content: string, newStatus: string): string {
  */
 export function updateStoryPriority(content: string, newPriority: number): string {
   const parsed = matter(content);
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   // Update priority and timestamp
   parsed.data.priority = newPriority;

@@ -118,11 +118,11 @@ describe('Frontmatter JSON Schemas', () => {
       expect(result).toBe(false);
     });
 
-    it('should reject story with invalid size enum', () => {
+    it('should accept story with any string size (sizes validated against config, not schema)', () => {
       const validate = ajv.compile(storySchema);
-      const invalidStory = {
+      const story = {
         id: 'DS-001',
-        title: 'Invalid Size',
+        title: 'Custom Size',
         type: 'feature',
         epic: 'EPIC-001',
         status: 'todo',
@@ -130,8 +130,8 @@ describe('Frontmatter JSON Schemas', () => {
         created: '2025-01-15',
       };
 
-      const result = validate(invalidStory);
-      expect(result).toBe(false);
+      const result = validate(story);
+      expect(result).toBe(true);
     });
 
     it('should reject story with invalid date format', () => {

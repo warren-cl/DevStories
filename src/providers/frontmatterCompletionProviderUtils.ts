@@ -23,12 +23,14 @@ const ENUM_FIELDS = ['status', 'type', 'size', 'sprint'];
 /**
  * Size descriptions for display
  */
-const SIZE_DESCRIPTIONS: Record<StorySize, string> = {
+const SIZE_DESCRIPTIONS: Record<string, string> = {
+  XXS: 'Extra Extra Small',
   XS: 'Extra Small',
   S: 'Small',
   M: 'Medium',
   L: 'Large',
   XL: 'Extra Large',
+  XXL: 'Extra Extra Large',
 };
 
 /**
@@ -39,6 +41,7 @@ const TYPE_DESCRIPTIONS: Record<string, string> = {
   bug: 'Defect or issue to fix',
   task: 'Work item or action',
   chore: 'Maintenance or housekeeping',
+  spike: 'Time-boxed investigation or research',
 };
 
 /**
@@ -92,7 +95,7 @@ export function getStatusCompletions(statuses: StatusDef[]): CompletionData[] {
  * @returns Completion data array with fixed story types
  */
 export function getTypeCompletions(): CompletionData[] {
-  return ['feature', 'bug', 'task', 'chore'].map(type => ({
+  return ['feature', 'bug', 'task', 'chore', 'spike'].map(type => ({
     value: type,
     detail: TYPE_DESCRIPTIONS[type],
   }));
@@ -119,6 +122,21 @@ export function getSprintCompletions(sprints: string[]): CompletionData[] {
   return sprints.map(sprint => ({
     value: sprint,
   }));
+}
+
+/**
+ * Detect if cursor is on theme: field after the colon
+ * @param line The current line text
+ * @param charPos The cursor's character position in the line
+ * @returns true if on theme field after colon
+ */
+export function detectThemeField(line: string, charPos: number): boolean {
+  const colonIndex = line.indexOf(':');
+  if (colonIndex === -1 || charPos <= colonIndex) {
+    return false;
+  }
+  const fieldPart = line.substring(0, colonIndex).trim();
+  return fieldPart === 'theme';
 }
 
 /**
@@ -234,6 +252,18 @@ interface StoryLike {
 }
 
 /**
+ * Generate completion items for theme field
+ * @param themes Theme objects with id and title
+ * @returns Completion data array
+ */
+export function getThemeCompletions(themes: EpicLike[]): CompletionData[] {
+  return themes.map(theme => ({
+    value: theme.id,
+    detail: theme.title,
+  }));
+}
+
+/**
  * Generate completion items for epic field
  * Always includes EPIC-INBOX as a valid option
  * @param epics Epic objects with id and title
@@ -267,13 +297,15 @@ export function getStoryCompletions(stories: StoryLike[]): CompletionData[] {
 }
 
 /**
- * Generate completion items for [[ID]] links (both stories and epics)
+ * Generate completion items for [[ID]] links (stories, epics, and themes)
  * @param stories Story objects with id and title
  * @param epics Epic objects with id and title
+ * @param themes Theme objects with id and title
  * @returns Completion data array
  */
-export function getAllIdCompletions(stories: StoryLike[], epics: EpicLike[]): CompletionData[] {
-  const storyCompletions = getStoryCompletions(stories);
+export function getAllIdCompletions(stories: StoryLike[], epics: EpicLike[], themes: EpicLike[] = []): CompletionData[] {
+  const themeCompletions = getThemeCompletions(themes);
   const epicCompletions = getEpicCompletions(epics);
-  return [...storyCompletions, ...epicCompletions];
+  const storyCompletions = getStoryCompletions(stories);
+  return [...themeCompletions, ...epicCompletions, ...storyCompletions];
 }

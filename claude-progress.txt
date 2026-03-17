@@ -269,7 +269,6 @@ Files changed (4):
 - src/test/suite/storyHoverProvider.test.ts (5 new tests)
 
 Tests: 562 unit + 139 integration (all passing)
-<<<<<<< HEAD
 
 === Session: 2025-12-05 18:52 ===
 Story: DS-175 (Fix hardcoded 'done' status checks)
@@ -332,3 +331,189 @@ Files changed (2):
 - .devstories/stories/DS-181.md (status: done)
 
 Tests: 571 unit + 139 integration (new test passes, pre-existing failure unrelated)
+
+=== Session: 2026-03-02 (feat/version-2-proposal branch) ===
+Stories: Version 2 proposal — Theme management, Backlog/Breakdown views, Drag-and-drop, Burndown chart, Sort, Set Current Sprint, effort-based progress
+Status: in-progress (uncommitted on feat/version-2-proposal, 87 files changed vs main)
+
+Summary:
+Major feature branch introducing Themes as a top-level grouping above Epics,
+dual view modes (Backlog by sprint / Breakdown by theme→epic→story), drag-and-drop
+reordering, sprint burndown chart, story point–based progress tracking, and
+several UX improvements.
+
+### New Features
+
+**Theme Management**
+- New `Theme` type (src/types/theme.ts): id, title, status, priority, created/updated
+- Parser.parseTheme() in parser.ts with gray-matter frontmatter parsing
+- Store: themes Map, getTheme(), getThemes(), getEpicsByTheme(), getEpicsWithoutTheme()
+- createTheme command with QuickPick for title, duplicate detection, kebab-case filenames
+- createThemeUtils.ts: findNextThemeId(), generateThemeMarkdown(), appendEpicToTheme()
+- changeStatus extended to handle Theme status updates (updateThemeStatus)
+- schemas/theme.schema.json with required id/title/status/created
+- validateThemeName() in inputValidation.ts
+
+**Dual View Modes (Breakdown / Backlog)**
+- `ViewMode` type ('breakdown' | 'backlog') in storiesProviderUtils.ts
+- storiesProvider.ts heavily reworked (~408 lines added):
+  - Breakdown view: Theme → Epic → Story hierarchy (with "No Theme" / "No Epic" sentinel nodes)
+  - Backlog view: Sprint → Story flat list (grouped by sprint from sprintSequence)
+- switchToBreakdown / switchToBacklog commands registered in extension.ts
+- View mode toggle buttons in tree view title bar
+- Tree title format: "BACKLOG: Current sprint-N" or "BREAKDOWN: Current sprint-N"
+
+**SprintNode Virtual Tree Nodes**
+- New `SprintNode` type (src/types/sprintNode.ts): _kind discriminant, sprintId, label, isBacklog
+- BACKLOG_SPRINT_ID sentinel for catch-all node
+- isSprintNode() type guard
+
+**BrokenFile Handling**
+- New `BrokenFile` type (src/types/brokenFile.ts): broken flag, id, filePath, error, fileType
+- Store tracks brokenFiles Map; parse failures stored instead of silently dropped
+- Broken files shown under orphan sentinel nodes in tree view
+
+**Drag-and-Drop**
+- StoriesDragAndDropController (265 lines):
+  - Breakdown: Story → Epic (reassigns epic), Epic → Theme (reassigns theme)
+  - Backlog: Story → SprintNode (sprint reassignment + priority 1), Story → Story (insert above)
+- BacklogDropHandler (238 lines): priority-based reordering with bump logic
+  - Sort guard: drops only valid when sorted by priority ascending
+  - updateStorySprintAndPriority(), updateStoryPriorityOnly() in utils
+- storiesDragAndDropControllerUtils.ts: frontmatter rewriting utilities
+
+**Sprint Burndown Chart**
+- BurndownViewProvider: WebviewView registered below tree in sidebar
+  - Renders inline SVG burndown (ideal dashed line vs actual red line)
+  - Follows sprint filter; falls back to config.json currentSprint
+  - Re-renders on store update, config change, sprint filter change
+- burndownUtils.ts (193 lines): pure functions for burndown calculations
+  - isBurndownConfigured(), getSprintDateRange(), calculateBurndown()
+  - Sprint date ranges derived from firstSprintStartDate + sprintLength
+  - Excludes isExcluded stories from ideal/actual lines
+- burndownSvgRenderer.ts: renderBurndownHtml(), renderPlaceholderHtml()
+
+**Sort Stories**
+- SortService (47 lines): session-only sort state (key + direction), event emitter
+- SortKey: 'priority' | 'date' | 'id'; SortDirection: 'asc' | 'desc'
+- sortStories command: QuickPick to choose sort order, successive clicks flip direction
+- sortStoriesBy(), sortStoriesForTreeView() in storiesProviderUtils.ts
+- Tree view refreshes on sort change
+
+**Set Current Sprint**
+- setCurrentSprint command: QuickPick from sprintSequence, persists to config.json
+- ConfigService.updateCurrentSprint(): reads/writes config.json sprints.current
+- Distinct from pickSprint (view-only filter)
+
+**Effort-Based Progress (Story Points)**
+- ConfigData: new `storypoints: number[]` (parallel array to sizes, index-aligned)
+- getSizePoints(size, sizes, storypoints) utility for point lookups
+- StatusBarStats changed from {total, done} to {totalPoints, donePoints}
+- Status bar text now shows "pts" suffix
+- Default sizes expanded: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL']
+- Default storypoints: [1, 2, 4, 8, 16, 32, 64]
+
+### Config / Schema Changes
+
+- StatusDef: added `isCompletion?: boolean` and `isExcluded?: boolean` flags
+- ConfigData: added `sprintLength?: number`, `firstSprintStartDate?: string` (burndown)
+- devstories.schema.json: theme prefix, storypoints array, sprint length/start fields, isCompletion/isExcluded on statuses, sizes no longer enum-restricted
+- common.schema.json: added themeId pattern, storySize no longer hardcoded enum
+- epic.schema.json: added theme and priority fields
+- story.schema.json: added date_done field, size description updated
+
+### Data Model Changes
+
+- Epic: added `theme?: string` and `priority: number` (default 500)
+- Story: added `dateDone?: Date` (auto-set on completion status, cleared otherwise)
+- Parser: epic field now optional in stories (orphans go to "No Epic")
+- Parser: epic parsing now extracts theme and priority fields
+- Story IDs padded to 5 digits (was 3), Epic IDs padded to 4 digits (was 3)
+
+### Filename Changes
+
+- New `toKebabCase()` utility (src/utils/filenameUtils.ts): titles → kebab-case suffixes
+- Story files: `DS-00001-login-form.md` (was `DS-001.md`)
+- Epic files: `EPIC-0001-user-auth.md` (was `EPIC-001.md`)
+- Theme files: `THEME-001-platform.md`
+
+### Command / Context Menu Changes
+
+- createEpic: accepts preselectedThemeId from right-click context menu, shows theme picker
+- createStory: accepts preselectedEpicId from right-click context menu
+- quickCapture: uses store-first approach for inbox epic lookup, disk scan for ID generation
+- pickSprint: simplified to use sprintSequence only (removed collectAvailableSprints)
+- changeStatus: manages date_done field on completion transitions
+- New context menus: Create Story on Epic, Create Epic on Theme/No Theme, Open Theme, Change Status on Theme
+
+### Provider Changes
+
+- Link provider: uses resolveFilePath callback instead of basePath+knownIds (supports kebab-case filenames via store filePath)
+- Hover provider: added theme field descriptions, theme ID completion
+- Completion provider: added theme field detection, theme completions, [[ID]] links include themes
+- Store.reloadFile(): public method for immediate store refresh after programmatic file creation (avoids Windows watcher delay)
+
+### Dependency Updates
+
+- typescript 5.4.5 → 5.9.3
+- vitest 1.6.0 → 4.0.18
+- eslint 9.39.1 → 9.27.0
+- @vscode/test-electron 2.4.0 → 2.5.2
+- ajv 8.17.1 → 8.18.0
+- glob 10.3.10 → 13.0.6
+- @types/mocha 10.0.6 → 10.0.10
+- typescript-eslint 8.48.1 → 8.56.1
+- Added @eslint/js ^9.27.0
+- Added overrides: diff ^8.0.3, serialize-javascript ^7.0.3
+
+### Package.json Contributions
+
+- New view: devstories.views.burndown (webview, Sprint Burndown)
+- New commands: createTheme, openTheme, setCurrentSprint, sortStories, switchToBreakdown, switchToBacklog
+- Updated menus: view mode toggle buttons, context menus for theme/epic create, sort button
+- test:integration script now includes compile-tests + compile steps
+
+### New Test Files (9)
+
+- backlogDropHandler.test.ts (521 lines)
+- backlogView.test.ts (185 lines)
+- burndownUtils.test.ts (273 lines)
+- createTheme.test.ts (144 lines)
+- dragAndDrop.test.ts (272 lines)
+- filenameUtils.test.ts (48 lines)
+- pickSprint.test.ts (175 lines)
+- setCurrentSprint.test.ts (105 lines)
+- sortService.test.ts (64 lines)
+
+### Modified Test Files (20)
+
+- treeViewSorting.test.ts (+275 lines — new sort/backlog tests)
+- configService.test.ts (+132 lines — storypoints, burndown config, isCompletion/isExcluded)
+- statusBar.test.ts (+73 lines — effort-based progress, point calculations)
+- parser.test.ts (+134 lines — theme parsing, optional epic, date_done)
+- changeStatus.test.ts (+68 lines — theme status, date_done management)
+- storiesProvider.test.ts (+51 lines — dual view mode, theme nodes)
+- createStory.test.ts (+48 lines — preselected epic, 5-digit IDs)
+- createEpic.test.ts (+42 lines — preselected theme, 4-digit IDs)
+- storyLinkProvider.test.ts (+17 lines — callback-based resolution)
+- linkResolver.test.ts (+10 lines — theme ID resolution)
+- schemas.test.ts (+5 lines — theme schema, custom sizes)
+- Plus minor adjustments to remaining test files for API changes
+
+Files changed (87 total):
+- 60 modified tracked files
+- 27 new untracked files (including .specstory/, .vscode/settings.json)
+
+New source files (17):
+- src/types/theme.ts, brokenFile.ts, sprintNode.ts
+- src/commands/createTheme.ts, createThemeUtils.ts, setCurrentSprint.ts, sortStories.ts
+- src/core/sortService.ts
+- src/utils/filenameUtils.ts
+- src/view/backlogDropHandler.ts, burndownSvgRenderer.ts, burndownUtils.ts
+- src/view/burndownViewProvider.ts, storiesDragAndDropController.ts, storiesDragAndDropControllerUtils.ts
+- schemas/theme.schema.json
+
+New test files (9):
+- src/test/unit/backlogDropHandler.test.ts, backlogView.test.ts, burndownUtils.test.ts
+- src/test/unit/createTheme.test.ts, dragAndDrop.test.ts, filenameUtils.test.ts
+- src/test/unit/pickSprint.test.ts, setCurrentSprint.test.ts, sortService.test.ts

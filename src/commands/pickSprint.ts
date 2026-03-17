@@ -1,12 +1,16 @@
 /**
- * Pick Sprint Command - Opens QuickPick for sprint selection
+ * Pick Sprint Command - Opens QuickPick for sprint view filter selection.
+ *
+ * Shows all sprints (sprintSequence + Backlog option if applicable).
+ * Selecting a sprint only updates the in-memory view filter — it does NOT
+ * write to config.json. Use setCurrentSprint to persist the current sprint.
  */
 
 import * as vscode from 'vscode';
 import { ConfigService } from '../core/configService';
 import { SprintFilterService } from '../core/sprintFilterService';
 import { Store } from '../core/store';
-import { collectAvailableSprints } from '../view/statusBarUtils';
+import { isBacklogStory } from '../view/storiesProviderUtils';
 
 interface SprintQuickPickItem extends vscode.QuickPickItem {
   value: string | null;
@@ -21,69 +25,67 @@ export async function executePickSprint(
   configService?: ConfigService
 ): Promise<void> {
   const stories = store.getStories();
-  const currentSprint = configService?.config.currentSprint;
-  const sprintSequence = configService?.config.sprintSequence ?? [];
-  const availableSprints = collectAvailableSprints(stories, currentSprint, sprintSequence);
-  const selectedSprint = sprintFilterService.currentSprint;
+  const currentSprint = configService?.config.currentSprint;         // persisted current sprint
+  const sprintSequence = configService?.config.sprintSequence ?? []; // config-defined order
+  const activeFilter = sprintFilterService.currentSprint;            // current UI filter
 
   // Build QuickPick items
   const items: SprintQuickPickItem[] = [];
 
-  // All Sprints option
+  // All Sprints option — clears filter but does NOT write to config
   items.push({
     label: '$(list-flat) All Sprints',
-    description: selectedSprint === null ? '(selected)' : undefined,
+    description: activeFilter === null ? '(selected)' : undefined,
     value: null,
   });
 
-  // Current sprint from config (if defined and exists)
-  if (currentSprint && availableSprints.includes(currentSprint)) {
-    const isSelected = selectedSprint === currentSprint;
-    items.push({
-      label: `$(star-full) ${currentSprint}`,
-      description: isSelected ? 'Current Sprint · (selected)' : 'Current Sprint',
-      value: currentSprint,
-    });
-  }
-
-  // Backlog option
-  const hasBacklogStories = stories.some(s => !s.sprint || s.sprint === '' || s.sprint === 'backlog');
+  // Backlog option — only shown when backlog stories exist.
+  // Uses isBacklogStory so stories whose sprint value is not in sprintSequence
+  // (e.g. a leftover sprint-0) are also counted.
+  const hasBacklogStories = stories.some(s => isBacklogStory(s, sprintSequence));
   if (hasBacklogStories) {
     items.push({
       label: '$(archive) Backlog',
-      description: selectedSprint === 'backlog' ? '(selected)' : undefined,
+      description: activeFilter === 'backlog' ? '(selected)' : undefined,
       value: 'backlog',
     });
   }
 
-  // Separator
-  if (availableSprints.length > 0) {
+  // Separator before the sprint list
+  if (sprintSequence.length > 0) {
     items.push({
-      label: '',
+      label: 'Sprints',
       kind: vscode.QuickPickItemKind.Separator,
       value: null,
     });
   }
 
-  // All sprints in sequence order (including current sprint for context)
-  for (const sprint of availableSprints) {
+  // Sprints from config sprintSequence in order — these are the team's defined sprints
+  for (const sprint of sprintSequence) {
     const isCurrentSprint = sprint === currentSprint;
-    const isSelected = selectedSprint === sprint;
+    const isSelected = activeFilter === sprint;
+    const tags: string[] = [];
+    if (isCurrentSprint) { tags.push('Current Sprint'); }
+    if (isSelected) { tags.push('selected'); }
+
     items.push({
       label: `$(milestone) ${sprint}`,
-      description: isCurrentSprint
-        ? isSelected ? 'Current Sprint · (selected)' : 'Current Sprint'
-        : isSelected ? '(selected)' : undefined,
+      description: tags.length > 0 ? tags.join(' · ') : undefined,
       value: sprint,
     });
   }
 
   const selected = await vscode.window.showQuickPick(items, {
-    placeHolder: 'Select sprint to filter by',
-    title: 'DevStories: Pick Sprint',
+    placeHolder: 'Select sprint to view',
+    title: 'DevStories: Switch Sprint',
   });
 
-  if (selected && selected.kind !== vscode.QuickPickItemKind.Separator) {
-    sprintFilterService.setSprint(selected.value);
+  if (!selected || selected.kind === vscode.QuickPickItemKind.Separator) {
+    return;
   }
+
+  const pickedValue = selected.value;
+
+  // Update the sprint filter (fires onDidSprintChange → tree + status bar refresh)
+  sprintFilterService.setSprint(pickedValue);
 }

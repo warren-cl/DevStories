@@ -10,32 +10,6 @@ suite('CreateEpic Command Integration Test', () => {
 		assert.ok(commands.includes('devstories.createEpic'), 'devstories.createEpic command should be registered');
 	});
 
-	test('parseConfigJson should work in VS Code context', async () => {
-		const { parseConfigJson } = await import('../../commands/createEpicUtils');
-
-		const json = JSON.stringify({
-			version: 1,
-			project: 'TestProject',
-			idPrefix: {
-				epic: 'PROJ',
-				story: 'FEAT',
-			},
-			sprints: {
-				current: 'sprint-5',
-			},
-			statuses: [
-				{ id: 'todo', label: 'To Do' },
-				{ id: 'done', label: 'Done' },
-			],
-		});
-		const config = parseConfigJson(json);
-
-		assert.strictEqual(config.epicPrefix, 'PROJ');
-		assert.strictEqual(config.storyPrefix, 'FEAT');
-		assert.strictEqual(config.currentSprint, 'sprint-5');
-		assert.deepStrictEqual(config.statuses, ['todo', 'done']);
-	});
-
 	test('findNextEpicId should find correct next ID', async () => {
 		const { findNextEpicId } = await import('../../commands/createEpicUtils');
 

@@ -1,16 +1,29 @@
 {
-  "version": 1,
+  "version": 2,
   "project": "DevStories",
   "idMode": "manual",
   "idPrefix": {
     "epic": "EPIC",
-    "story": "DS"
+    "story": "DS",
+    "theme": "THEME"
   },
   "statuses": [
-    { "id": "todo", "label": "To Do" },
-    { "id": "in_progress", "label": "In Progress" },
-    { "id": "review", "label": "Review" },
-    { "id": "done", "label": "Done" }
+    {
+      "id": "todo",
+      "label": "To Do"
+    },
+    {
+      "id": "in_progress",
+      "label": "In Progress"
+    },
+    {
+      "id": "review",
+      "label": "Review"
+    },
+    {
+      "id": "done",
+      "label": "Done"
+    }
   ],
   "sprints": {
     "current": "1.1.0-intellisense",
@@ -35,6 +48,30 @@
       "backlog"
     ]
   },
-  "sizes": ["XS", "S", "M", "L", "XL"],
-  "autoFilterCurrentSprint": true
+  "sizes": [
+    "XXS",
+    "XS",
+    "S",
+    "M",
+    "L",
+    "XL",
+    "XXL"
+  ],
+  "storypoints": [
+    1,
+    2,
+    4,
+    8,
+    16,
+    32,
+    64
+  ],
+  "autoFilterCurrentSprint": true,
+  "quickCapture": {
+    "defaultToCurrentSprint": false
+  },
+  "storydocs": {
+    "enabled": false,
+    "root": "docs/storydocs"
+  }
 }

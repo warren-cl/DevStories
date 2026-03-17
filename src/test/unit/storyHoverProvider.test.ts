@@ -79,6 +79,7 @@ describe('storyHoverProviderUtils', () => {
       id: 'EPIC-001',
       title: 'Phase 1: Foundation',
       status: 'in_progress',
+      priority: 500,
       created: new Date('2025-01-15'),
       content: 'Epic content',
     };
@@ -591,13 +592,13 @@ describe('storyHoverProviderUtils', () => {
     it('should return description for type field', () => {
       const result = getFieldDescription('type', 'story');
 
-      expect(result).toBe('Story type: feature, bug, task, or chore');
+      expect(result).toBe('Story type: feature, bug, task, chore, or spike');
     });
 
     it('should return description for size field', () => {
       const result = getFieldDescription('size', 'story');
 
-      expect(result).toBe('Complexity estimate: XS, S, M, L, or XL');
+      expect(result).toBe('Complexity estimate (valid values defined in config.json)');
     });
 
     it('should return description for sprint field', () => {

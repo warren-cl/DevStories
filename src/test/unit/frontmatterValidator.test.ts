@@ -121,7 +121,7 @@ created: 2025-01-15
       expect(typeError?.message).toContain('feature');
     });
 
-    it('should return error for invalid size enum', () => {
+    it('should return warning for size not in config', () => {
       const content = `---
 id: DS-001
 title: Invalid Size
@@ -136,7 +136,7 @@ created: 2025-01-15
       expect(errors.length).toBeGreaterThan(0);
       const sizeError = errors.find(e => e.field === 'size');
       expect(sizeError).toBeDefined();
-      expect(sizeError?.severity).toBe('error');
+      expect(sizeError?.severity).toBe('warning');
     });
 
     it('should return error for invalid date format', () => {
@@ -450,11 +450,13 @@ created: 2025-01-15
     const createKnownIds = (overrides: Partial<KnownIds> = {}): KnownIds => ({
       stories: new Set(['DS-001', 'DS-002', 'DS-003']),
       epics: new Set(['EPIC-001', 'EPIC-002', 'EPIC-INBOX']),
+      themes: new Set<string>(),
       epicStoryMap: new Map([
         ['EPIC-001', new Set(['DS-001', 'DS-002'])],
         ['EPIC-002', new Set(['DS-003'])],
         ['EPIC-INBOX', new Set()]
       ]),
+      themeEpicMap: new Map<string, Set<string>>(),
       ...overrides
     });
 

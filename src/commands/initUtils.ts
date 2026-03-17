@@ -3,10 +3,13 @@
  * These can be unit tested with Vitest
  */
 
+import { localToday } from "../utils/dateUtils";
+
 export interface InitConfig {
   projectName: string;
   epicPrefix: string;
   storyPrefix: string;
+  themePrefix: string;
   sprint: string;
 }
 
@@ -15,24 +18,34 @@ export interface InitConfig {
  */
 export function generateConfigJson(config: InitConfig): string {
   const configObj = {
-    version: 1,
+    version: 2,
     project: config.projectName,
-    idMode: 'auto',
+    idMode: "auto",
     idPrefix: {
+      theme: config.themePrefix,
       epic: config.epicPrefix,
       story: config.storyPrefix,
     },
     statuses: [
-      { id: 'todo', label: 'To Do' },
-      { id: 'in_progress', label: 'In Progress' },
-      { id: 'review', label: 'Review' },
-      { id: 'done', label: 'Done' },
+      { id: "todo", label: "To Do" },
+      { id: "in_progress", label: "In Progress" },
+      { id: "review", label: "Review" },
+      { id: "done", label: "Done" },
     ],
     sprints: {
       current: config.sprint,
-      sequence: [config.sprint, 'backlog'],
+      sequence: [config.sprint, "backlog"],
     },
-    sizes: ['XS', 'S', 'M', 'L', 'XL'],
+    sizes: ["XXS", "XS", "S", "M", "L", "XL", "XXL"],
+    storypoints: [1, 2, 4, 8, 16, 32, 64],
+    autoFilterCurrentSprint: true,
+    quickCapture: {
+      defaultToCurrentSprint: false,
+    },
+    storydocs: {
+      enabled: false,
+      root: "docs/storydocs",
+    },
   };
   return JSON.stringify(configObj, null, 2);
 }
@@ -43,7 +56,7 @@ export function generateConfigJson(config: InitConfig): string {
  */
 export function detectProjectName(files: Map<string, string>): string | undefined {
   // package.json (highest priority)
-  const packageJson = files.get('package.json');
+  const packageJson = files.get("package.json");
   if (packageJson) {
     try {
       const parsed = JSON.parse(packageJson);
@@ -56,7 +69,7 @@ export function detectProjectName(files: Map<string, string>): string | undefine
   }
 
   // Cargo.toml
-  const cargoToml = files.get('Cargo.toml');
+  const cargoToml = files.get("Cargo.toml");
   if (cargoToml) {
     const match = cargoToml.match(/^\s*name\s*=\s*"([^"]+)"/m);
     if (match) {
@@ -65,7 +78,7 @@ export function detectProjectName(files: Map<string, string>): string | undefine
   }
 
   // pyproject.toml
-  const pyprojectToml = files.get('pyproject.toml');
+  const pyprojectToml = files.get("pyproject.toml");
   if (pyprojectToml) {
     const match = pyprojectToml.match(/^\s*name\s*=\s*"([^"]+)"/m);
     if (match) {
@@ -74,12 +87,12 @@ export function detectProjectName(files: Map<string, string>): string | undefine
   }
 
   // go.mod
-  const goMod = files.get('go.mod');
+  const goMod = files.get("go.mod");
   if (goMod) {
     const match = goMod.match(/^module\s+(\S+)/m);
     if (match) {
       // Extract last path segment (e.g., github.com/user/project -> project)
-      const parts = match[1].split('/');
+      const parts = match[1].split("/");
       return parts[parts.length - 1];
     }
   }
@@ -91,7 +104,7 @@ export function detectProjectName(files: Map<string, string>): string | undefine
  * Generates sample epic content
  */
 export function generateSampleEpic(storyPrefix: string): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   return `---
 id: EPIC-001
@@ -118,7 +131,7 @@ Replace this with your epic description.
  * Generates sample story content
  */
 export function generateSampleStory(sprint: string, storyPrefix: string): string {
-  const today = new Date().toISOString().split('T')[0];
+  const today = localToday();
 
   return `---
 id: ${storyPrefix}-001
@@ -128,7 +141,7 @@ epic: EPIC-001
 status: todo
 sprint: ${sprint}
 size: S
-priority: 500
+priority: 1
 assignee: ""
 dependencies: []
 created: ${today}

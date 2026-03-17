@@ -17,7 +17,7 @@
     },
     "type": {
       "$ref": "defs/common.schema.json#/$defs/storyType",
-      "description": "Story type: feature, bug, task, or chore"
+      "description": "Story type: feature, bug, task, chore, or spike"
     },
     "epic": {
       "$ref": "defs/common.schema.json#/$defs/epicId",
@@ -34,7 +34,7 @@
     },
     "size": {
       "$ref": "defs/common.schema.json#/$defs/storySize",
-      "description": "Complexity estimate: XS, S, M, L, or XL"
+      "description": "Complexity estimate (valid values defined in config.json sizes array)"
     },
     "priority": {
       "type": "integer",
@@ -58,6 +58,22 @@
     "updated": {
       "$ref": "defs/common.schema.json#/$defs/dateString",
       "description": "Date story was last modified (auto-updated on save)"
+    },
+    "completed_on": {
+      "$ref": "defs/common.schema.json#/$defs/dateString",
+      "description": "Date story reached completion status (auto-managed by extension)"
+    },
+    "workflow": {
+      "type": "string",
+      "description": "Workflow this story belongs to (e.g., infrastructure, full-stack, frontend)"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author of this document"
+    },
+    "owner": {
+      "type": "string",
+      "description": "Owner of this document"
     }
   },
   "additionalProperties": false

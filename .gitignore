@@ -8,6 +8,9 @@ node_modules/
 # VS Code test runner
 .vscode-test/
 
+# SpecStories
+.specstory/
+
 # Packaged extension
 *.vsix
 

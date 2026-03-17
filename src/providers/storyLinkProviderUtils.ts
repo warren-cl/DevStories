@@ -1,4 +1,4 @@
-import { LINK_PATTERN, resolveLinkPath } from '../utils/linkResolver';
+import { LINK_PATTERN } from '../utils/linkResolver';
 
 /**
  * Represents a link match with position info
@@ -41,19 +41,18 @@ export function findLinksInDocument(text: string): LinkMatch[] {
 }
 
 /**
- * Create a resolved document link from a match
- * Returns null if the ID is not in knownIds (broken link)
+ * Create a resolved document link from a match.
+ * @param resolveFilePath - Callback that returns the absolute file path for an ID,
+ *   or undefined if the ID is unknown (broken link).
  */
 export function createDocumentLink(
   match: LinkMatch,
-  basePath: string,
-  knownIds: Set<string>
+  resolveFilePath: (id: string) => string | undefined
 ): ResolvedLink | null {
-  if (!knownIds.has(match.id)) {
+  const targetPath = resolveFilePath(match.id);
+  if (!targetPath) {
     return null;
   }
-
-  const targetPath = resolveLinkPath(match.id, basePath);
 
   return {
     id: match.id,

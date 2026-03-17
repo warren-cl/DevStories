@@ -2,7 +2,7 @@
   "name": "devstories",
   "displayName": "DevStories",
   "description": "Stories as markdown files, version-controlled with your code. AI-readable. Git-tracked.",
-  "version": "1.0.0",
+  "version": "2.3.2",
   "publisher": "DhavalSavalia",
   "author": {
     "name": "Dhaval Savalia",
@@ -55,6 +55,11 @@
         {
           "id": "devstories.views.explorer",
           "name": "Stories"
+        },
+        {
+          "id": "devstories.views.burndown",
+          "name": "Sprint Burndown",
+          "type": "webview"
         }
       ]
     },
@@ -85,11 +90,8 @@
       },
       {
         "command": "devstories.pickSprint",
-        "title": "DevStories: Pick Sprint",
-        "icon": {
-          "light": "assets/filter.svg",
-          "dark": "assets/filter.svg"
-        }
+        "title": "DevStories: Filter by Sprint",
+        "icon": "$(filter)"
       },
       {
         "command": "devstories.clearSprintFilter",
@@ -104,27 +106,104 @@
         "title": "Open Epic File"
       },
       {
+        "command": "devstories.createTheme",
+        "title": "DevStories: Create Theme",
+        "icon": "$(add)"
+      },
+      {
+        "command": "devstories.openTheme",
+        "title": "Open Theme File"
+      },
+      {
         "command": "devstories.createStoryMenu",
         "title": "DevStories: Create Story...",
         "icon": "$(add)"
+      },
+      {
+        "command": "devstories.setCurrentSprint",
+        "title": "DevStories: Set Current Sprint",
+        "icon": "$(milestone)"
+      },
+      {
+        "command": "devstories.sortStories",
+        "title": "DevStories: Sort Stories",
+        "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "devstories.switchToBreakdown",
+        "title": "DevStories: Switch to Breakdown View",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "devstories.switchToBacklog",
+        "title": "DevStories: Switch to Backlog View",
+        "icon": "$(calendar)"
+      },
+      {
+        "command": "devstories.textFilter",
+        "title": "DevStories: Search",
+        "icon": "$(search)"
+      },
+      {
+        "command": "devstories.clearTextFilter",
+        "title": "DevStories: Clear Search",
+        "icon": "$(search-stop)"
+      },
+      {
+        "command": "devstories.reconcileStorydocs",
+        "title": "DevStories: Reconcile StoryDocs Folders"
+      },
+      {
+        "command": "devstories.browseStorydocs",
+        "title": "DevStories: Browse StoryDocs"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "devstories.createStoryMenu",
+          "command": "devstories.switchToBreakdown",
+          "when": "view == devstories.views.explorer && devstories:viewMode == backlog",
+          "group": "navigation@0"
+        },
+        {
+          "command": "devstories.switchToBacklog",
+          "when": "view == devstories.views.explorer && devstories:viewMode == breakdown",
+          "group": "navigation@0"
+        },
+        {
+          "command": "devstories.createTheme",
           "when": "view == devstories.views.explorer",
           "group": "navigation@1"
         },
         {
+          "command": "devstories.setCurrentSprint",
+          "when": "view == devstories.views.explorer",
+          "group": "navigation@2"
+        },
+        {
           "command": "devstories.pickSprint",
           "when": "view == devstories.views.explorer && !devstories:hasSprintFilter",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "devstories.clearSprintFilter",
           "when": "view == devstories.views.explorer && devstories:hasSprintFilter",
-          "group": "navigation@2"
+          "group": "navigation@3"
+        },
+        {
+          "command": "devstories.sortStories",
+          "when": "view == devstories.views.explorer",
+          "group": "navigation@4"
+        },
+        {
+          "command": "devstories.textFilter",
+          "when": "view == devstories.views.explorer && !devstories:hasTextFilter",
+          "group": "navigation@5"
+        },
+        {
+          "command": "devstories.clearTextFilter",
+          "when": "view == devstories.views.explorer && devstories:hasTextFilter",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
@@ -139,14 +218,54 @@
           "group": "devstories@1"
         },
         {
+          "command": "devstories.changeStatus",
+          "when": "view == devstories.views.explorer && viewItem == theme",
+          "group": "devstories@1"
+        },
+        {
+          "command": "devstories.createStory",
+          "when": "view == devstories.views.explorer && viewItem == epic",
+          "group": "devstories@2"
+        },
+        {
+          "command": "devstories.createEpic",
+          "when": "view == devstories.views.explorer && viewItem == theme",
+          "group": "devstories@2"
+        },
+        {
+          "command": "devstories.createEpic",
+          "when": "view == devstories.views.explorer && viewItem == noTheme",
+          "group": "devstories@1"
+        },
+        {
           "command": "devstories.openEpic",
           "when": "view == devstories.views.explorer && viewItem == epic",
+          "group": "navigation"
+        },
+        {
+          "command": "devstories.openTheme",
+          "when": "view == devstories.views.explorer && viewItem == theme",
           "group": "navigation"
         },
         {
           "command": "devstories.saveAsTemplate",
           "when": "view == devstories.views.explorer && viewItem == story",
           "group": "devstories@2"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == story && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == epic && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == theme && devstories:storydocsEnabled",
+          "group": "devstories@3"
         }
       ],
       "editor/context": [
@@ -205,27 +324,31 @@
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vitest run",
-    "test:integration": "node ./out/test/runTest.js"
+    "test:integration": "npm run compile-tests && npm run compile && node ./out/test/runTest.js"
   },
   "devDependencies": {
+    "@eslint/js": "^9.27.0",
     "@types/glob": "^8.1.0",
-    "@types/mocha": "^10.0.6",
+    "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@types/vscode": "^1.90.0",
-    "@typescript-eslint/eslint-plugin": "^8.48.1",
-    "@typescript-eslint/parser": "^8.48.1",
-    "@vscode/test-electron": "^2.4.0",
-    "ajv": "^8.17.1",
+    "@vscode/test-electron": "^2.5.2",
+    "ajv": "^8.18.0",
     "esbuild": "^0.27.0",
-    "eslint": "^9.39.1",
-    "glob": "^10.3.10",
+    "eslint": "^9.27.0",
+    "glob": "^13.0.6",
     "mocha": "^11.7.5",
-    "typescript": "^5.4.5",
-    "typescript-eslint": "^8.48.1",
-    "vitest": "^1.6.0"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1",
+    "vitest": "^4.0.18"
   },
   "dependencies": {
+    "@vscode/vsce": "^3.7.1",
     "ajv-formats": "^3.0.1",
     "gray-matter": "^4.0.3"
+  },
+  "overrides": {
+    "diff": "^8.0.3",
+    "serialize-javascript": "^7.0.3"
   }
 }

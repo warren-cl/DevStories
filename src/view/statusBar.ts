@@ -59,7 +59,9 @@ export class StatusBarController implements vscode.Disposable {
   getStats(sprint?: string): StatusBarStats {
     const sprintFilter = sprint !== undefined ? sprint : this.getCurrentSprintFilter();
     const statuses = this.configService?.config.statuses ?? [];
-    return getStatsFromStories(this.store.getStories(), sprintFilter, statuses);
+    const sizes = this.configService?.config.sizes ?? [];
+    const storypoints = this.configService?.config.storypoints ?? [];
+    return getStatsFromStories(this.store.getStories(), sprintFilter, statuses, sizes, storypoints);
   }
 
   /**
@@ -77,8 +79,10 @@ export class StatusBarController implements vscode.Disposable {
       ? (sprint || null)
       : this.getCurrentSprintFilter();
     const statuses = this.configService?.config.statuses ?? [];
-    const stats = getStatsFromStories(this.store.getStories(), sprintFilter, statuses);
-    return getFormattedStatusBarText(stats.done, stats.total, sprintFilter);
+    const sizes = this.configService?.config.sizes ?? [];
+    const storypoints = this.configService?.config.storypoints ?? [];
+    const stats = getStatsFromStories(this.store.getStories(), sprintFilter, statuses, sizes, storypoints);
+    return getFormattedStatusBarText(stats.donePoints, stats.totalPoints, sprintFilter);
   }
 
   /**
@@ -104,8 +108,10 @@ export class StatusBarController implements vscode.Disposable {
   private getTooltip(): vscode.MarkdownString {
     const sprint = this.getCurrentSprintFilter();
     const statuses = this.configService?.config.statuses ?? [];
-    const stats = getStatsFromStories(this.store.getStories(), sprint, statuses);
-    const lines = formatTooltipLines(stats.done, stats.total, sprint);
+    const sizes = this.configService?.config.sizes ?? [];
+    const storypoints = this.configService?.config.storypoints ?? [];
+    const stats = getStatsFromStories(this.store.getStories(), sprint, statuses, sizes, storypoints);
+    const lines = formatTooltipLines(stats.donePoints, stats.totalPoints, sprint);
     const md = new vscode.MarkdownString(lines.join('\n'));
     md.isTrusted = true;
     return md;

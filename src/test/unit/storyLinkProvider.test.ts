@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   findLinksInDocument,
   createDocumentLink,
@@ -98,52 +98,49 @@ dependencies:
   });
 
   describe('createDocumentLink', () => {
-    const basePath = '/workspace/.devstories';
-
-    it('should create link for story ID', () => {
+    it('should create link when resolveFilePath returns a path', () => {
       const match: LinkMatch = { id: 'DS-001', start: 0, end: 10 };
-      const knownIds = new Set(['DS-001']);
+      const fakePath = '/workspace/.devstories/stories/DS-001-login-form.md';
 
-      const link = createDocumentLink(match, basePath, knownIds);
+      const link = createDocumentLink(match, (id) => id === 'DS-001' ? fakePath : undefined);
 
       expect(link).not.toBeNull();
-      expect(link!.targetPath).toBe('/workspace/.devstories/stories/DS-001.md');
+      expect(link!.targetPath).toBe(fakePath);
     });
 
-    it('should create link for epic ID', () => {
+    it('should create link for epic via resolveFilePath', () => {
       const match: LinkMatch = { id: 'EPIC-001', start: 0, end: 12 };
-      const knownIds = new Set(['EPIC-001']);
+      const fakePath = '/workspace/.devstories/epics/EPIC-001-my-epic.md';
 
-      const link = createDocumentLink(match, basePath, knownIds);
+      const link = createDocumentLink(match, (id) => id === 'EPIC-001' ? fakePath : undefined);
 
       expect(link).not.toBeNull();
-      expect(link!.targetPath).toBe('/workspace/.devstories/epics/EPIC-001.md');
+      expect(link!.targetPath).toBe(fakePath);
     });
 
-    it('should return null for unknown ID (broken link)', () => {
+    it('should return null when resolveFilePath returns undefined (broken link)', () => {
       const match: LinkMatch = { id: 'DS-999', start: 0, end: 10 };
-      const knownIds = new Set(['DS-001']);
 
-      const link = createDocumentLink(match, basePath, knownIds);
+      const link = createDocumentLink(match, (_id) => undefined);
 
       expect(link).toBeNull();
     });
 
-    it('should handle EPIC-INBOX', () => {
+    it('should handle EPIC-INBOX via resolveFilePath', () => {
       const match: LinkMatch = { id: 'EPIC-INBOX', start: 0, end: 14 };
-      const knownIds = new Set(['EPIC-INBOX']);
+      const fakePath = '/workspace/.devstories/epics/EPIC-INBOX-inbox.md';
 
-      const link = createDocumentLink(match, basePath, knownIds);
+      const link = createDocumentLink(match, (id) => id === 'EPIC-INBOX' ? fakePath : undefined);
 
       expect(link).not.toBeNull();
-      expect(link!.targetPath).toBe('/workspace/.devstories/epics/EPIC-INBOX.md');
+      expect(link!.targetPath).toBe(fakePath);
     });
 
     it('should preserve start and end positions', () => {
       const match: LinkMatch = { id: 'DS-001', start: 15, end: 25 };
-      const knownIds = new Set(['DS-001']);
+      const fakePath = '/workspace/.devstories/stories/DS-001-some-title.md';
 
-      const link = createDocumentLink(match, basePath, knownIds);
+      const link = createDocumentLink(match, (_id) => fakePath);
 
       expect(link).not.toBeNull();
       expect(link!.start).toBe(15);

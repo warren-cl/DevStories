@@ -25,7 +25,7 @@ export interface ValidationError {
 /**
  * File type for schema selection
  */
-export type FileType = 'story' | 'epic';
+export type FileType = 'story' | 'epic' | 'theme';
 
 /**
  * Config values for dynamic validation
@@ -41,13 +41,16 @@ export interface ValidationConfig {
 export interface KnownIds {
   stories: Set<string>;                         // All story IDs
   epics: Set<string>;                           // All epic IDs
+  themes: Set<string>;                          // All theme IDs
   epicStoryMap: Map<string, Set<string>>;       // Epic ID → story IDs listed in that epic's ## Stories section
+  themeEpicMap: Map<string, Set<string>>;       // Theme ID → epic IDs listed in that theme's ## Epics section
 }
 
 // Lazy-loaded Ajv instance
 let ajvInstance: Ajv | null = null;
 let storyValidate: ReturnType<Ajv['compile']> | null = null;
 let epicValidate: ReturnType<Ajv['compile']> | null = null;
+let themeValidate: ReturnType<Ajv['compile']> | null = null;
 
 /**
  * Get or create Ajv instance with schemas loaded
@@ -77,6 +80,12 @@ function getAjv(schemasDir: string): Ajv {
     fs.readFileSync(path.join(schemasDir, 'epic.schema.json'), 'utf-8')
   );
   epicValidate = ajvInstance.compile(epicSchema);
+
+  // Load and compile theme schema
+  const themeSchema = JSON.parse(
+    fs.readFileSync(path.join(schemasDir, 'theme.schema.json'), 'utf-8')
+  );
+  themeValidate = ajvInstance.compile(themeSchema);
 
   return ajvInstance;
 }
@@ -233,7 +242,7 @@ export function validateFrontmatter(
 
   // Initialize Ajv and get validator
   getAjv(schemasDir);
-  const validate = fileType === 'story' ? storyValidate : epicValidate;
+  const validate = fileType === 'story' ? storyValidate : (fileType === 'theme' ? themeValidate : epicValidate);
 
   if (!validate) {
     return [{
@@ -305,6 +314,9 @@ export function getFileTypeFromPath(filePath: string): FileType | null {
   if (filePath.includes('/epics/') || filePath.includes('\\epics\\')) {
     return 'epic';
   }
+  if (filePath.includes('/themes/') || filePath.includes('\\themes\\')) {
+    return 'theme';
+  }
   return null;
 }
 
@@ -322,6 +334,7 @@ export function resetAjvCache(): void {
   ajvInstance = null;
   storyValidate = null;
   epicValidate = null;
+  themeValidate = null;
 }
 
 /**
@@ -450,6 +463,25 @@ export function validateCrossFile(
     }
   }
 
+  // 1b. Validate theme field (epics only)
+  if (fileType === 'epic' && data.theme) {
+    const themeId = String(data.theme);
+    if (!knownIds.themes.has(themeId)) {
+      const line = findFieldLine(content, 'theme');
+      const lineContent = content.split('\n')[line - 1] || '';
+      const { start, end } = findValueColumn(lineContent, 'theme');
+
+      errors.push({
+        line,
+        column: start,
+        endColumn: end,
+        message: `Theme '${themeId}' does not exist`,
+        severity: 'error',
+        field: 'theme'
+      });
+    }
+  }
+
   // 2. Validate dependencies (stories only)
   if (fileType === 'story' && Array.isArray(data.dependencies)) {
     for (const dep of data.dependencies) {
@@ -498,29 +530,45 @@ export function validateCrossFile(
 
   // 4. ID uniqueness across collections
   if (currentId) {
-    if (fileType === 'story' && knownIds.epics.has(currentId)) {
+    if (fileType === 'story' && (knownIds.epics.has(currentId) || knownIds.themes.has(currentId))) {
       const line = findFieldLine(content, 'id');
       const lineContent = content.split('\n')[line - 1] || '';
       const { start, end } = findValueColumn(lineContent, 'id');
+      const conflictType = knownIds.epics.has(currentId) ? 'epic' : 'theme';
 
       errors.push({
         line,
         column: start,
         endColumn: end,
-        message: `ID '${currentId}' already exists as an epic`,
+        message: `ID '${currentId}' already exists as a ${conflictType}`,
         severity: 'error',
         field: 'id'
       });
-    } else if (fileType === 'epic' && knownIds.stories.has(currentId)) {
+    } else if (fileType === 'epic' && (knownIds.stories.has(currentId) || knownIds.themes.has(currentId))) {
       const line = findFieldLine(content, 'id');
       const lineContent = content.split('\n')[line - 1] || '';
       const { start, end } = findValueColumn(lineContent, 'id');
+      const conflictType = knownIds.stories.has(currentId) ? 'story' : 'theme';
 
       errors.push({
         line,
         column: start,
         endColumn: end,
-        message: `ID '${currentId}' already exists as a story`,
+        message: `ID '${currentId}' already exists as a ${conflictType}`,
+        severity: 'error',
+        field: 'id'
+      });
+    } else if (fileType === 'theme' && (knownIds.stories.has(currentId) || knownIds.epics.has(currentId))) {
+      const line = findFieldLine(content, 'id');
+      const lineContent = content.split('\n')[line - 1] || '';
+      const { start, end } = findValueColumn(lineContent, 'id');
+      const conflictType = knownIds.stories.has(currentId) ? 'story' : 'epic';
+
+      errors.push({
+        line,
+        column: start,
+        endColumn: end,
+        message: `ID '${currentId}' already exists as a ${conflictType}`,
         severity: 'error',
         field: 'id'
       });
@@ -542,6 +590,25 @@ export function validateCrossFile(
           message: `Story is not listed in ${epicId}'s Stories section`,
           severity: 'warning',
           field: 'epic'
+        });
+      }
+    }
+  }
+
+  // 6. Orphan epic warning (epic not listed in theme's ## Epics section)
+  if (fileType === 'epic' && currentId && data.theme) {
+    const themeId = String(data.theme);
+    if (knownIds.themes.has(themeId)) {
+      const themeEpics = knownIds.themeEpicMap.get(themeId);
+      if (themeEpics && !themeEpics.has(currentId)) {
+        const line = findFieldLine(content, 'theme');
+
+        errors.push({
+          line,
+          column: 0,
+          message: `Epic is not listed in ${themeId}'s Epics section`,
+          severity: 'warning',
+          field: 'theme'
         });
       }
     }

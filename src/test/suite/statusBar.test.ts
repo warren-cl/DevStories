@@ -126,14 +126,14 @@ created: 2025-01-01
 
   test('should count stories accurately', () => {
     const stats = statusBar.getStats();
-    assert.strictEqual(stats.total, 5, 'Should have 5 total stories');
-    assert.strictEqual(stats.done, 3, 'Should have 3 done stories');
+    assert.strictEqual(stats.totalPoints, 5, 'Should have 5 total stories');
+    assert.strictEqual(stats.donePoints, 3, 'Should have 3 done stories');
   });
 
   test('should count stories by sprint', () => {
     const stats = statusBar.getStats('sprint-1');
-    assert.strictEqual(stats.total, 4, 'Sprint-1 should have 4 stories');
-    assert.strictEqual(stats.done, 2, 'Sprint-1 should have 2 done');
+    assert.strictEqual(stats.totalPoints, 4, 'Sprint-1 should have 4 stories');
+    assert.strictEqual(stats.donePoints, 2, 'Sprint-1 should have 2 done');
   });
 
   test('should update on store change', async () => {
@@ -150,11 +150,11 @@ created: 2025-01-01
 ---
 # Todo Story (now done)`);
 
-    // Wait for watcher to trigger
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // Wait for watcher to trigger (debounce 100ms + VS Code fs notification latency)
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
     const stats = statusBar.getStats();
-    assert.strictEqual(stats.done, 4, 'Should now have 4 done stories');
+    assert.strictEqual(stats.donePoints, 4, 'Should now have 4 done stories');
   });
 
   test('should format status bar text correctly', () => {

@@ -1,14 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
   sortStoriesForTreeView,
+  sortStoriesBy,
   getEarliestStorySprintIndex,
   sortEpicsBySprintOrder,
+  sortThemesByEpicSprintOrder,
   getTreeViewTitle,
   getStatusIndicator,
 } from '../../view/storiesProviderUtils';
 import { Story, StoryType, StorySize } from '../../types/story';
 import { Epic } from '../../types/epic';
+import { Theme } from '../../types/theme';
 import { StatusDef } from '../../core/configServiceUtils';
+import { SortState } from '../../core/sortService';
 
 // Helper to create mock stories
 function createMockStory(overrides: Partial<Story> = {}): Story {
@@ -32,6 +36,20 @@ function createMockEpic(overrides: Partial<Epic> = {}): Epic {
     id: 'EPIC-001',
     title: 'Test Epic',
     status: 'todo',
+    priority: 500,
+    created: new Date('2025-01-15'),
+    content: '',
+    ...overrides,
+  };
+}
+
+// Helper to create mock themes
+function createMockTheme(overrides: Partial<Theme> = {}): Theme {
+  return {
+    id: 'THEME-001',
+    title: 'Test Theme',
+    status: 'todo',
+    priority: 500,
     created: new Date('2025-01-15'),
     content: '',
     ...overrides,
@@ -194,7 +212,7 @@ describe('Tree View Sorting Utils', () => {
   });
 
   describe('sortEpicsBySprintOrder', () => {
-    it('should sort epics by their earliest story sprint', () => {
+    it('should sort epics by their earliest story sprint (no sortState)', () => {
       const epics = [
         createMockEpic({ id: 'E-1' }),
         createMockEpic({ id: 'E-2' }),
@@ -287,19 +305,226 @@ describe('Tree View Sorting Utils', () => {
 
       expect(epics.map(e => e.id)).toEqual(originalOrder);
     });
+
+    it('should sort epics by priority ascending when sortState provided', () => {
+      const epics = [
+        createMockEpic({ id: 'E-1', priority: 300 }),
+        createMockEpic({ id: 'E-2', priority: 100 }),
+        createMockEpic({ id: 'E-3', priority: 200 }),
+      ];
+      const state: SortState = { key: 'priority', direction: 'asc' };
+      const sorted = sortEpicsBySprintOrder(epics, sprintSequence, () => [], state);
+      expect(sorted.map(e => e.id)).toEqual(['E-2', 'E-3', 'E-1']);
+    });
+
+    it('should sort epics by priority descending when sortState provided', () => {
+      const epics = [
+        createMockEpic({ id: 'E-1', priority: 100 }),
+        createMockEpic({ id: 'E-2', priority: 300 }),
+      ];
+      const state: SortState = { key: 'priority', direction: 'desc' };
+      const sorted = sortEpicsBySprintOrder(epics, sprintSequence, () => [], state);
+      expect(sorted.map(e => e.id)).toEqual(['E-2', 'E-1']);
+    });
+
+    it('should sort epics by date ascending when sortState provided', () => {
+      const epics = [
+        createMockEpic({ id: 'E-1', created: new Date('2025-03-01') }),
+        createMockEpic({ id: 'E-2', created: new Date('2025-01-01') }),
+        createMockEpic({ id: 'E-3', created: new Date('2025-02-01') }),
+      ];
+      const state: SortState = { key: 'date', direction: 'asc' };
+      const sorted = sortEpicsBySprintOrder(epics, sprintSequence, () => [], state);
+      expect(sorted.map(e => e.id)).toEqual(['E-2', 'E-3', 'E-1']);
+    });
+
+    it('should sort epics by ID number ascending when sortState provided', () => {
+      const epics = [
+        createMockEpic({ id: 'EPIC-003' }),
+        createMockEpic({ id: 'EPIC-001' }),
+        createMockEpic({ id: 'EPIC-002' }),
+      ];
+      const state: SortState = { key: 'id', direction: 'asc' };
+      const sorted = sortEpicsBySprintOrder(epics, sprintSequence, () => [], state);
+      expect(sorted.map(e => e.id)).toEqual(['EPIC-001', 'EPIC-002', 'EPIC-003']);
+    });
+  });
+
+  describe('sortThemesByEpicSprintOrder', () => {
+    it('should sort themes by priority ascending when sortState provided', () => {
+      const themes = [
+        createMockTheme({ id: 'T-1', priority: 300 }),
+        createMockTheme({ id: 'T-2', priority: 100 }),
+        createMockTheme({ id: 'T-3', priority: 200 }),
+      ];
+      const state: SortState = { key: 'priority', direction: 'asc' };
+      const sorted = sortThemesByEpicSprintOrder(themes, sprintSequence, () => [], () => [], state);
+      expect(sorted.map(t => t.id)).toEqual(['T-2', 'T-3', 'T-1']);
+    });
+
+    it('should sort themes by priority descending when sortState provided', () => {
+      const themes = [
+        createMockTheme({ id: 'T-1', priority: 100 }),
+        createMockTheme({ id: 'T-2', priority: 300 }),
+      ];
+      const state: SortState = { key: 'priority', direction: 'desc' };
+      const sorted = sortThemesByEpicSprintOrder(themes, sprintSequence, () => [], () => [], state);
+      expect(sorted.map(t => t.id)).toEqual(['T-2', 'T-1']);
+    });
+
+    it('should sort themes by date ascending when sortState provided', () => {
+      const themes = [
+        createMockTheme({ id: 'T-1', created: new Date('2025-03-01') }),
+        createMockTheme({ id: 'T-2', created: new Date('2025-01-01') }),
+        createMockTheme({ id: 'T-3', created: new Date('2025-02-01') }),
+      ];
+      const state: SortState = { key: 'date', direction: 'asc' };
+      const sorted = sortThemesByEpicSprintOrder(themes, sprintSequence, () => [], () => [], state);
+      expect(sorted.map(t => t.id)).toEqual(['T-2', 'T-3', 'T-1']);
+    });
+
+    it('should sort themes by ID number ascending when sortState provided', () => {
+      const themes = [
+        createMockTheme({ id: 'THEME-003' }),
+        createMockTheme({ id: 'THEME-001' }),
+        createMockTheme({ id: 'THEME-002' }),
+      ];
+      const state: SortState = { key: 'id', direction: 'asc' };
+      const sorted = sortThemesByEpicSprintOrder(themes, sprintSequence, () => [], () => [], state);
+      expect(sorted.map(t => t.id)).toEqual(['THEME-001', 'THEME-002', 'THEME-003']);
+    });
+
+    it('should fall back to sprint order when no sortState provided', () => {
+      const themes = [
+        createMockTheme({ id: 'T-1', created: new Date('2025-01-10') }),
+        createMockTheme({ id: 'T-2', created: new Date('2025-01-20') }),
+      ];
+      const epicsForTheme: Record<string, Epic[]> = {
+        'T-1': [createMockEpic({ id: 'E-1' })],
+        'T-2': [createMockEpic({ id: 'E-2' })],
+      };
+      const storyForEpic: Record<string, Story[]> = {
+        'E-1': [createMockStory({ sprint: 'launch-1' })],
+        'E-2': [createMockStory({ sprint: 'foundation-1' })],
+      };
+      const sorted = sortThemesByEpicSprintOrder(
+        themes, sprintSequence,
+        (tid) => epicsForTheme[tid] ?? [],
+        (eid) => storyForEpic[eid] ?? []
+      );
+      expect(sorted.map(t => t.id)).toEqual(['T-2', 'T-1']);
+    });
+  });
+
+  describe('sortStoriesBy', () => {
+    const seq = ['sprint-1', 'sprint-2'];
+
+    it('sorts by priority ascending (lower = more important)', () => {
+      const stories = [
+        createMockStory({ id: 'S-1', priority: 300 }),
+        createMockStory({ id: 'S-2', priority: 100 }),
+        createMockStory({ id: 'S-3', priority: 200 }),
+      ];
+      const state: SortState = { key: 'priority', direction: 'asc' };
+      const sorted = sortStoriesBy(stories, state, seq);
+      expect(sorted.map(s => s.id)).toEqual(['S-2', 'S-3', 'S-1']);
+    });
+
+    it('sorts by priority descending', () => {
+      const stories = [
+        createMockStory({ id: 'S-1', priority: 300 }),
+        createMockStory({ id: 'S-2', priority: 100 }),
+      ];
+      const state: SortState = { key: 'priority', direction: 'desc' };
+      const sorted = sortStoriesBy(stories, state, seq);
+      expect(sorted.map(s => s.id)).toEqual(['S-1', 'S-2']);
+    });
+
+    it('sorts by date created ascending', () => {
+      const stories = [
+        createMockStory({ id: 'S-1', created: new Date('2025-03-01') }),
+        createMockStory({ id: 'S-2', created: new Date('2025-01-01') }),
+        createMockStory({ id: 'S-3', created: new Date('2025-02-01') }),
+      ];
+      const state: SortState = { key: 'date', direction: 'asc' };
+      const sorted = sortStoriesBy(stories, state, seq);
+      expect(sorted.map(s => s.id)).toEqual(['S-2', 'S-3', 'S-1']);
+    });
+
+    it('sorts by date created descending', () => {
+      const stories = [
+        createMockStory({ id: 'S-1', created: new Date('2025-01-01') }),
+        createMockStory({ id: 'S-2', created: new Date('2025-03-01') }),
+      ];
+      const state: SortState = { key: 'date', direction: 'desc' };
+      const sorted = sortStoriesBy(stories, state, seq);
+      expect(sorted.map(s => s.id)).toEqual(['S-2', 'S-1']);
+    });
+
+    it('sorts by story ID number ascending', () => {
+      const stories = [
+        createMockStory({ id: 'STORY-00003' }),
+        createMockStory({ id: 'STORY-00001' }),
+        createMockStory({ id: 'STORY-00002' }),
+      ];
+      const state: SortState = { key: 'id', direction: 'asc' };
+      const sorted = sortStoriesBy(stories, state, seq);
+      expect(sorted.map(s => s.id)).toEqual(['STORY-00001', 'STORY-00002', 'STORY-00003']);
+    });
+
+    it('sorts by story ID number descending', () => {
+      const stories = [
+        createMockStory({ id: 'STORY-00001' }),
+        createMockStory({ id: 'STORY-00002' }),
+      ];
+      const state: SortState = { key: 'id', direction: 'desc' };
+      const sorted = sortStoriesBy(stories, state, seq);
+      expect(sorted.map(s => s.id)).toEqual(['STORY-00002', 'STORY-00001']);
+    });
+
+    it('does not mutate the original array', () => {
+      const stories = [
+        createMockStory({ id: 'S-1', priority: 200 }),
+        createMockStory({ id: 'S-2', priority: 100 }),
+      ];
+      const original = [...stories];
+      const state: SortState = { key: 'priority', direction: 'asc' };
+      sortStoriesBy(stories, state, seq);
+      expect(stories.map(s => s.id)).toEqual(original.map(s => s.id));
+    });
   });
 
   describe('getTreeViewTitle', () => {
-    it('should return "Stories" when no filter is active', () => {
-      expect(getTreeViewTitle(null)).toBe('Stories');
+    it('shows "BACKLOG: Current X" when no filter is active (default backlog mode)', () => {
+      expect(getTreeViewTitle('sprint-4', null)).toBe('BACKLOG: Current sprint-4');
     });
 
-    it('should return "Stories (sprint-name)" when sprint filter is active', () => {
-      expect(getTreeViewTitle('sprint-1')).toBe('Stories (sprint-1)');
+    it('shows "BACKLOG: Current X" when filter matches current sprint', () => {
+      expect(getTreeViewTitle('sprint-4', 'sprint-4')).toBe('BACKLOG: Current sprint-4');
     });
 
-    it('should return "Stories (Backlog)" when backlog filter is active', () => {
-      expect(getTreeViewTitle('backlog')).toBe('Stories (Backlog)');
+    it('shows "BREAKDOWN: Current X: Showing Y" when filter differs in breakdown mode', () => {
+      expect(getTreeViewTitle('sprint-4', 'sprint-3', 'breakdown')).toBe('BREAKDOWN: Current sprint-4: Showing sprint-3');
+    });
+
+    it('shows "BACKLOG: Current X: Showing Backlog" when backlog filter is active', () => {
+      expect(getTreeViewTitle('sprint-4', 'backlog')).toBe('BACKLOG: Current sprint-4: Showing Backlog');
+    });
+
+    it('shows "BACKLOG: Current (none)" when no current sprint configured', () => {
+      expect(getTreeViewTitle(null, null)).toBe('BACKLOG: Current (none)');
+    });
+
+    it('shows "BACKLOG: Current (none): Showing Y" when filter active but no current sprint', () => {
+      expect(getTreeViewTitle(undefined, 'sprint-1')).toBe('BACKLOG: Current (none): Showing sprint-1');
+    });
+
+    it('shows "BREAKDOWN: Current X" when in breakdown mode with no filter', () => {
+      expect(getTreeViewTitle('sprint-4', null, 'breakdown')).toBe('BREAKDOWN: Current sprint-4');
+    });
+
+    it('shows "BACKLOG: Current X" when explicitly in backlog mode', () => {
+      expect(getTreeViewTitle('sprint-4', null, 'backlog')).toBe('BACKLOG: Current sprint-4');
     });
   });
 
@@ -360,6 +585,49 @@ describe('Tree View Sorting Utils', () => {
     it('should return ● for single status (always complete)', () => {
       const statuses = makeStatuses('only');
       expect(getStatusIndicator('only', statuses)).toBe('●');
+    });
+
+    it('should use isCompletion as endpoint: done=● in extended workflow', () => {
+      const statuses: StatusDef[] = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'in_progress', label: 'In Progress' },
+        { id: 'review', label: 'Review' },
+        { id: 'done', label: 'Done', isCompletion: true },
+        { id: 'blocked', label: 'Blocked' },
+        { id: 'deferred', label: 'Deferred' },
+        { id: 'cancelled', label: 'Cancelled' },
+      ];
+      expect(getStatusIndicator('done', statuses)).toBe('●');
+    });
+
+    it('should show ○ for post-completion statuses (blocked/cancelled/deferred)', () => {
+      const statuses: StatusDef[] = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'in_progress', label: 'In Progress' },
+        { id: 'review', label: 'Review' },
+        { id: 'done', label: 'Done', isCompletion: true },
+        { id: 'blocked', label: 'Blocked' },
+        { id: 'deferred', label: 'Deferred' },
+        { id: 'cancelled', label: 'Cancelled' },
+      ];
+      expect(getStatusIndicator('blocked', statuses)).toBe('○');
+      expect(getStatusIndicator('deferred', statuses)).toBe('○');
+      expect(getStatusIndicator('cancelled', statuses)).toBe('○');
+    });
+
+    it('should interpolate active workflow correctly with isCompletion set', () => {
+      // Active range [0..3]: todo=○, in_progress=◔, review=◕, done=●
+      const statuses: StatusDef[] = [
+        { id: 'todo', label: 'To Do' },
+        { id: 'in_progress', label: 'In Progress' },
+        { id: 'review', label: 'Review' },
+        { id: 'done', label: 'Done', isCompletion: true },
+        { id: 'blocked', label: 'Blocked' },
+        { id: 'cancelled', label: 'Cancelled' },
+      ];
+      expect(getStatusIndicator('todo', statuses)).toBe('○');
+      expect(getStatusIndicator('in_progress', statuses)).toBe('◔');
+      expect(getStatusIndicator('review', statuses)).toBe('◕');
     });
   });
 });
