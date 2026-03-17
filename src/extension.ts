@@ -12,6 +12,7 @@ import { executeSaveAsTemplate } from "./commands/saveAsTemplate";
 import { executeSetCurrentSprint } from "./commands/setCurrentSprint";
 import { executeSortStories } from "./commands/sortStories";
 import { executeTextFilter } from "./commands/textFilter";
+import { executeBrowseStorydocs } from "./commands/browseStorydocs";
 import { applyAutoFilterSprint } from "./core/autoFilterSprint";
 import { AutoTimestamp } from "./core/autoTimestamp";
 import { ConfigService } from "./core/configService";
@@ -117,12 +118,16 @@ export async function activate(context: vscode.ExtensionContext) {
     refreshTitle();
     applyAutoFilterSprint(newConfig, sprintFilterService);
     await updateWelcomeContext(store.getEpics().length);
+    // Update storydocs-enabled context when config changes
+    await vscode.commands.executeCommand("setContext", "devstories:storydocsEnabled", isStorydocsEnabled(newConfig));
   });
 
   // Set initial title and filter context
   refreshTitle();
   await vscode.commands.executeCommand("setContext", "devstories:hasSprintFilter", sprintFilterService.currentSprint !== null);
   await vscode.commands.executeCommand("setContext", "devstories:hasTextFilter", textFilterService.filterText !== "");
+  // Set initial storydocs-enabled context (for context menu visibility)
+  await vscode.commands.executeCommand("setContext", "devstories:storydocsEnabled", isStorydocsEnabled(configService.config));
   // Set initial view mode context (default: backlog)
   await vscode.commands.executeCommand("setContext", "devstories:viewMode", storiesProvider.viewMode);
 
@@ -338,6 +343,14 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  // StoryDocs: Browse command (QuickPick of files/subfolders in node's storydocs folder)
+  const browseStorydocsCommand = vscode.commands.registerCommand(
+    "devstories.browseStorydocs",
+    wrapCommand("browseStorydocs", async (item) => {
+      await executeBrowseStorydocs(store, configService, item);
+    }),
+  );
+
   // StoryDocs: Reconcile command
   const reconcileStorydocsCommand = vscode.commands.registerCommand(
     "devstories.reconcileStorydocs",
@@ -387,6 +400,7 @@ export async function activate(context: vscode.ExtensionContext) {
     createStoryMenuCommand,
     switchToBreakdownCommand,
     switchToBacklogCommand,
+    browseStorydocsCommand,
     reconcileStorydocsCommand,
   );
 }
