@@ -3,8 +3,8 @@
  * These can be unit tested with Vitest
  */
 
-import { sortSprintsBySequence, isCompletedStatus, StatusDef, getSizePoints } from '../core/configServiceUtils';
-import { Story } from '../types/story';
+import { sortSprintsBySequence, isCompletedStatus, isExcludedStatus, StatusDef, getSizePoints } from "../core/configServiceUtils";
+import { Story } from "../types/story";
 
 export interface StatusBarStats {
   totalPoints: number;
@@ -25,21 +25,23 @@ export function getStatsFromStories(
   sprint: string | null,
   statuses: StatusDef[] = [],
   sizes: string[] = [],
-  storypoints: number[] = []
+  storypoints: number[] = [],
 ): StatusBarStats {
   let filtered = stories;
 
   if (sprint !== null) {
-    if (sprint === 'backlog') {
-      filtered = stories.filter(s => !s.sprint || s.sprint === '' || s.sprint === 'backlog');
+    if (sprint === "backlog") {
+      filtered = stories.filter((s) => !s.sprint || s.sprint === "" || s.sprint === "backlog");
     } else {
-      filtered = stories.filter(s => s.sprint === sprint);
+      filtered = stories.filter((s) => s.sprint === sprint);
     }
   }
 
+  filtered = filtered.filter((s) => !isExcludedStatus(s.status, statuses));
+
   const totalPoints = filtered.reduce((sum, s) => sum + getSizePoints(s.size, sizes, storypoints), 0);
   const donePoints = filtered
-    .filter(s => isCompletedStatus(s.status, statuses))
+    .filter((s) => isCompletedStatus(s.status, statuses))
     .reduce((sum, s) => sum + getSizePoints(s.size, sizes, storypoints), 0);
 
   return { totalPoints, donePoints };
@@ -53,13 +55,13 @@ export function getStatsFromStories(
  */
 export function buildProgressBar(done: number, total: number, barLength: number = 6): string {
   if (total === 0) {
-    return '█'.repeat(barLength);
+    return "█".repeat(barLength);
   }
 
   const filled = Math.round((done / total) * barLength);
   const empty = barLength - filled;
 
-  return '█'.repeat(filled) + '░'.repeat(empty);
+  return "█".repeat(filled) + "░".repeat(empty);
 }
 
 /**
@@ -71,9 +73,9 @@ export function buildProgressBar(done: number, total: number, barLength: number 
 export function getFormattedStatusBarText(done: number, total: number, sprint: string | null): string {
   let sprintLabel: string;
   if (sprint === null) {
-    sprintLabel = 'All Sprints';
-  } else if (sprint === 'backlog') {
-    sprintLabel = 'Backlog';
+    sprintLabel = "All Sprints";
+  } else if (sprint === "backlog") {
+    sprintLabel = "Backlog";
   } else {
     sprintLabel = sprint;
   }
@@ -96,20 +98,17 @@ export function getFormattedStatusBarText(done: number, total: number, sprint: s
 export function formatTooltipLines(done: number, total: number, sprint: string | null): string[] {
   const remaining = total - done;
 
-  const lines: string[] = [
-    '**DevStories: Sprint Progress**',
-    '',
-  ];
+  const lines: string[] = ["**DevStories: Sprint Progress**", ""];
 
   if (sprint === null) {
-    lines.push('📊 Showing: All Sprints');
-  } else if (sprint === 'backlog') {
-    lines.push('📊 Showing: Backlog');
+    lines.push("📊 Showing: All Sprints");
+  } else if (sprint === "backlog") {
+    lines.push("📊 Showing: Backlog");
   } else {
     lines.push(`📊 Showing: ${sprint}`);
   }
 
-  lines.push('');
+  lines.push("");
   lines.push(`✅ Done: ${done} pts`);
   lines.push(`📝 Remaining: ${remaining} pts`);
   lines.push(`📦 Total: ${total} pts`);
@@ -124,22 +123,18 @@ export function formatTooltipLines(done: number, total: number, sprint: string |
  * @param sprintSequence - Sprint sequence from config for ordering
  * @returns Sorted array of unique sprint names (excludes backlog/empty)
  */
-export function collectAvailableSprints(
-  stories: Story[],
-  currentSprint: string | undefined,
-  sprintSequence: string[] = []
-): string[] {
+export function collectAvailableSprints(stories: Story[], currentSprint: string | undefined, sprintSequence: string[] = []): string[] {
   const sprints = new Set<string>();
 
   // Add sprints from stories
   for (const story of stories) {
-    if (story.sprint && story.sprint !== '' && story.sprint !== 'backlog') {
+    if (story.sprint && story.sprint !== "" && story.sprint !== "backlog") {
       sprints.add(story.sprint);
     }
   }
 
   // Add current sprint from config if defined
-  if (currentSprint && currentSprint !== '' && currentSprint !== 'backlog') {
+  if (currentSprint && currentSprint !== "" && currentSprint !== "backlog") {
     sprints.add(currentSprint);
   }
 
