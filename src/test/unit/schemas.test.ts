@@ -275,4 +275,78 @@ describe('Frontmatter JSON Schemas', () => {
       expect(properties).not.toHaveProperty('sprint');
     });
   });
+
+  describe('task.schema.json', () => {
+    let taskSchema: object;
+
+    beforeAll(() => {
+      const schemasDir = path.join(__dirname, '../../../schemas');
+      taskSchema = JSON.parse(
+        fs.readFileSync(path.join(schemasDir, 'task.schema.json'), 'utf-8')
+      );
+    });
+
+    it('should validate a complete valid task', () => {
+      const validate = ajv.compile(taskSchema);
+      const validTask = {
+        id: 'TASK-001',
+        title: 'Implement login',
+        task_type: 'code',
+        story: 'DS-00001',
+        status: 'todo',
+        assigned_agent: 'copilot',
+        priority: 2,
+        dependencies: ['TASK-002'],
+        created: '2025-01-15',
+        updated: '2025-01-20',
+        completed_on: '2025-02-01',
+      };
+
+      const result = validate(validTask);
+      expect(result).toBe(true);
+    });
+
+    it('should validate task with minimal required fields', () => {
+      const validate = ajv.compile(taskSchema);
+      const minimalTask = {
+        id: 'TASK-001',
+        title: 'Minimal Task',
+        task_type: 'investigate',
+        story: 'DS-001',
+        status: 'todo',
+        created: '2025-01-15',
+      };
+
+      const result = validate(minimalTask);
+      expect(result).toBe(true);
+    });
+
+    it('should reject task missing required task_type field', () => {
+      const validate = ajv.compile(taskSchema);
+      const invalidTask = {
+        id: 'TASK-001',
+        title: 'Missing type',
+        story: 'DS-001',
+        status: 'todo',
+        created: '2025-01-15',
+      };
+
+      const result = validate(invalidTask);
+      expect(result).toBe(false);
+    });
+
+    it('should reject task missing required story field', () => {
+      const validate = ajv.compile(taskSchema);
+      const invalidTask = {
+        id: 'TASK-001',
+        title: 'Missing story',
+        task_type: 'code',
+        status: 'todo',
+        created: '2025-01-15',
+      };
+
+      const result = validate(invalidTask);
+      expect(result).toBe(false);
+    });
+  });
 });

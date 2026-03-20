@@ -156,6 +156,10 @@
       {
         "command": "devstories.browseStorydocs",
         "title": "DevStories: Browse StoryDocs"
+      },
+      {
+        "command": "devstories.createTask",
+        "title": "DevStories: Create Task"
       }
     ],
     "menus": {
@@ -265,6 +269,21 @@
         {
           "command": "devstories.browseStorydocs",
           "when": "view == devstories.views.explorer && viewItem == theme && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.createTask",
+          "when": "view == devstories.views.explorer && viewItem == story && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.changeStatus",
+          "when": "view == devstories.views.explorer && viewItem == task",
+          "group": "devstories@1"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == task && devstories:storydocsEnabled",
           "group": "devstories@3"
         }
       ],

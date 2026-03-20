@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DevStories Task Frontmatter",
+  "description": "Schema for task markdown frontmatter",
+  "type": "object",
+  "required": ["id", "title", "task_type", "story", "status", "created"],
+  "properties": {
+    "id": {
+      "$ref": "defs/common.schema.json#/$defs/taskId",
+      "description": "Unique task identifier (e.g., TASK-001)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Task title - brief description of the work"
+    },
+    "task_type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Task type (validated against config.json taskTypes)"
+    },
+    "story": {
+      "$ref": "defs/common.schema.json#/$defs/storyId",
+      "description": "Parent story ID this task belongs to"
+    },
+    "assigned_agent": {
+      "type": "string",
+      "description": "Agent assigned to this task"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Current workflow status (validated against config.json statuses)"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "$ref": "defs/common.schema.json#/$defs/taskId"
+      },
+      "description": "List of task IDs this task depends on"
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Sort priority - lower values appear first (default: 1)"
+    },
+    "created": {
+      "$ref": "defs/common.schema.json#/$defs/dateString",
+      "description": "Date task was created (YYYY-MM-DD)"
+    },
+    "updated": {
+      "$ref": "defs/common.schema.json#/$defs/dateString",
+      "description": "Date task was last modified (auto-updated on save)"
+    },
+    "completed_on": {
+      "$ref": "defs/common.schema.json#/$defs/dateString",
+      "description": "Date task reached completion status (auto-managed by extension)"
+    }
+  },
+  "additionalProperties": false
+}

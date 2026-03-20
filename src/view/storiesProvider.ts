@@ -9,6 +9,7 @@ import { BrokenFile } from "../types/brokenFile";
 import { Epic } from "../types/epic";
 import { InboxSpikeNode, InboxSpikeFile, INBOX_NODE_ID, SPIKES_NODE_ID, isInboxSpikeNode, isInboxSpikeFile } from "../types/inboxSpikeNode";
 import { Story, StoryType } from "../types/story";
+import { Task, isTask } from "../types/task";
 import { Theme } from "../types/theme";
 import { SprintNode, BACKLOG_SPRINT_ID, isSprintNode } from "../types/sprintNode";
 import {
@@ -16,6 +17,7 @@ import {
   sortStoriesForTreeView,
   sortEpicsBySprintOrder,
   sortThemesByEpicSprintOrder,
+  sortTasks,
   getStatusIndicator,
   isBacklogStory,
   ViewMode,
@@ -52,7 +54,7 @@ function makeNoEpicNode(): Epic {
 }
 
 /** Union of all node types that can appear in the tree view. */
-export type TreeElement = Theme | Epic | Story | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile;
+export type TreeElement = Theme | Epic | Story | Task | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile;
 
 function makeInboxNode(): InboxSpikeNode {
   return { _kind: "inboxSpikeNode", nodeId: INBOX_NODE_ID, label: "Inbox", folderName: "inbox" };
@@ -156,10 +158,10 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
           }
         }
 
-        // When text filter is active, hide sprint nodes with no matching stories
+        // When text filter is active, hide sprint nodes with no matching stories/tasks
         if (textFilter !== "") {
           const sprintStories = allStories.filter((s) => s.sprint === sprint);
-          if (!sprintStories.some((s) => this.matchesTextFilter(s))) {
+          if (!sprintStories.some((s) => this.storyOrTaskMatchesTextFilter(s))) {
             continue;
           }
         }
@@ -179,7 +181,7 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
         if (textFilter !== "") {
           const backlogStories = allStories.filter((s) => isBacklogStory(s, sprintSequence));
           const brokenStories = this.store.getBrokenStories();
-          showBacklog = backlogStories.some((s) => this.matchesTextFilter(s)) || brokenStories.some((b) => this.matchesTextFilter(b));
+          showBacklog = backlogStories.some((s) => this.storyOrTaskMatchesTextFilter(s)) || brokenStories.some((b) => this.matchesTextFilter(b));
         }
         if (showBacklog) {
           nodes.push({
@@ -235,9 +237,9 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
         filtered = allStories.filter((s) => s.sprint === element.sprintId);
       }
 
-      // Apply text filter if active
+      // Apply text filter if active (also keep stories with matching tasks)
       if (textFilter !== "") {
-        filtered = filtered.filter((s) => this.matchesTextFilter(s));
+        filtered = filtered.filter((s) => this.storyOrTaskMatchesTextFilter(s));
       }
 
       const sorted = sortState ? sortStoriesBy(filtered, sortState, sprintSequence) : sortStoriesForTreeView(filtered, sprintSequence);
@@ -254,7 +256,12 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       return Promise.resolve(sorted);
     }
 
-    // Story and BrokenFile nodes are leaves
+    // Story nodes: return tasks as children (if storydocs enabled and tasks exist)
+    if (this.isStory(element as Epic | Story)) {
+      return Promise.resolve(this.getTaskChildren(element as Story, textFilter));
+    }
+
+    // Task and BrokenFile nodes are leaves
     return Promise.resolve([]);
   }
 
@@ -294,8 +301,8 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
             if (sprintFilter !== null) {
               return stories.some((s) => this.matchesSprintFilter(s, sprintFilter));
             }
-            // Text filter: at least one child story matches
-            return stories.some((s) => this.matchesTextFilter(s));
+            // Text filter: at least one child story (or its tasks) matches
+            return stories.some((s) => this.storyOrTaskMatchesTextFilter(s));
           });
         });
       }
@@ -361,6 +368,11 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       return Promise.resolve([]);
     }
 
+    // Task nodes are leaves
+    if (isTask(element)) {
+      return Promise.resolve([]);
+    }
+
     if (this.isTheme(element)) {
       // Theme: return filtered epics for this theme
       const epics = element.id === NO_THEME_ID ? this.store.getEpicsWithoutTheme() : this.store.getEpicsByTheme(element.id);
@@ -419,9 +431,9 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       }
 
       // Apply text filter: if the epic itself matches, show all its stories;
-      // otherwise only show stories that individually match
+      // otherwise only show stories that individually match (including via task matches)
       if (textFilter !== "" && !this.matchesTextFilter(epic)) {
-        filtered = filtered.filter((s) => this.matchesTextFilter(s));
+        filtered = filtered.filter((s) => this.storyOrTaskMatchesTextFilter(s));
       }
 
       // Sort stories by configured sort state (or fallback to default sprint/priority sort)
@@ -429,6 +441,11 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       const sorted = sortState ? sortStoriesBy(filtered, sortState, sprintSequence) : sortStoriesForTreeView(filtered, sprintSequence);
 
       return Promise.resolve(sorted);
+    }
+
+    // Story nodes: return tasks as children (if storydocs enabled and tasks exist)
+    if (this.isStory(element as Epic | Story)) {
+      return Promise.resolve(this.getTaskChildren(element as Story, textFilter));
     }
 
     return Promise.resolve([]);
@@ -447,8 +464,8 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       if (sprintFilter !== null) {
         return stories.some((s) => this.matchesSprintFilter(s, sprintFilter));
       }
-      // Text filter only: at least one child story matches
-      return stories.some((s) => this.matchesTextFilter(s));
+      // Text filter only: at least one child story (or its tasks) matches
+      return stories.some((s) => this.storyOrTaskMatchesTextFilter(s));
     });
   }
 
@@ -461,7 +478,7 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       if (sprintFilter !== null && !this.matchesSprintFilter(s, sprintFilter)) {
         return false;
       }
-      if (textFilter !== "" && !this.matchesTextFilter(s)) {
+      if (textFilter !== "" && !this.storyOrTaskMatchesTextFilter(s)) {
         return false;
       }
       return true;
@@ -480,7 +497,7 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
    * Case-insensitive substring match against the display text of a tree element.
    * Returns true when no text filter is active (empty string).
    */
-  private matchesTextFilter(element: Story | Epic | Theme | BrokenFile | InboxSpikeFile): boolean {
+  private matchesTextFilter(element: Story | Epic | Theme | Task | BrokenFile | InboxSpikeFile): boolean {
     const filterText = this.textFilterService?.filterText ?? "";
     if (filterText === "") {
       return true;
@@ -495,16 +512,46 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       // InboxSpikeFile — match against fileName
       return element.fileName.toLowerCase().includes(query);
     }
-    // Story, Epic, or Theme — match against "id: title" (same as tree label)
+    // Story, Epic, Theme, or Task — match against "id: title" (same as tree label)
     const label = `${element.id}: ${element.title}`.toLowerCase();
     return label.includes(query);
   }
 
+  /**
+   * Get sorted, filtered task children for a story node.
+   * Returns empty array when storydocs is disabled or no tasks exist.
+   */
+  private getTaskChildren(story: Story, textFilter: string): Task[] {
+    let tasks = this.store.getTasksByStory(story.id);
+    if (tasks.length === 0) {
+      return [];
+    }
+    if (textFilter !== "") {
+      // If the story itself matches the filter, show all its tasks;
+      // otherwise only show tasks that individually match
+      if (!this.matchesTextFilter(story)) {
+        tasks = tasks.filter((t) => this.matchesTextFilter(t));
+      }
+    }
+    return sortTasks(tasks);
+  }
+
+  /**
+   * Returns true if the story itself matches the text filter, or any of its tasks do.
+   * Used for determining story/ancestor visibility in filtered views.
+   */
+  private storyOrTaskMatchesTextFilter(story: Story): boolean {
+    if (this.matchesTextFilter(story)) {
+      return true;
+    }
+    return this.store.getTasksByStory(story.id).some((t) => this.matchesTextFilter(t));
+  }
+
   private isTheme(element: Theme | Epic | Story): element is Theme {
-    // Theme has no 'type' (Story discriminant) and no 'theme' key (Epic always has
-    // theme: data.theme set by parser, even when undefined, making 'theme' in epic === true).
-    // Also exclude _kind-based nodes (SprintNode, InboxSpikeNode, InboxSpikeFile).
-    return !("type" in element) && !("theme" in element) && !("_kind" in element);
+    // Theme has no 'type' (Story discriminant), no 'theme' key (Epic always has
+    // theme: data.theme set by parser), no 'taskType' (Task discriminant),
+    // and no _kind-based nodes (SprintNode, InboxSpikeNode, InboxSpikeFile).
+    return !("type" in element) && !("theme" in element) && !("_kind" in element) && !("taskType" in element);
   }
 
   private isStory(element: Epic | Story): element is Story {
@@ -553,6 +600,9 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
     }
     if ("broken" in element) {
       return this.createBrokenFileTreeItem(element);
+    }
+    if (isTask(element)) {
+      return this.createTaskTreeItem(element);
     }
     if (this.isTheme(element)) {
       return this.createThemeTreeItem(element);
@@ -712,7 +762,9 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
   private createStoryTreeItem(element: Story): vscode.TreeItem {
     const label = `${element.id}: ${element.title}`;
-    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+    const tasks = this.store.getTasksByStory(element.id);
+    const collapsibleState = tasks.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
+    const item = new vscode.TreeItem(label, collapsibleState);
     item.contextValue = "story";
     item.id = element.id;
     item.iconPath = this.getStoryIcon(element.type);
@@ -727,6 +779,31 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
       item.command = {
         command: "vscode.open",
         title: "Open Story",
+        arguments: [vscode.Uri.file(element.filePath)],
+      };
+    }
+    return item;
+  }
+
+  private createTaskTreeItem(element: Task): vscode.TreeItem {
+    const label = `${element.id}: ${element.title}`;
+    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+    item.contextValue = "task";
+    item.id = element.id;
+    item.iconPath = new vscode.ThemeIcon("tasklist");
+    item.description = `${this.getStatusIndicator(element.status)} ${element.status}`;
+    const agentLabel = element.assignedAgent ? `Agent: ${element.assignedAgent}\n` : "";
+    item.tooltip = new vscode.MarkdownString(
+      `**${element.id}**: ${element.title}\n\n` +
+        `Type: ${element.taskType}\n` +
+        `Status: ${element.status}\n` +
+        agentLabel +
+        `Story: ${element.story}`,
+    );
+    if (element.filePath) {
+      item.command = {
+        command: "vscode.open",
+        title: "Open Task",
         arguments: [vscode.Uri.file(element.filePath)],
       };
     }

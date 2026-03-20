@@ -5,6 +5,7 @@
 
 import { Epic } from '../types/epic';
 import { Story } from '../types/story';
+import { Task } from '../types/task';
 import { Theme } from '../types/theme';
 import { BrokenFile } from '../types/brokenFile';
 import { getSprintIndex, StatusDef } from '../core/configServiceUtils';
@@ -356,4 +357,19 @@ export function getStatusIndicator(status: string, statuses: StatusDef[]): strin
   // No isCompletion flags — original position-based logic
   const progressIndex = Math.round((index / (statuses.length - 1)) * 4);
   return PROGRESS_CIRCLES[progressIndex];
+}
+
+/**
+ * Sort tasks by priority ASC (lower = higher priority), then by task ID ASC.
+ */
+export function sortTasks(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    if (a.priority !== b.priority) {
+      return a.priority - b.priority;
+    }
+    // Sort by trailing number in ID
+    const numA = parseInt(a.id.replace(/^.*-(\d+)$/, '$1'), 10) || 0;
+    const numB = parseInt(b.id.replace(/^.*-(\d+)$/, '$1'), 10) || 0;
+    return numA - numB;
+  });
 }

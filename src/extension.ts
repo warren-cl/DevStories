@@ -4,6 +4,7 @@ import { executeCreateEpic } from "./commands/createEpic";
 import { executeCreateTheme } from "./commands/createTheme";
 import { executeCreateStory } from "./commands/createStory";
 import { executeCreateStoryMenu } from "./commands/createStoryMenu";
+import { executeCreateTask } from "./commands/createTask";
 import { wrapCommand } from "./commands/errorHandler";
 import { executeInit } from "./commands/init";
 import { executePickSprint } from "./commands/pickSprint";
@@ -35,6 +36,7 @@ import { StoriesProvider } from "./view/storiesProvider";
 import { getTreeViewTitle } from "./view/storiesProviderUtils";
 import { StorydocsService } from "./core/storydocsService";
 import { isStorydocsEnabled } from "./core/storydocsUtils";
+import { TaskWatcher } from "./core/taskWatcher";
 
 export async function activate(context: vscode.ExtensionContext) {
   // Initialize logger first
@@ -57,7 +59,7 @@ export async function activate(context: vscode.ExtensionContext) {
     textFilterService,
   );
   const statusBarController = new StatusBarController(store, configService, sprintFilterService);
-  const autoTimestamp = new AutoTimestamp();
+  const autoTimestamp = new AutoTimestamp(configService);
   const storydocsService = new StorydocsService(store, configService);
 
   // Initialize config service (loads config and starts watching)
@@ -175,9 +177,26 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  // Create TaskWatcher for storydocs task files
+  let taskWatcher: TaskWatcher | undefined;
+  const config = configService.config;
+  if (config.storydocsEnabled && config.storydocsRoot) {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders) {
+      const absRoot = vscode.Uri.joinPath(workspaceFolders[0].uri, config.storydocsRoot).fsPath;
+      taskWatcher = new TaskWatcher(absRoot);
+      taskWatcher.onDidCreate(uri => store.reloadFile(uri));
+      taskWatcher.onDidChange(uri => store.reloadFile(uri));
+      taskWatcher.onDidDelete(uri => store.handleFileDeleted(uri));
+    }
+  }
+
   // Cleanup empty storydocs folders when nodes are deleted
   store.onWillDeleteNode((info) => {
-    void storydocsService.cleanupEmptyFolder(info.id, info.nodeType);
+    // Tasks don't have their own storydocs type folder; they live inside story folders
+    if (info.nodeType !== "task") {
+      void storydocsService.cleanupEmptyFolder(info.id, info.nodeType);
+    }
   });
 
   // Update welcome context based on folder and epic state
@@ -238,7 +257,8 @@ export async function activate(context: vscode.ExtensionContext) {
         const story = store.getStory(item.id);
         const epic = store.getEpic(item.id);
         const theme = store.getTheme(item.id);
-        const target = story || epic || theme;
+        const task = store.getTask(item.id);
+        const target = task || story || epic || theme;
         if (target) {
           await executeChangeStatus(store, target, configService);
         }
@@ -366,6 +386,14 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  // Create Task command (requires storydocs)
+  const createTaskCommand = vscode.commands.registerCommand(
+    "devstories.createTask",
+    wrapCommand("createTask", async (item) => {
+      await executeCreateTask(store, item?.id, storydocsService, configService);
+    }),
+  );
+
   context.subscriptions.push(
     watcher,
     configService,
@@ -402,7 +430,11 @@ export async function activate(context: vscode.ExtensionContext) {
     switchToBacklogCommand,
     browseStorydocsCommand,
     reconcileStorydocsCommand,
+    createTaskCommand,
   );
+  if (taskWatcher) {
+    context.subscriptions.push(taskWatcher);
+  }
 }
 
 export function deactivate() {

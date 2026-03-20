@@ -39,10 +39,15 @@
           "type": "string",
           "pattern": "^[A-Z]+$",
           "description": "Prefix for story IDs (e.g., DS, STORY)"
+        },
+        "task": {
+          "type": "string",
+          "pattern": "^[A-Z]+$",
+          "description": "Prefix for task IDs (e.g., TASK)"
         }
       },
       "additionalProperties": false,
-      "description": "ID prefixes for epics and stories"
+      "description": "ID prefixes for epics, stories, and tasks"
     },
     "statuses": {
       "type": "array",
@@ -154,6 +159,19 @@
       "required": ["enabled", "root"],
       "additionalProperties": false,
       "description": "StoryDocs: hierarchical document folders mirroring the breakdown tree view"
+    },
+    "taskTypes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "description": "Template filename (with .template.md suffix) for this task type"
+      },
+      "description": "Mapping of task type ID to template filename (e.g., { \"code\": \"code.template.md\" })"
+    },
+    "templateRoot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Root folder for templates (story and task), relative to the repository root. Defaults to .devstories/templates if not set."
     }
   },
   "additionalProperties": false

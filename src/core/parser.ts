@@ -1,6 +1,7 @@
 import matter from 'gray-matter';
 import { Epic, EpicStatus } from '../types/epic';
 import { Story, StorySize, StoryStatus, StoryType } from '../types/story';
+import { Task, TaskType, TaskStatus } from '../types/task';
 import { Theme, ThemeStatus } from '../types/theme';
 import { validateStoryTitle, validateEpicName, validateThemeName } from '../utils/inputValidation';
 
@@ -110,6 +111,35 @@ export class Parser {
       owner: data.owner,
       content: parsed.content,
       filePath: filePath
+    };
+  }
+
+  static parseTask(content: string, filePath?: string): Task {
+    const parsed = matter(content);
+    const data = parsed.data;
+
+    if (Object.keys(data).length === 0) {
+      throw new Error('Invalid frontmatter: No frontmatter found');
+    }
+
+    if (!data.id || !data.title || !data.task_type || !data.story || !data.status || !data.created) {
+      throw new Error('Missing required fields: id, title, task_type, story, status, created');
+    }
+
+    return {
+      id: data.id,
+      title: data.title,
+      taskType: data.task_type as TaskType,
+      story: data.story,
+      assignedAgent: data.assigned_agent,
+      status: data.status as TaskStatus,
+      dependencies: data.dependencies || [],
+      priority: data.priority ?? 1,
+      created: new Date(data.created),
+      updated: data.updated ? new Date(data.updated) : undefined,
+      completedOn: data.completed_on ? new Date(data.completed_on) : undefined,
+      content: parsed.content,
+      filePath: filePath,
     };
   }
 }

@@ -55,6 +55,12 @@ export interface ConfigData {
   storydocsEnabled?: boolean;
   /** Root folder for storydocs, relative to workspace root */
   storydocsRoot?: string;
+  /** Prefix for task IDs (default: TASK) */
+  taskPrefix: string;
+  /** Mapping of task type ID to template filename (e.g., { code: 'code.template.md' }) */
+  taskTypes: Record<string, string>;
+  /** Root folder for templates (story and task), relative to workspace root. Falls back to .devstories/templates */
+  templateRoot?: string;
 }
 
 /**
@@ -66,10 +72,21 @@ export interface ConfigData {
  */
 export const CURRENT_CONFIG_SCHEMA_VERSION = 2;
 
+export const DEFAULT_TASK_TYPES: Record<string, string> = {
+  code: 'code.template.md',
+  document: 'document.template.md',
+  remediate: 'remediate.template.md',
+  investigate: 'investigate.template.md',
+  plan: 'plan.template.md',
+  validate: 'validate.template.md',
+};
+
 export const DEFAULT_CONFIG: ConfigData = {
   epicPrefix: 'EPIC',
   storyPrefix: 'STORY',
   themePrefix: 'THEME',
+  taskPrefix: 'TASK',
+  taskTypes: DEFAULT_TASK_TYPES,
   sprintSequence: [],
   statuses: [
     { id: 'todo', label: 'To Do' },
@@ -198,6 +215,17 @@ export function parseConfigJsonContent(content: string): Partial<ConfigData> {
       result.storydocsRoot = parsed.storydocs.root.trim();
     }
 
+    // Task config
+    if (parsed.idPrefix?.task) {
+      result.taskPrefix = parsed.idPrefix.task;
+    }
+    if (typeof parsed.taskTypes === 'object' && parsed.taskTypes !== null && !Array.isArray(parsed.taskTypes)) {
+      result.taskTypes = parsed.taskTypes as Record<string, string>;
+    }
+    if (typeof parsed.templateRoot === 'string' && parsed.templateRoot.trim()) {
+      result.templateRoot = parsed.templateRoot.trim();
+    }
+
     return result;
   } catch {
     // Invalid JSON config - return empty to use defaults
@@ -240,6 +268,9 @@ export function mergeConfigWithDefaults(parsed: Partial<ConfigData>): ConfigData
     firstSprintStartDate: parsed.firstSprintStartDate,
     storydocsEnabled: parsed.storydocsEnabled,
     storydocsRoot: parsed.storydocsRoot,
+    taskPrefix: parsed.taskPrefix ?? DEFAULT_CONFIG.taskPrefix,
+    taskTypes: parsed.taskTypes ?? DEFAULT_CONFIG.taskTypes,
+    templateRoot: parsed.templateRoot,
   };
 }
 
@@ -417,6 +448,21 @@ export function computeConfigUpgrade(raw: Record<string, unknown>): ConfigUpgrad
   if (upgraded.storydocs === undefined) {
     upgraded.storydocs = { enabled: false, root: 'docs/storydocs' };
     fieldsAdded.push('storydocs');
+  }
+
+  // idPrefix.task
+  if (typeof upgraded.idPrefix === 'object' && upgraded.idPrefix !== null) {
+    const idPrefix = upgraded.idPrefix as Record<string, unknown>;
+    if (idPrefix.task === undefined) {
+      idPrefix.task = 'TASK';
+      fieldsAdded.push('idPrefix.task');
+    }
+  }
+
+  // taskTypes (default mapping)
+  if (upgraded.taskTypes === undefined) {
+    upgraded.taskTypes = { ...DEFAULT_TASK_TYPES };
+    fieldsAdded.push('taskTypes');
   }
 
   // Always bump version
