@@ -13,25 +13,36 @@ import { ConfigService } from "../core/configService";
 import { getLogger } from "../core/logger";
 import { isStorydocsEnabled, computeNodeFolderPath, type NodeType } from "../core/storydocsUtils";
 import { buildQuickPickItems, type StorydocEntry } from "./browseStorydocsUtils";
+import { isTask } from "../types/task";
 
 /**
  * Determine node type for an item clicked in the tree view.
- * Returns the ID and NodeType, or undefined if the item isn't a story/epic/theme.
+ * Returns the ID and NodeType, or undefined if the item isn't a recognized node.
+ * For tasks, resolves to the parent story so Browse StoryDocs opens the story folder.
  */
-function resolveNode(store: Store, item: { id: string }): { id: string; nodeType: NodeType } | undefined {
-  if (store.getStory(item.id)) {
-    return { id: item.id, nodeType: "story" };
+function resolveNode(store: Store, item: Record<string, unknown>): { id: string; nodeType: NodeType } | undefined {
+  // Tasks resolve to their parent story's storydocs folder
+  if (isTask(item)) {
+    return { id: item.story, nodeType: "story" };
   }
-  if (store.getEpic(item.id)) {
-    return { id: item.id, nodeType: "epic" };
+  const id = item.id as string;
+  if (store.getStory(id)) {
+    return { id, nodeType: "story" };
   }
-  if (store.getTheme(item.id)) {
-    return { id: item.id, nodeType: "theme" };
+  if (store.getEpic(id)) {
+    return { id, nodeType: "epic" };
+  }
+  if (store.getTheme(id)) {
+    return { id, nodeType: "theme" };
   }
   return undefined;
 }
 
-export async function executeBrowseStorydocs(store: Store, configService: ConfigService, item: { id: string } | undefined): Promise<void> {
+export async function executeBrowseStorydocs(
+  store: Store,
+  configService: ConfigService,
+  item: Record<string, unknown> | undefined,
+): Promise<void> {
   if (!item) {
     return;
   }

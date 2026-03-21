@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { localToday } from "../../utils/dateUtils";
 import { updateTaskStatus } from "../../commands/changeStatusUtils";
 
 const STATUSES = [
@@ -36,7 +37,7 @@ describe("updateTaskStatus", () => {
   });
 
   it("updates the updated field to today", () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     const result = updateTaskStatus(makeTaskContent(), "in_progress");
     expect(result).toMatch(new RegExp(`updated: ['"]?${today}['"]?`));
   });

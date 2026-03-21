@@ -702,6 +702,7 @@ Some content`;
         sizes: ["XXS", "XS", "S", "M", "L", "XL", "XXL"],
         storydocs: { enabled: false, root: "docs/storydocs" },
         taskTypes: { code: "code.template.md" },
+        templateRoot: ".devstories/templates",
       };
       const result = computeConfigUpgrade(raw);
       expect(result).not.toBeNull();
@@ -748,6 +749,55 @@ Some content`;
       const result = computeConfigUpgrade(raw);
       expect(result!.upgraded.storydocs).toEqual({ enabled: true, root: "my-docs" });
       expect(result!.fieldsAdded).not.toContain("storydocs");
+    });
+
+    it("adds idPrefix.task when idPrefix exists but task missing", () => {
+      const raw = { version: 1, idPrefix: { epic: "EPIC", story: "DS", theme: "TH" } };
+      const result = computeConfigUpgrade(raw);
+      expect((result!.upgraded.idPrefix as Record<string, unknown>).task).toBe("TASK");
+      expect(result!.fieldsAdded).toContain("idPrefix.task");
+    });
+
+    it("does not overwrite existing idPrefix.task", () => {
+      const raw = { version: 1, idPrefix: { epic: "EP", story: "ST", theme: "TH", task: "TSK" } };
+      const result = computeConfigUpgrade(raw);
+      expect((result!.upgraded.idPrefix as Record<string, unknown>).task).toBe("TSK");
+      expect(result!.fieldsAdded).not.toContain("idPrefix.task");
+    });
+
+    it("does not add idPrefix.task when idPrefix is absent", () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.fieldsAdded).not.toContain("idPrefix.task");
+    });
+
+    it("adds taskTypes when missing", () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.taskTypes).toBeDefined();
+      expect(Object.keys(result!.upgraded.taskTypes as Record<string, string>)).toContain("code");
+      expect(result!.fieldsAdded).toContain("taskTypes");
+    });
+
+    it("does not overwrite existing taskTypes", () => {
+      const raw = { version: 1, taskTypes: { custom: "custom.template.md" } };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.taskTypes).toEqual({ custom: "custom.template.md" });
+      expect(result!.fieldsAdded).not.toContain("taskTypes");
+    });
+
+    it("adds templateRoot when missing", () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.templateRoot).toBe(".devstories/templates");
+      expect(result!.fieldsAdded).toContain("templateRoot");
+    });
+
+    it("does not overwrite existing templateRoot", () => {
+      const raw = { version: 1, templateRoot: "docs/my-templates" };
+      const result = computeConfigUpgrade(raw);
+      expect(result!.upgraded.templateRoot).toBe("docs/my-templates");
+      expect(result!.fieldsAdded).not.toContain("templateRoot");
     });
   });
 });

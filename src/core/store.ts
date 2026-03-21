@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import matter from "gray-matter";
 import { BrokenFile } from "../types/brokenFile";
 import { Epic } from "../types/epic";
 import { InboxSpikeFile, InboxSpikeFolderType } from "../types/inboxSpikeNode";
@@ -38,7 +39,7 @@ export class Store {
     this.watcher.onDidDelete((uri) => this.handleFileDeleted(uri));
   }
 
-  async load() {
+  async load(storydocsRoot?: string) {
     const storyFiles = await vscode.workspace.findFiles("**/.devstories/stories/*.md");
     const epicFiles = await vscode.workspace.findFiles("**/.devstories/epics/*.md");
     const themeFiles = await vscode.workspace.findFiles("**/.devstories/themes/*.md");
@@ -51,6 +52,7 @@ export class Store {
     this.brokenFiles.clear();
     this.inboxFiles.clear();
     this.spikeFiles.clear();
+    this.tasks.clear();
 
     await Promise.all(storyFiles.map((uri) => this.parseAndAddStory(uri)));
     await Promise.all(epicFiles.map((uri) => this.parseAndAddEpic(uri)));
@@ -60,6 +62,13 @@ export class Store {
     }
     for (const uri of spikeFiles) {
       this.addInboxSpikeFile(uri, "spikes");
+    }
+
+    // Load task files from storydocs directories when root is known
+    if (storydocsRoot) {
+      const pattern = new vscode.RelativePattern(storydocsRoot, "stories/*/tasks/*.md");
+      const taskFiles = await vscode.workspace.findFiles(pattern);
+      await Promise.all(taskFiles.map((uri) => this.parseAndAddTask(uri)));
     }
 
     // Notify listeners that data has been loaded
@@ -135,8 +144,8 @@ export class Store {
     return Array.from(this.spikeFiles.values());
   }
 
-  getTask(id: string): Task | undefined {
-    return this.tasks.get(id);
+  getTask(compositeId: string): Task | undefined {
+    return this.tasks.get(compositeId);
   }
 
   getTasks(): Task[] {
@@ -178,7 +187,11 @@ export class Store {
    * without relying solely on the FileSystemWatcher (which can be delayed on Windows).
    */
   async reloadFile(uri: vscode.Uri): Promise<void> {
-    if (uri.path.includes("/stories/")) {
+    // Check /tasks/ before /stories/ — task paths contain both segments
+    // (e.g. storydocs/stories/STORY-001/tasks/TASK-001.md)
+    if (uri.path.includes("/tasks/")) {
+      await this.parseAndAddTask(uri);
+    } else if (uri.path.includes("/stories/")) {
       await this.parseAndAddStory(uri);
     } else if (uri.path.includes("/epics/")) {
       await this.parseAndAddEpic(uri);
@@ -188,8 +201,6 @@ export class Store {
       this.addInboxSpikeFile(uri, "inbox");
     } else if (uri.path.includes("/spikes/")) {
       this.addInboxSpikeFile(uri, "spikes");
-    } else if (uri.path.includes("/tasks/")) {
-      await this.parseAndAddTask(uri);
     }
     this._onDidUpdate.fire();
   }
@@ -319,26 +330,22 @@ export class Store {
   private async parseAndAddTask(uri: vscode.Uri) {
     try {
       const content = await this.readFile(uri);
-      const task = Parser.parseTask(content, uri.fsPath);
-      this.tasks.set(task.id, task);
+      const { task, changed, normalizedData, markdownBody } = Parser.parseTask(content, uri.fsPath);
+      this.tasks.set(`${task.story}::${task.id}`, task);
+
+      // Auto-heal: write canonical frontmatter back if normalization changed anything
+      if (changed) {
+        const newContent = matter.stringify(markdownBody, normalizedData);
+        // Loop guard: only write if content actually changed on disk
+        if (newContent !== content) {
+          const encoder = new TextEncoder();
+          void vscode.workspace.fs.writeFile(uri, encoder.encode(newContent));
+          getLogger().info(`Auto-healed task frontmatter: ${uri.fsPath}`);
+        }
+      }
     } catch (e) {
       getLogger().error(`Failed to parse task ${uri.fsPath}:`, e);
     }
-  }
-
-  /**
-   * Load task files from storydocs directories.
-   * Called after initial load when storydocs root is known.
-   */
-  async loadTasks(storydocsRoot: string): Promise<void> {
-    const pattern = new vscode.RelativePattern(
-      storydocsRoot,
-      'stories/*/tasks/*.md'
-    );
-    const taskFiles = await vscode.workspace.findFiles(pattern);
-    this.tasks.clear();
-    await Promise.all(taskFiles.map((uri) => this.parseAndAddTask(uri)));
-    this._onDidUpdate.fire();
   }
 
   private async readFile(uri: vscode.Uri): Promise<string> {

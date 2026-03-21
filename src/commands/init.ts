@@ -140,6 +140,7 @@ export async function executeInit(options: InitOptions = {}): Promise<boolean> {
     epicPrefix: "EPIC",
     storyPrefix,
     themePrefix: "THEME",
+    taskPrefix: "TASK",
     sprint,
   };
 

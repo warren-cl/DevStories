@@ -181,7 +181,8 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
         if (textFilter !== "") {
           const backlogStories = allStories.filter((s) => isBacklogStory(s, sprintSequence));
           const brokenStories = this.store.getBrokenStories();
-          showBacklog = backlogStories.some((s) => this.storyOrTaskMatchesTextFilter(s)) || brokenStories.some((b) => this.matchesTextFilter(b));
+          showBacklog =
+            backlogStories.some((s) => this.storyOrTaskMatchesTextFilter(s)) || brokenStories.some((b) => this.matchesTextFilter(b));
         }
         if (showBacklog) {
           nodes.push({
@@ -789,8 +790,8 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
     const label = `${element.id}: ${element.title}`;
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
     item.contextValue = "task";
-    item.id = element.id;
-    item.iconPath = new vscode.ThemeIcon("tasklist");
+    item.id = `${element.story}::${element.id}`;
+    item.iconPath = this.getIconPath("task");
     item.description = `${this.getStatusIndicator(element.status)} ${element.status}`;
     const agentLabel = element.assignedAgent ? `Agent: ${element.assignedAgent}\n` : "";
     item.tooltip = new vscode.MarkdownString(

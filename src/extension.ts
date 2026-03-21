@@ -37,6 +37,7 @@ import { getTreeViewTitle } from "./view/storiesProviderUtils";
 import { StorydocsService } from "./core/storydocsService";
 import { isStorydocsEnabled } from "./core/storydocsUtils";
 import { TaskWatcher } from "./core/taskWatcher";
+import { isTask } from "./types/task";
 
 export async function activate(context: vscode.ExtensionContext) {
   // Initialize logger first
@@ -161,8 +162,37 @@ export async function activate(context: vscode.ExtensionContext) {
   const diagnosticsProvider = new FrontmatterDiagnosticsProvider(configService, store, context.extensionPath);
   const diagnosticsDisposables = diagnosticsProvider.register();
 
-  // Load initial data and wait for completion
-  await store.load();
+  // Helper: compute absolute storydocs root from config
+  function getAbsStorydocsRoot(cfg: typeof configService.config): string | undefined {
+    if (!isStorydocsEnabled(cfg)) {
+      return undefined;
+    }
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders) {
+      return undefined;
+    }
+    return vscode.Uri.joinPath(folders[0].uri, cfg.storydocsRoot!).fsPath;
+  }
+
+  // Helper: create (or recreate) TaskWatcher, wiring events to store
+  let taskWatcher: TaskWatcher | undefined;
+  function ensureTaskWatcher(absRoot: string | undefined): void {
+    taskWatcher?.dispose();
+    taskWatcher = undefined;
+    if (absRoot) {
+      taskWatcher = new TaskWatcher(absRoot);
+      taskWatcher.onDidCreate((uri) => store.reloadFile(uri));
+      taskWatcher.onDidChange((uri) => store.reloadFile(uri));
+      taskWatcher.onDidDelete((uri) => store.handleFileDeleted(uri));
+    }
+  }
+
+  // Load initial data (including tasks when storydocs is enabled)
+  const absRoot = getAbsStorydocsRoot(configService.config);
+  await store.load(absRoot);
+
+  // Create initial TaskWatcher for storydocs task files
+  ensureTaskWatcher(absRoot);
 
   // Reconcile storydocs folders after store is populated
   if (isStorydocsEnabled(configService.config)) {
@@ -171,25 +201,15 @@ export async function activate(context: vscode.ExtensionContext) {
   }
 
   // Re-reconcile when storydocs config changes (e.g. feature enabled mid-session)
-  configService.onDidConfigChange((newConfig) => {
+  configService.onDidConfigChange(async (newConfig) => {
+    const newRoot = getAbsStorydocsRoot(newConfig);
+    ensureTaskWatcher(newRoot);
     if (isStorydocsEnabled(newConfig)) {
       void storydocsService.reconcileAll();
     }
+    // Reload store so task data reflects the new config
+    await store.load(newRoot);
   });
-
-  // Create TaskWatcher for storydocs task files
-  let taskWatcher: TaskWatcher | undefined;
-  const config = configService.config;
-  if (config.storydocsEnabled && config.storydocsRoot) {
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (workspaceFolders) {
-      const absRoot = vscode.Uri.joinPath(workspaceFolders[0].uri, config.storydocsRoot).fsPath;
-      taskWatcher = new TaskWatcher(absRoot);
-      taskWatcher.onDidCreate(uri => store.reloadFile(uri));
-      taskWatcher.onDidChange(uri => store.reloadFile(uri));
-      taskWatcher.onDidDelete(uri => store.handleFileDeleted(uri));
-    }
-  }
 
   // Cleanup empty storydocs folders when nodes are deleted
   store.onWillDeleteNode((info) => {
@@ -211,8 +231,8 @@ export async function activate(context: vscode.ExtensionContext) {
     wrapCommand("init", async () => {
       const success = await executeInit();
       if (success) {
-        // Reload store to pick up new files
-        await store.load();
+        // Reload store to pick up new files (including tasks if storydocs enabled)
+        await store.load(getAbsStorydocsRoot(configService.config));
         // Update welcome context (folder now exists)
         await updateWelcomeContext(store.getEpics().length);
       }
@@ -253,11 +273,13 @@ export async function activate(context: vscode.ExtensionContext) {
     "devstories.changeStatus",
     wrapCommand("changeStatus", async (item) => {
       if (item) {
-        // Called from context menu with tree item
+        // Called from context menu with tree item.
+        // VS Code passes the data element from getChildren(), not the TreeItem.
+        // For tasks, item.id is the bare ID; construct composite key for store lookup.
+        const task = isTask(item) ? store.getTask(`${item.story}::${item.id}`) : undefined;
         const story = store.getStory(item.id);
         const epic = store.getEpic(item.id);
         const theme = store.getTheme(item.id);
-        const task = store.getTask(item.id);
         const target = task || story || epic || theme;
         if (target) {
           await executeChangeStatus(store, target, configService);
@@ -432,9 +454,8 @@ export async function activate(context: vscode.ExtensionContext) {
     reconcileStorydocsCommand,
     createTaskCommand,
   );
-  if (taskWatcher) {
-    context.subscriptions.push(taskWatcher);
-  }
+  // TaskWatcher is managed by ensureTaskWatcher(); register a disposal wrapper
+  context.subscriptions.push({ dispose: () => taskWatcher?.dispose() });
 }
 
 export function deactivate() {

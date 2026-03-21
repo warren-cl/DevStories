@@ -4,6 +4,7 @@ import { Story, StorySize, StoryStatus, StoryType } from '../types/story';
 import { Task, TaskType, TaskStatus } from '../types/task';
 import { Theme, ThemeStatus } from '../types/theme';
 import { validateStoryTitle, validateEpicName, validateThemeName } from '../utils/inputValidation';
+import { normalizeTaskFrontmatter, NormalizationResult } from './taskParserUtils';
 
 export class Parser {
   static parseStory(content: string, filePath?: string): Story {
@@ -114,7 +115,7 @@ export class Parser {
     };
   }
 
-  static parseTask(content: string, filePath?: string): Task {
+  static parseTask(content: string, filePath?: string): { task: Task; changed: boolean; normalizedData: Record<string, unknown>; markdownBody: string } {
     const parsed = matter(content);
     const data = parsed.data;
 
@@ -122,24 +123,29 @@ export class Parser {
       throw new Error('Invalid frontmatter: No frontmatter found');
     }
 
-    if (!data.id || !data.title || !data.task_type || !data.story || !data.status || !data.created) {
-      throw new Error('Missing required fields: id, title, task_type, story, status, created');
-    }
+    // Normalize: map aliases, derive from path/filename, fill defaults
+    const { normalized, changed }: NormalizationResult =
+      normalizeTaskFrontmatter(data as Record<string, unknown>, filePath ?? '');
 
     return {
-      id: data.id,
-      title: data.title,
-      taskType: data.task_type as TaskType,
-      story: data.story,
-      assignedAgent: data.assigned_agent,
-      status: data.status as TaskStatus,
-      dependencies: data.dependencies || [],
-      priority: data.priority ?? 1,
-      created: new Date(data.created),
-      updated: data.updated ? new Date(data.updated) : undefined,
-      completedOn: data.completed_on ? new Date(data.completed_on) : undefined,
-      content: parsed.content,
-      filePath: filePath,
+      task: {
+        id: normalized.id as string,
+        title: normalized.title as string,
+        taskType: normalized.task_type as TaskType,
+        story: normalized.story as string,
+        assignedAgent: normalized.assigned_agent as string | undefined,
+        status: normalized.status as TaskStatus,
+        dependencies: (normalized.dependencies as string[]) || [],
+        priority: (normalized.priority as number) ?? 1,
+        created: new Date(normalized.created as string),
+        updated: normalized.updated ? new Date(normalized.updated as string) : undefined,
+        completedOn: normalized.completed_on ? new Date(normalized.completed_on as string) : undefined,
+        content: parsed.content,
+        filePath: filePath,
+      },
+      changed,
+      normalizedData: normalized,
+      markdownBody: parsed.content,
     };
   }
 }

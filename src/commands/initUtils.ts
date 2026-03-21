@@ -10,6 +10,7 @@ export interface InitConfig {
   epicPrefix: string;
   storyPrefix: string;
   themePrefix: string;
+  taskPrefix: string;
   sprint: string;
 }
 
@@ -18,13 +19,14 @@ export interface InitConfig {
  */
 export function generateConfigJson(config: InitConfig): string {
   const configObj = {
-    version: 2,
+    version: 3,
     project: config.projectName,
     idMode: "auto",
     idPrefix: {
       theme: config.themePrefix,
       epic: config.epicPrefix,
       story: config.storyPrefix,
+      task: config.taskPrefix,
     },
     statuses: [
       { id: "todo", label: "To Do" },
@@ -46,6 +48,15 @@ export function generateConfigJson(config: InitConfig): string {
       enabled: false,
       root: "docs/storydocs",
     },
+    taskTypes: {
+      code: "code.template.md",
+      document: "document.template.md",
+      remediate: "remediate.template.md",
+      investigate: "investigate.template.md",
+      plan: "plan.template.md",
+      validate: "validate.template.md",
+    },
+    templateRoot: ".devstories/templates",
   };
   return JSON.stringify(configObj, null, 2);
 }
