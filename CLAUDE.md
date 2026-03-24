@@ -73,6 +73,7 @@ DevStories/
 │   │   ├── storiesProviderUtils.ts# Sorting, status indicators, ViewMode type
 │   │   ├── storiesDragAndDropController.ts  # Drag-and-drop: reassign + reorder + inbox conversion
 │   │   ├── backlogDropHandler.ts  # Backlog-specific drop logic with priority bumping
+│   │   ├── taskDropHandler.ts     # Task priority reordering within a story (both views)
 │   │   ├── inboxDropHandler.ts    # Inbox/spike → story/epic conversion on drop
 │   │   ├── inboxConversionUtils.ts# Pure: stripDatePrefix, titleFromKebabCase, fill frontmatter
 │   │   ├── burndownViewProvider.ts# Sprint burndown WebviewView (SVG chart)
@@ -286,6 +287,7 @@ Key sections (see `schemas/devstories.schema.json` for full schema):
 
 - **Breakdown view**: Reassign stories between epics, epics between themes
 - **Backlog view**: Reorder stories by priority within/across sprints (uses `backlogDropHandler.ts`)
+- **Task reordering** (both views): Reorder tasks within a story by priority (uses `taskDropHandler.ts`). Task → parent story makes it highest priority; task → sibling task inserts below. Drops on tasks from different stories or non-task/non-parent targets are silently refused. Uses the same `cascadeBumpIfNeeded()` / `computeSprintNodeDropPriority()` algorithms as stories. Sort-guard dialog shown if not sorted by priority ascending.
 - **Inbox/spike conversion**: Drag `.md` files from inbox/spikes onto tree nodes to convert into stories/epics (`inboxDropHandler.ts`) — also calls `storydocsService.ensureFolder()` for converted nodes
 - Move functions: `moveStoryToEpic()`, `moveStoryToNoEpic()`, `moveEpicToTheme()` — update frontmatter via gray-matter, write to disk (no storydocs folder moves needed with flat layout)
 
@@ -475,6 +477,7 @@ Extension activates when:
 18. **gray-matter date round-tripping** — gray-matter converts YAML date strings (`2026-03-23`) to JS `Date` objects on parse. `matter.stringify()` then outputs full ISO timestamps (`2026-03-23T00:00:00.000Z`). Call `normalizeDatesInData(parsed.data)` from `dateUtils.ts` after every `matter(content)` parse to convert `Date` objects back to `YYYY-MM-DD` strings before writing.
 19. **Post-completion icon IDs are exact** — The `POST_COMPLETION_ICONS` map uses exact status IDs: `blocked`, `deferred`, `superseded`, `cancelled`. Using different IDs (e.g., `on_hold` instead of `deferred`) will fall back to `○`.
 20. **Command titles use category, not prefix** — Commands use `"category": "DevStories"` in package.json, not `"title": "DevStories: ..."`. VS Code shows category in Command Palette but omits it from context menus, keeping menus clean.
+21. **Task drag-and-drop is view-mode agnostic** — Task reprioritization logic in `handleDrop()` is placed before the Breakdown/Backlog view-mode branch because it behaves identically in both views. Only the `priority` field is modified (tasks have no sprint field). The drag payload uses the composite key (`story::taskId`) as the item ID.
 
 ## File Structure on Disk
 

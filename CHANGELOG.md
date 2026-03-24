@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Right-Click Context Menus**: Create Story on Epic, Create Epic on Theme / No Theme, Open Theme, Change Status on Theme
 - **Sort Stories**: Sort tree view by priority, date, or ID via title bar button; successive clicks flip direction
 - **Set Current Sprint**: Update the active sprint directly from the tree view title bar
-- **Drag-and-Drop**: Reassign stories between epics, epics between themes (Breakdown view); reorder stories by sprint and priority (Backlog view)
+- **Drag-and-Drop**: Reassign stories between epics, epics between themes (Breakdown view); reorder stories by sprint and priority (Backlog view); reorder tasks within a story by priority (both views). Tasks can be dropped on a sibling task (inserts below) or on their parent story (becomes highest priority). Same cascade-bump algorithm and sort-guard dialog as stories.
 - **Orphan Collection**: Orphaned epics (no theme) and stories (no/invalid epic) collected under virtual sentinel nodes; broken files surfaced in tree
 - **Sprint Burndown Chart**: Inline SVG burndown in the sidebar below the tree view — ideal vs actual lines, auto-refreshes on store/config/filter changes
 - **Kebab-Case Filenames**: Stories and epics now created with title slugs (e.g. `DS-00001-login-form.md`)

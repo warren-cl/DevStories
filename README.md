@@ -71,6 +71,8 @@ more. Click to open the file.
 
 Reorder stories and reassign them between epics or sprints by dragging and dropping in the tree view. Priority is automatically updated.
 
+Tasks can also be reordered within their parent story — drag a task onto a sibling to place it just below, or onto the parent story node to make it the highest priority task. Works in both Breakdown and Backlog views.
+
 ### 📥 Inbox & Spikes
 
 Capture ideas and exploratory work without committing to a fully-formed story:

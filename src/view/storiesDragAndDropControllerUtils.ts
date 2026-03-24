@@ -89,6 +89,21 @@ export function updateStoryPriorityOnly(content: string, newPriority: number): s
   return matter.stringify(parsed.content, parsed.data);
 }
 
+/**
+ * Update only the `priority` field in a task's YAML frontmatter.
+ * Used when reordering tasks within a story via drag-and-drop.
+ * Also bumps `updated` to today.
+ */
+export function updateTaskPriorityOnly(content: string, newPriority: number): string {
+  const parsed = matter(content);
+  const today = localToday();
+
+  parsed.data.priority = newPriority;
+  parsed.data.updated = today;
+
+  return matter.stringify(parsed.content, parsed.data);
+}
+
 // ─── Priority cascade helpers ───────────────────────────────────────────────
 
 /** Lightweight representation of a story for cascade computation. */

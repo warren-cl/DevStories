@@ -6,6 +6,7 @@ import {
   clearStoryEpic,
   updateStorySprintAndPriority,
   updateStoryPriorityOnly,
+  updateTaskPriorityOnly,
 } from "../../view/storiesDragAndDropControllerUtils";
 import { BrokenFile } from "../../types/brokenFile";
 import { Epic } from "../../types/epic";
@@ -336,5 +337,54 @@ Story content.
   it("should handle large priority values", () => {
     const result = updateStoryPriorityOnly(STORY_CONTENT, 10000);
     expect(result).toContain("priority: 10000");
+  });
+});
+
+// ─── updateTaskPriorityOnly ───────────────────────────────────────────────────
+
+const TASK_CONTENT = `---
+id: TASK-001
+title: "Implement validation"
+task_type: code
+story: DS-001
+status: todo
+priority: 5
+created: 2025-02-01
+updated: 2025-02-01
+---
+
+## Description
+
+Task content here.
+`;
+
+describe("updateTaskPriorityOnly", () => {
+  it("should update priority field", () => {
+    const result = updateTaskPriorityOnly(TASK_CONTENT, 42);
+    expect(result).toContain("priority: 42");
+  });
+
+  it("should bump the updated date", () => {
+    const today = localToday();
+    const result = updateTaskPriorityOnly(TASK_CONTENT, 1);
+    expect(result).toMatch(new RegExp(`updated: '?${today}'?`));
+  });
+
+  it("should preserve task-specific fields", () => {
+    const result = updateTaskPriorityOnly(TASK_CONTENT, 10);
+    expect(result).toContain("task_type: code");
+    expect(result).toContain("story: DS-001");
+    expect(result).toContain("status: todo");
+  });
+
+  it("should preserve markdown content below frontmatter", () => {
+    const result = updateTaskPriorityOnly(TASK_CONTENT, 10);
+    expect(result).toContain("## Description");
+    expect(result).toContain("Task content here.");
+  });
+
+  it("should handle priority of 1", () => {
+    const result = updateTaskPriorityOnly(TASK_CONTENT, 1);
+    expect(result).toContain("priority: 1");
   });
 });

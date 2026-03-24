@@ -1,11 +1,12 @@
 {
-  "version": 2,
+  "version": 3,
   "project": "DevStories",
   "idMode": "manual",
   "idPrefix": {
     "epic": "EPIC",
     "story": "DS",
-    "theme": "THEME"
+    "theme": "THEME",
+    "task": "TASK"
   },
   "statuses": [
     {
@@ -73,5 +74,14 @@
   "storydocs": {
     "enabled": false,
     "root": "docs/storydocs"
-  }
+  },
+  "taskTypes": {
+    "code": "code.template.md",
+    "document": "document.template.md",
+    "remediate": "remediate.template.md",
+    "investigate": "investigate.template.md",
+    "plan": "plan.template.md",
+    "validate": "validate.template.md"
+  },
+  "templateRoot": ".devstories/templates"
 }

@@ -14,6 +14,10 @@
  *   InboxSpikeFile → SprintNode — converts to story in that sprint
  *   InboxSpikeFile → Story      — converts to story at target priority
  *
+ * Supported moves (both views):
+ *   Task → Parent Story  — task becomes highest priority under that story
+ *   Task → Sibling Task  — task inserted below target, bumps siblings with >= priority
+ *
  * All other drag/drop combinations are silently refused.
  */
 
@@ -31,6 +35,7 @@ import { InboxSpikeNode, InboxSpikeFile, isInboxSpikeNode, isInboxSpikeFile } fr
 import { ViewMode } from './storiesProviderUtils';
 import { updateStoryEpic, updateEpicTheme, clearStoryEpic } from './storiesDragAndDropControllerUtils';
 import { handleBacklogDrop } from './backlogDropHandler';
+import { handleTaskDropOnStory, handleTaskDropOnTask } from './taskDropHandler';
 import { handleInboxDropOnBacklog, handleInboxDropOnBreakdown, BreakdownTarget } from './inboxDropHandler';
 import { getLogger } from '../core/logger';
 import { StorydocsService } from '../core/storydocsService';
@@ -77,6 +82,25 @@ function getNodeType(node: Theme | Epic | Story | Task | BrokenFile | SprintNode
   return 'theme';
 }
 
+// ─── Task sort guard ────────────────────────────────────────────────────────
+
+function isSortedByPriorityAsc(sortService: SortService): boolean {
+  return sortService.state.key === 'priority' && sortService.state.direction === 'asc';
+}
+
+async function showTaskSortGuardDialog(sortService: SortService): Promise<void> {
+  const switchBtn = 'Switch to Priority Sort';
+  const choice = await vscode.window.showWarningMessage(
+    'Drag-and-drop reordering only works when stories are sorted by priority (ascending). ' +
+      'Would you like to switch to priority sort?',
+    { modal: true },
+    switchBtn,
+  );
+  if (choice === switchBtn) {
+    sortService.setState({ key: 'priority', direction: 'asc' });
+  }
+}
+
 export class StoriesDragAndDropController
   implements vscode.TreeDragAndDropController<Theme | Epic | Story | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile> {
 
@@ -98,15 +122,14 @@ export class StoriesDragAndDropController
     dataTransfer: vscode.DataTransfer,
     _token: vscode.CancellationToken
   ): void {
-    // Silently exclude broken files, sprint nodes, inbox/spike container sentinels, and tasks — they cannot be moved.
-    // Allow InboxSpikeFile nodes to be dragged.
+    // Silently exclude broken files, sprint nodes, and inbox/spike container sentinels — they cannot be moved.
+    // Allow InboxSpikeFile nodes and tasks to be dragged.
     const draggable = source.filter(n => {
       if ('broken' in n) { return false; }
       if (isSprintNode(n)) { return false; }
       if (isInboxSpikeNode(n)) { return false; }
-      if (isTask(n)) { return false; }
       return true;
-    }) as (Theme | Epic | Story | InboxSpikeFile)[];
+    }) as (Theme | Epic | Story | Task | InboxSpikeFile)[];
     if (draggable.length === 0) {
       return;
     }
@@ -114,6 +137,10 @@ export class StoriesDragAndDropController
       // InboxSpikeFile uses filePath as id (they don't have story IDs yet)
       if (isInboxSpikeFile(n)) {
         return { id: n.filePath, nodeType: 'inboxSpikeFile' as NodeType };
+      }
+      // Tasks use composite key (story::taskId) to match store key scheme
+      if (isTask(n)) {
+        return { id: `${n.story}::${n.id}`, nodeType: 'task' as NodeType };
       }
       return { id: n.id, nodeType: getNodeType(n) };
     });
@@ -132,8 +159,8 @@ export class StoriesDragAndDropController
       return;
     }
 
-    // Refuse drops onto broken file nodes, task nodes, inbox/spike containers, and inbox/spike files
-    if ('broken' in target || isTask(target) || isInboxSpikeNode(target) || isInboxSpikeFile(target)) {
+    // Refuse drops onto broken file nodes, inbox/spike containers, and inbox/spike files
+    if ('broken' in target || isInboxSpikeNode(target) || isInboxSpikeFile(target)) {
       return;
     }
 
@@ -159,6 +186,49 @@ export class StoriesDragAndDropController
     }
 
     const [dragged] = items;
+
+    // ── Task reordering (view-mode agnostic) ────────────────────────────────
+    if (dragged.nodeType === 'task') {
+      if (this.sortService && !isSortedByPriorityAsc(this.sortService)) {
+        await showTaskSortGuardDialog(this.sortService);
+        return;
+      }
+
+      const draggedTask = this.store.getTask(dragged.id);
+      if (!draggedTask) {
+        return;
+      }
+
+      // Task → Parent Story: become highest priority
+      if ('type' in target && !isTask(target)) {
+        const targetStory = target as Story;
+        if (targetStory.id !== draggedTask.story) {
+          return;
+        }
+        await handleTaskDropOnStory({
+          draggedTask,
+          parentStory: targetStory,
+          store: this.store,
+        });
+        return;
+      }
+
+      // Task → Sibling Task: insert below target
+      if (isTask(target)) {
+        if (target.story !== draggedTask.story) {
+          return;
+        }
+        await handleTaskDropOnTask({
+          draggedTask,
+          targetTask: target,
+          store: this.store,
+        });
+        return;
+      }
+
+      // All other targets: silently refuse
+      return;
+    }
 
     // ── Backlog view: priority-based reordering ─────────────────────────────
     if (this.getViewMode() === 'backlog') {

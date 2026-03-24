@@ -2,7 +2,7 @@
   "name": "devstories",
   "displayName": "DevStories",
   "description": "Stories as markdown files, version-controlled with your code. AI-readable. Git-tracked.",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "publisher": "DhavalSavalia",
   "author": {
     "name": "Dhaval Savalia",
