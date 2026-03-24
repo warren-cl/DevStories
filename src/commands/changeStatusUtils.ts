@@ -110,6 +110,31 @@ export function updateEpicStatus(content: string, newStatus: string): string {
 }
 
 /**
+ * Update the status field in a task's frontmatter.
+ * Manages completed_on field like stories:
+ *   - Sets completed_on when transitioning to a completion status
+ *   - Removes completed_on when transitioning away from a completion status
+ * Returns the updated markdown content
+ */
+export function updateTaskStatus(content: string, newStatus: string, statuses?: StatusDef[]): string {
+  const parsed = matter(content);
+  const today = localToday();
+
+  parsed.data.status = newStatus;
+  parsed.data.updated = today;
+
+  if (statuses) {
+    if (isCompletedStatus(newStatus, statuses)) {
+      parsed.data.completed_on = today;
+    } else {
+      delete parsed.data.completed_on;
+    }
+  }
+
+  return matter.stringify(parsed.content, parsed.data);
+}
+
+/**
  * DS-083: Update the priority field in a story's frontmatter
  * Returns the updated markdown content
  */

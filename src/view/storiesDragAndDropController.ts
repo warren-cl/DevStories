@@ -24,6 +24,7 @@ import { ConfigService } from '../core/configService';
 import { BrokenFile } from '../types/brokenFile';
 import { Epic } from '../types/epic';
 import { Story } from '../types/story';
+import { Task, isTask } from '../types/task';
 import { Theme } from '../types/theme';
 import { SprintNode, isSprintNode } from '../types/sprintNode';
 import { InboxSpikeNode, InboxSpikeFile, isInboxSpikeNode, isInboxSpikeFile } from '../types/inboxSpikeNode';
@@ -43,7 +44,7 @@ const NO_THEME_ID = '__NO_THEME__';
 /** Sentinel id for the virtual "No Epic" node nested under "No Theme" (mirrors storiesProvider.ts). */
 const NO_EPIC_ID = '__NO_EPIC__';
 
-type NodeType = 'story' | 'epic' | 'theme' | 'broken' | 'sprintNode' | 'inboxSpikeFile' | 'inboxSpikeNode';
+type NodeType = 'story' | 'epic' | 'theme' | 'task' | 'broken' | 'sprintNode' | 'inboxSpikeFile' | 'inboxSpikeNode';
 
 interface DragPayloadItem {
   id: string;
@@ -51,7 +52,7 @@ interface DragPayloadItem {
 }
 
 /** Discriminate among all tree node types based on structural shape. */
-function getNodeType(node: Theme | Epic | Story | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile): NodeType {
+function getNodeType(node: Theme | Epic | Story | Task | BrokenFile | SprintNode | InboxSpikeNode | InboxSpikeFile): NodeType {
   if (isInboxSpikeFile(node)) {
     return 'inboxSpikeFile';
   }
@@ -63,6 +64,9 @@ function getNodeType(node: Theme | Epic | Story | BrokenFile | SprintNode | Inbo
   }
   if ('broken' in node) {
     return 'broken';
+  }
+  if (isTask(node)) {
+    return 'task';
   }
   if ('type' in node) {
     return 'story';
@@ -94,12 +98,13 @@ export class StoriesDragAndDropController
     dataTransfer: vscode.DataTransfer,
     _token: vscode.CancellationToken
   ): void {
-    // Silently exclude broken files, sprint nodes, and inbox/spike container sentinels — they cannot be moved.
+    // Silently exclude broken files, sprint nodes, inbox/spike container sentinels, and tasks — they cannot be moved.
     // Allow InboxSpikeFile nodes to be dragged.
     const draggable = source.filter(n => {
       if ('broken' in n) { return false; }
       if (isSprintNode(n)) { return false; }
       if (isInboxSpikeNode(n)) { return false; }
+      if (isTask(n)) { return false; }
       return true;
     }) as (Theme | Epic | Story | InboxSpikeFile)[];
     if (draggable.length === 0) {
@@ -127,8 +132,8 @@ export class StoriesDragAndDropController
       return;
     }
 
-    // Refuse drops onto broken file nodes, inbox/spike containers, and inbox/spike files
-    if ('broken' in target || isInboxSpikeNode(target) || isInboxSpikeFile(target)) {
+    // Refuse drops onto broken file nodes, task nodes, inbox/spike containers, and inbox/spike files
+    if ('broken' in target || isTask(target) || isInboxSpikeNode(target) || isInboxSpikeFile(target)) {
       return;
     }
 

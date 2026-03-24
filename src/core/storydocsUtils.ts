@@ -54,3 +54,11 @@ export function computeStoryFolderPath(root: string, storyId: string): string {
 export function computeNodeFolderPath(root: string, nodeId: string, nodeType: NodeType): string {
   return path.join(root, TYPE_FOLDERS[nodeType], nodeId);
 }
+
+/**
+ * Compute the tasks subfolder path for a story's storydocs folder.
+ * Layout: {root}/stories/{storyId}/tasks/
+ */
+export function computeTaskFolderPath(root: string, storyId: string): string {
+  return path.join(root, TYPE_FOLDERS.story, storyId, "tasks");
+}

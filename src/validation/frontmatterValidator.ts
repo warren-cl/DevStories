@@ -25,7 +25,7 @@ export interface ValidationError {
 /**
  * File type for schema selection
  */
-export type FileType = 'story' | 'epic' | 'theme';
+export type FileType = 'story' | 'epic' | 'theme' | 'task';
 
 /**
  * Config values for dynamic validation
@@ -42,6 +42,7 @@ export interface KnownIds {
   stories: Set<string>;                         // All story IDs
   epics: Set<string>;                           // All epic IDs
   themes: Set<string>;                          // All theme IDs
+  tasks: Set<string>;                           // All task IDs
   epicStoryMap: Map<string, Set<string>>;       // Epic ID → story IDs listed in that epic's ## Stories section
   themeEpicMap: Map<string, Set<string>>;       // Theme ID → epic IDs listed in that theme's ## Epics section
 }
@@ -51,6 +52,7 @@ let ajvInstance: Ajv | null = null;
 let storyValidate: ReturnType<Ajv['compile']> | null = null;
 let epicValidate: ReturnType<Ajv['compile']> | null = null;
 let themeValidate: ReturnType<Ajv['compile']> | null = null;
+let taskValidate: ReturnType<Ajv['compile']> | null = null;
 
 /**
  * Get or create Ajv instance with schemas loaded
@@ -86,6 +88,15 @@ function getAjv(schemasDir: string): Ajv {
     fs.readFileSync(path.join(schemasDir, 'theme.schema.json'), 'utf-8')
   );
   themeValidate = ajvInstance.compile(themeSchema);
+
+  // Load and compile task schema
+  const taskSchemaPath = path.join(schemasDir, 'task.schema.json');
+  if (fs.existsSync(taskSchemaPath)) {
+    const taskSchema = JSON.parse(
+      fs.readFileSync(taskSchemaPath, 'utf-8')
+    );
+    taskValidate = ajvInstance.compile(taskSchema);
+  }
 
   return ajvInstance;
 }
@@ -242,7 +253,16 @@ export function validateFrontmatter(
 
   // Initialize Ajv and get validator
   getAjv(schemasDir);
-  const validate = fileType === 'story' ? storyValidate : (fileType === 'theme' ? themeValidate : epicValidate);
+  let validate: ReturnType<Ajv['compile']> | null;
+  if (fileType === 'task') {
+    validate = taskValidate;
+  } else if (fileType === 'story') {
+    validate = storyValidate;
+  } else if (fileType === 'theme') {
+    validate = themeValidate;
+  } else {
+    validate = epicValidate;
+  }
 
   if (!validate) {
     return [{
@@ -308,6 +328,10 @@ export function validateFrontmatter(
  * Determine file type from path
  */
 export function getFileTypeFromPath(filePath: string): FileType | null {
+  // Check for task files first (tasks live under stories/{ID}/tasks/)
+  if (filePath.includes('/tasks/') || filePath.includes('\\tasks\\')) {
+    return 'task';
+  }
   if (filePath.includes('/stories/') || filePath.includes('\\stories\\')) {
     return 'story';
   }
@@ -335,6 +359,7 @@ export function resetAjvCache(): void {
   storyValidate = null;
   epicValidate = null;
   themeValidate = null;
+  taskValidate = null;
 }
 
 /**
@@ -611,6 +636,25 @@ export function validateCrossFile(
           field: 'theme'
         });
       }
+    }
+  }
+
+  // 7. Validate task's story field references a known story
+  if (fileType === 'task' && data.story) {
+    const storyId = String(data.story);
+    if (!knownIds.stories.has(storyId)) {
+      const line = findFieldLine(content, 'story');
+      const lineContent = content.split('\n')[line - 1] || '';
+      const { start, end } = findValueColumn(lineContent, 'story');
+
+      errors.push({
+        line,
+        column: start,
+        endColumn: end,
+        message: `Story '${storyId}' does not exist`,
+        severity: 'error',
+        field: 'story'
+      });
     }
   }
 

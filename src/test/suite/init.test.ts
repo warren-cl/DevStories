@@ -27,6 +27,7 @@ suite('Init Command Integration Test', () => {
 			epicPrefix: 'EPIC',
 			storyPrefix: 'DS',
 			themePrefix: 'THEME',
+			taskPrefix: 'TASK',
 			sprint: 'sprint-1',
 		};
 

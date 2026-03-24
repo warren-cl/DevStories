@@ -23,9 +23,11 @@ DevStories/
 ├── src/
 │   ├── extension.ts              # Entry point — registers all commands, providers, views
 │   ├── core/
-│   │   ├── parser.ts             # Frontmatter parsing (gray-matter) for stories, epics, themes
-│   │   ├── store.ts              # In-memory cache (stories, epics, themes, brokenFiles, inbox, spikes)
+│   │   ├── parser.ts             # Frontmatter parsing (gray-matter) for stories, epics, themes, tasks
+│   │   ├── store.ts              # In-memory cache (stories, epics, themes, tasks, brokenFiles, inbox, spikes)
 │   │   ├── watcher.ts            # FileSystemWatcher for .devstories/ changes
+│   │   ├── taskWatcher.ts        # FileSystemWatcher for storydocs tasks (stories/*/tasks/*.md)
+│   │   ├── taskParserUtils.ts    # Pure: normalizeTaskFrontmatter(), field aliases, auto-healing
 │   │   ├── configService.ts      # Reads/watches config.json, exposes ConfigData + events
 │   │   ├── configServiceUtils.ts # Pure: parseConfig, mergeDefaults, getSizePoints, isCompletedStatus
 │   │   ├── configServiceNotifications.ts # User-facing config error notifications
@@ -52,6 +54,8 @@ DevStories/
 │   │   ├── textFilter.ts         # Text search InputBox (clears sprint filter on activation)
 │   │   ├── saveAsTemplate.ts     # Save story as reusable template
 │   │   ├── createStoryMenu.ts    # Multi-option story creation menu
+│   │   ├── createTask.ts         # Create task under a story (requires storydocs)
+│   │   ├── createTaskUtils.ts    # Pure: buildTaskFrontmatter, nextTaskId
 │   │   ├── errorHandler.ts       # wrapCommand() error boundary
 │   │   └── *Utils.ts             # Pure-function companions (testable without VS Code API)
 │   ├── providers/
@@ -80,25 +84,28 @@ DevStories/
 │   │   ├── story.ts              # Story interface + StoryType, StorySize, StoryStatus
 │   │   ├── epic.ts               # Epic interface (with theme + priority fields)
 │   │   ├── theme.ts              # Theme interface (top-level grouping)
+│   │   ├── task.ts               # Task interface + TaskType, isTask() type guard
 │   │   ├── brokenFile.ts         # BrokenFile interface (parse failures shown in tree)
 │   │   ├── sprintNode.ts         # SprintNode virtual tree node for Backlog view
 │   │   └── inboxSpikeNode.ts     # InboxSpikeNode/File interfaces, sentinel IDs, type guards
 │   ├── utils/
 │   │   ├── linkResolver.ts       # Resolve [[ID]] to file path (story/epic/theme)
 │   │   ├── inputValidation.ts    # Title/name validation for stories, epics, themes
-│   │   └── filenameUtils.ts      # toKebabCase() for filename slugs
+│   │   ├── filenameUtils.ts      # toKebabCase() for filename slugs
+│   │   └── dateUtils.ts          # formatDate(), localToday(), normalizeDatesInData()
 │   └── test/
 │       ├── suite/                # @vscode/test-electron integration tests
-│       └── unit/                 # Vitest unit tests (37 files, ~864 tests)
+│       └── unit/                 # Vitest unit tests (~45 files, ~1041 tests)
 ├── schemas/                      # JSON Schema definitions
 │   ├── devstories.schema.json    # config.json schema
 │   ├── story.schema.json         # Story frontmatter schema
 │   ├── epic.schema.json          # Epic frontmatter schema
 │   ├── theme.schema.json         # Theme frontmatter schema
+│   ├── task.schema.json          # Task frontmatter schema
 │   └── defs/common.schema.json   # Shared definitions (ID patterns, enums)
 ├── webview/                      # Tutorial/webview assets
 ├── docs/PRD/                     # Product requirements
-└── package.json                  # 23 commands, views, menus, keybindings
+└── package.json                  # 24+ commands, views, menus, keybindings
 ```
 
 ## Data Flow Patterns
@@ -106,12 +113,17 @@ DevStories/
 ### Store-Centric Architecture
 
 - **Store** (`src/core/store.ts`) is the single source of truth in memory
-- Maintains Maps: `stories`, `epics`, `themes`, `brokenFiles` + arrays for `inboxFiles`, `spikeFiles`
+- Maintains Maps: `stories`, `epics`, `themes`, `tasks`, `brokenFiles` + arrays for `inboxFiles`, `spikeFiles`
+- **Task composite keys**: Tasks are stored as `"${storyId}::${taskId}"` (e.g. `STORY-001::TASK-001`) because task IDs are only unique within a story
 - All UI components (tree view, burndown, status bar) read from Store
 - Store emits two events:
   - `onDidUpdate` — fires after any data change (UI consumers refresh here)
-  - `onWillDeleteNode` — fires **before** removing a node, with `{ id, nodeType }` (used by StorydocsService for folder cleanup)
-- File changes flow in via Watcher; `store.reloadFile(uri)` allows immediate refresh after programmatic writes (avoids Windows FileSystemWatcher race)
+  - `onWillDeleteNode` — fires **before** removing a node, with `{ id, nodeType }` (used by StorydocsService for folder cleanup; nodeType can be `"task"`)
+- File changes flow in via two watchers:
+  - **Watcher** (`watcher.ts`) — `.devstories/` changes (stories, epics, themes)
+  - **TaskWatcher** (`taskWatcher.ts`) — `{storydocsRoot}/stories/*/tasks/*.md` changes
+- `store.reloadFile(uri)` allows immediate refresh after programmatic writes (avoids Windows FileSystemWatcher race)
+- **CRITICAL**: `reloadFile()` checks `/tasks/` **before** `/stories/` in its if/else-if chain because task paths contain both segments (e.g., `storydocs/stories/STORY-001/tasks/TASK-001.md`)
 
 ### File → Store → UI Flow
 
@@ -126,6 +138,19 @@ Store.stories.set(id, story) (Map update)
 Store.onDidUpdate event fires
   ↓
 StoriesProvider.refresh() + BurndownViewProvider.refresh() + StatusBar.update()
+```
+
+### Task File → Store → UI Flow
+
+```
+{storydocsRoot}/stories/STORY-001/tasks/TASK-001-my-task.md (filesystem)
+  ↓ (TaskWatcher detects change, debounced 100ms)
+Parser.parseTask() → normalizeTaskFrontmatter() (alias mapping, path-derived defaults)
+  ↓
+Store.tasks.set("STORY-001::TASK-001", task) (composite key)
+  — if normalization changed data → auto-heal: write canonical frontmatter back to disk
+  ↓
+Store.onDidUpdate → StoriesProvider shows task as child of STORY-001
 ```
 
 ### UI → File Flow
@@ -199,29 +224,57 @@ completed_on: 2025-02-01 # Auto-set when status reaches isCompletion, cleared ot
 - `id`, `title`, `status`, `priority`, `created`, `updated`
 - Top-level grouping above epics; epics reference themes via `theme:` field
 
+### Task File Structure
+
+```markdown
+---
+id: TASK-001
+title: Implement login validation
+task_type: code  # Must match a key in config.taskTypes
+story: STORY-001 # Auto-derived from folder path (authoritative)
+status: todo
+assigned_agent: code-agent  # Optional — populated from .github/agents/*.md
+priority: 1      # Lower = higher priority (default: 1)
+dependencies:
+  - TASK-002
+created: 2026-03-23
+updated: 2026-03-23
+completed_on:    # Auto-managed like stories
+---
+
+## Description
+...
+```
+
+Task files live at `{storydocsRoot}/stories/{STORY-ID}/tasks/{TASK-ID}-slug.md`. Task IDs are 3-digit zero-padded: `TASK-001`.
+
 ### Filename Convention
 
-Files include a kebab-case slug: `DS-00001-login-form.md`, `EPIC-0001-user-auth.md`, `THEME-001-platform.md`
+Files include a kebab-case slug: `DS-00001-login-form.md`, `EPIC-0001-user-auth.md`, `THEME-001-platform.md`, `TASK-001-implement-validation.md`
 
 ### Config File (`.devstories/config.json`)
 
 Key sections (see `schemas/devstories.schema.json` for full schema):
 
-- `idPrefix`: `{ theme, epic, story }` — ID prefixes
+- `idPrefix`: `{ theme, epic, story, task }` — ID prefixes (task defaults to `"TASK"`)
 - `statuses[]`: `{ id, label, isCompletion?, isExcluded? }` — workflow definition
 - `sizes[]` / `storypoints[]` — parallel arrays (index-aligned)
 - `sprints`: `{ current, sequence[], length, firstSprintStartDate }`
 - `quickCapture`: `{ defaultToCurrentSprint }`
 - `autoFilterCurrentSprint` — auto-apply sprint filter on load
-- `storydocs`: `{ enabled, root }` — StoryDocs flat folder layout (see below)
+- `storydocs`: `{ enabled, root }` — StoryDocs flat folder layout (required for tasks)
+- `taskTypes`: `{ code: "code.template.md", ... }` — maps task type ID → template filename
+- `templateRoot` — root folder for templates (defaults to `.devstories/templates`)
+- Config schema version: `3` (auto-upgrades from v2, adding `taskTypes` and `idPrefix.task`)
 
 ## Key Features & How They Work
 
-### Hierarchy: Theme → Epic → Story
+### Hierarchy: Theme → Epic → Story → Task
 
-- Themes group epics; epics group stories. Both relationships are optional.
+- Themes group epics; epics group stories; stories contain tasks. All relationships are optional.
 - Orphans collected under virtual sentinel nodes (`__NO_THEME__`, `__NO_EPIC__`).
-- `epic` field on stories, `theme` field on epics.
+- `epic` field on stories, `theme` field on epics, `story` field on tasks.
+- Tasks appear as leaf children under their parent story in both Breakdown and Backlog views.
 
 ### Dual View Modes
 
@@ -273,10 +326,31 @@ Key sections (see `schemas/devstories.schema.json` for full schema):
 - `frontmatterDiagnostics.ts`: Reports errors in VS Code Problems panel
 - `frontmatterCompletionProvider.ts`: Autocomplete for all frontmatter fields + `[[ID]]` references
 
+### Progress Indicators (`storiesProviderUtils.ts`)
+
+- 6-stage progress circles: `["○", "◎", "◔", "◐", "◕", "●"]`
+- Formula: `PROGRESS_CIRCLES[Math.round((statusIndex / firstCompletionIndex) * 5)]`
+- Completion statuses (any with `isCompletion: true`) → `●`
+- Post-completion icons by exact status ID: `blocked → ⊘`, `deferred → ⏸`, `superseded → ⊖`, `cancelled → ⊗`
+- Unknown post-completion statuses fall back to `○`
+- If no `isCompletion` flag exists, falls back to position-based mapping over the full array
+
 ### Status Bar
 
 - Shows story-point progress for filtered sprint
 - Calculations in `statusBarUtils.ts`, uses `isCompletion` flag from statuses
+
+### Tasks
+
+- **Require StoryDocs enabled** — tasks live at `{storydocsRoot}/stories/{STORY-ID}/tasks/`
+- **Composite key pattern** — Store uses `"${storyId}::${taskId}"` because task IDs are only unique per story
+- **TaskWatcher** watches `stories/*/tasks/*.md` in the storydocs root. Recreated when `storydocsRoot` changes in config.
+- **Auto-healing** — `normalizeTaskFrontmatter()` in `taskParserUtils.ts` resolves field aliases, derives `story`/`id` from path/filename, applies defaults. If normalization changes anything, the canonical frontmatter is written back to disk.
+- **Field aliases**: `task_id→id`, `story_id/parent_story→story`, `agent/assignee→assigned_agent`, `type→task_type` (only if value looks like a task type, not a story type like "feature")
+- **Path is authoritative**: `story` is always derived from the folder path, never from the frontmatter field
+- **Tree view**: Tasks shown as children of stories. `contextValue = "task"`. Sorted by priority ASC, then task ID numeric suffix ASC.
+- **Create Task wizard**: story selection → title → task type. Command: `devstories.createTask`
+- **changeStatus for tasks**: In `extension.ts`, uses `isTask(item) ? store.getTask(\`${item.story}::${item.id}\`) : undefined` to construct the composite key from the VS Code tree item data
 
 ## Adding a New Feature — Checklist
 
@@ -290,7 +364,7 @@ Key sections (see `schemas/devstories.schema.json` for full schema):
    - Create commands accept optional service params (last parameter, optional)
    - Drag-and-drop controller accepts services via constructor
    - Store events (`onDidUpdate`, `onWillDeleteNode`) for reactive behavior
-8. **Register command** in `package.json` under `contributes.commands` (and menus if needed)
+8. **Register command** in `package.json` under `contributes.commands` (and menus if needed); use `"category": "DevStories"` instead of prefixing the title
 9. **Write tests** — unit tests in `src/test/unit/`, integration in `src/test/suite/`
 10. **Update docs** — CHANGELOG.md (unreleased section), README.md, this file
 
@@ -315,7 +389,7 @@ The `StoriesDragAndDropController` constructor accepts optional services. Move f
 
 ### Commands
 
-- `npm test` — Vitest unit tests (~864 tests, 37 files)
+- `npm test` — Vitest unit tests (~1041 tests, ~45 files)
 - `npm run test:integration` — @vscode/test-electron (compiles first, runs in extension host)
 - `npx tsc --noEmit` — Type check
 - `npm run lint` — ESLint 9 (flat config)
@@ -357,9 +431,9 @@ Extension activates when:
 - User runs init command
 - Workspace contains story files
 
-### Registered Commands (23)
+### Registered Commands (24+)
 
-`init`, `createStory`, `createEpic`, `createTheme`, `createStoryMenu`, `quickCapture`, `changeStatus`, `pickSprint`, `setCurrentSprint`, `sortStories`, `switchToBreakdown`, `switchToBacklog`, `clearSprintFilter`, `openEpic`, `openTheme`, `saveAsTemplate`, `textFilter`, `clearTextFilter`, `reconcileStorydocs`
+`init`, `createStory`, `createEpic`, `createTheme`, `createTask`, `createStoryMenu`, `quickCapture`, `changeStatus`, `pickSprint`, `setCurrentSprint`, `sortStories`, `switchToBreakdown`, `switchToBacklog`, `clearSprintFilter`, `openEpic`, `openTheme`, `saveAsTemplate`, `textFilter`, `clearTextFilter`, `reconcileStorydocs`, `browseStorydocs`
 
 ### Context Keys
 
@@ -394,23 +468,37 @@ Extension activates when:
 11. **StoryDocs fire-and-forget** — StorydocsService calls must never block or fail the primary operation (create/delete). Always use `void service?.ensureFolder(...)` or `void service?.cleanupEmptyFolder(...)`. No moveFolder exists — the flat layout eliminates folder moves.
 12. **Text filter clears sprint filter** — Activating `textFilter` programmatically clears `sprintFilterService` to search across all sprints
 13. **Inbox conversion preserves existing frontmatter** — When converting inbox/spike files, existing fields are kept; only ID, sprint, epic/theme, and priority are overwritten from drop context
+14. **Task composite keys** — Store uses `"${storyId}::${taskId}"` as the Map key. When looking up tasks from tree items, you must construct this composite key from `item.story` and `item.id` (the tree item's `.id` property is already composite, but command handlers receive the raw data element, not the TreeItem).
+15. **reloadFile() routing order** — `/tasks/` must be checked **before** `/stories/` because task paths contain both segments. If reordered, task changes silently route to `parseAndAddStory()` and fail.
+16. **Task path is authoritative** — `normalizeTaskFrontmatter()` always derives the `story` field from the folder path, never from what the user wrote in frontmatter. Same for `id` (derived from filename).
+17. **Task auto-healing writes** — If normalization changes frontmatter, the store writes the canonical version back to disk. This creates a re-entrant file change event; the store has a loop guard to prevent infinite cycles.
+18. **gray-matter date round-tripping** — gray-matter converts YAML date strings (`2026-03-23`) to JS `Date` objects on parse. `matter.stringify()` then outputs full ISO timestamps (`2026-03-23T00:00:00.000Z`). Call `normalizeDatesInData(parsed.data)` from `dateUtils.ts` after every `matter(content)` parse to convert `Date` objects back to `YYYY-MM-DD` strings before writing.
+19. **Post-completion icon IDs are exact** — The `POST_COMPLETION_ICONS` map uses exact status IDs: `blocked`, `deferred`, `superseded`, `cancelled`. Using different IDs (e.g., `on_hold` instead of `deferred`) will fall back to `○`.
+20. **Command titles use category, not prefix** — Commands use `"category": "DevStories"` in package.json, not `"title": "DevStories: ..."`. VS Code shows category in Command Palette but omits it from context menus, keeping menus clean.
 
 ## File Structure on Disk
 
 ```
 your-project/
-└── .devstories/
-    ├── config.json
-    ├── themes/
-    │   └── THEME-001-platform.md
-    ├── epics/
-    │   └── EPIC-0001-user-auth.md
-    ├── stories/
-    │   └── DS-00001-login-form.md
-    ├── inbox/                    # Staging: raw ideas
-    ├── spikes/                   # Staging: time-boxed research
-    └── templates/
-        └── feature.md
+├── .devstories/
+│   ├── config.json
+│   ├── themes/
+│   │   └── THEME-001-platform.md
+│   ├── epics/
+│   │   └── EPIC-0001-user-auth.md
+│   ├── stories/
+│   │   └── DS-00001-login-form.md
+│   ├── inbox/                    # Staging: raw ideas
+│   ├── spikes/                   # Staging: time-boxed research
+│   └── templates/
+│       ├── feature.md
+│       └── code.template.md      # Task templates
+└── docs/storydocs/               # When StoryDocs enabled
+    ├── themes/THEME-001/
+    ├── epics/EPIC-0001/
+    └── stories/DS-00001/
+        └── tasks/                # Task files live here
+            └── TASK-001-implement-validation.md
 ```
 
 ## Dogfooding

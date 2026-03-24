@@ -19,6 +19,7 @@ import { getLogger } from './logger';
 import {
   isStorydocsEnabled,
   computeNodeFolderPath,
+  computeTaskFolderPath,
   NodeType,
 } from './storydocsUtils';
 
@@ -110,6 +111,18 @@ export class StorydocsService implements vscode.Disposable {
 
     const folderPath = computeNodeFolderPath(root, nodeId, nodeType);
     await this.deleteIfEmpty(folderPath);
+  }
+
+  /**
+   * Ensure the tasks subfolder exists within a story's storydocs folder.
+   * Called by the createTask command before writing the task file.
+   */
+  async ensureTaskFolder(storyId: string): Promise<void> {
+    const root = this.getRoot();
+    if (!root) { return; }
+
+    const folderPath = computeTaskFolderPath(root, storyId);
+    await this.createDirectoryIfMissing(folderPath);
   }
 
   // ─── Private helpers ────────────────────────────────────────────────────────

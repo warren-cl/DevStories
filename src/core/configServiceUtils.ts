@@ -3,10 +3,9 @@
  * These can be unit tested with Vitest
  */
 
-import { StoryType, StorySize } from '../types/story';
+import { StoryType, StorySize } from "../types/story";
 
- 
-const matter = require('gray-matter');
+const matter = require("gray-matter");
 
 /**
  * Status definition from config.json
@@ -26,11 +25,11 @@ export interface StatusDef {
  * Template data parsed from .devstories/templates/ files
  */
 export interface TemplateData {
-  name: string;           // Filename without .md (e.g., "api-endpoint")
-  displayName: string;    // From frontmatter title or fallback to name
-  description?: string;   // From frontmatter description
-  types?: StoryType[];    // Filter by story type (if specified)
-  content: string;        // Template body (without frontmatter)
+  name: string; // Filename without .md (e.g., "api-endpoint")
+  displayName: string; // From frontmatter title or fallback to name
+  description?: string; // From frontmatter description
+  types?: StoryType[]; // Filter by story type (if specified)
+  content: string; // Template body (without frontmatter)
 }
 
 /**
@@ -55,6 +54,12 @@ export interface ConfigData {
   storydocsEnabled?: boolean;
   /** Root folder for storydocs, relative to workspace root */
   storydocsRoot?: string;
+  /** Prefix for task IDs (default: TASK) */
+  taskPrefix: string;
+  /** Mapping of task type ID to template filename (e.g., { code: 'code.template.md' }) */
+  taskTypes: Record<string, string>;
+  /** Root folder for templates (story and task), relative to workspace root. Falls back to .devstories/templates */
+  templateRoot?: string;
 }
 
 /**
@@ -64,20 +69,31 @@ export interface ConfigData {
  * Current config schema version.
  * Bump this when adding new fields that should be auto-populated in existing configs.
  */
-export const CURRENT_CONFIG_SCHEMA_VERSION = 2;
+export const CURRENT_CONFIG_SCHEMA_VERSION = 3;
+
+export const DEFAULT_TASK_TYPES: Record<string, string> = {
+  code: "code.template.md",
+  document: "document.template.md",
+  remediate: "remediate.template.md",
+  investigate: "investigate.template.md",
+  plan: "plan.template.md",
+  validate: "validate.template.md",
+};
 
 export const DEFAULT_CONFIG: ConfigData = {
-  epicPrefix: 'EPIC',
-  storyPrefix: 'STORY',
-  themePrefix: 'THEME',
+  epicPrefix: "EPIC",
+  storyPrefix: "STORY",
+  themePrefix: "THEME",
+  taskPrefix: "TASK",
+  taskTypes: DEFAULT_TASK_TYPES,
   sprintSequence: [],
   statuses: [
-    { id: 'todo', label: 'To Do' },
-    { id: 'in_progress', label: 'In Progress' },
-    { id: 'review', label: 'Review' },
-    { id: 'done', label: 'Done' },
+    { id: "todo", label: "To Do" },
+    { id: "in_progress", label: "In Progress" },
+    { id: "review", label: "Review" },
+    { id: "done", label: "Done" },
   ],
-  sizes: ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL'] as StorySize[],
+  sizes: ["XXS", "XS", "S", "M", "L", "XL", "XXL"] as StorySize[],
   storypoints: [1, 2, 4, 8, 16, 32, 64],
   quickCaptureDefaultToCurrentSprint: false,
   autoFilterCurrentSprint: true,
@@ -173,29 +189,40 @@ export function parseConfigJsonContent(content: string): Partial<ConfigData> {
     }
 
     // Quick capture options
-    if (typeof parsed.quickCapture?.defaultToCurrentSprint === 'boolean') {
+    if (typeof parsed.quickCapture?.defaultToCurrentSprint === "boolean") {
       result.quickCaptureDefaultToCurrentSprint = parsed.quickCapture.defaultToCurrentSprint;
     }
 
     // Auto-filter current sprint (DS-153)
-    if (typeof parsed.autoFilterCurrentSprint === 'boolean') {
+    if (typeof parsed.autoFilterCurrentSprint === "boolean") {
       result.autoFilterCurrentSprint = parsed.autoFilterCurrentSprint;
     }
 
     // Sprint date config for burndown charts
-    if (typeof parsed.sprints?.length === 'number') {
+    if (typeof parsed.sprints?.length === "number") {
       result.sprintLength = parsed.sprints.length;
     }
-    if (typeof parsed.sprints?.firstSprintStartDate === 'string') {
+    if (typeof parsed.sprints?.firstSprintStartDate === "string") {
       result.firstSprintStartDate = parsed.sprints.firstSprintStartDate;
     }
 
     // StoryDocs config
-    if (typeof parsed.storydocs?.enabled === 'boolean') {
+    if (typeof parsed.storydocs?.enabled === "boolean") {
       result.storydocsEnabled = parsed.storydocs.enabled;
     }
-    if (typeof parsed.storydocs?.root === 'string' && parsed.storydocs.root.trim()) {
+    if (typeof parsed.storydocs?.root === "string" && parsed.storydocs.root.trim()) {
       result.storydocsRoot = parsed.storydocs.root.trim();
+    }
+
+    // Task config
+    if (parsed.idPrefix?.task) {
+      result.taskPrefix = parsed.idPrefix.task;
+    }
+    if (typeof parsed.taskTypes === "object" && parsed.taskTypes !== null && !Array.isArray(parsed.taskTypes)) {
+      result.taskTypes = parsed.taskTypes as Record<string, string>;
+    }
+    if (typeof parsed.templateRoot === "string" && parsed.templateRoot.trim()) {
+      result.templateRoot = parsed.templateRoot.trim();
     }
 
     return result;
@@ -209,7 +236,7 @@ export function parseConfigJsonContent(content: string): Partial<ConfigData> {
  * Parse a template file into TemplateData
  */
 export function parseTemplateFile(filename: string, content: string): TemplateData {
-  const name = filename.replace(/\.md$/, '');
+  const name = filename.replace(/\.md$/, "");
   const parsed = matter(content);
 
   return {
@@ -240,6 +267,9 @@ export function mergeConfigWithDefaults(parsed: Partial<ConfigData>): ConfigData
     firstSprintStartDate: parsed.firstSprintStartDate,
     storydocsEnabled: parsed.storydocsEnabled,
     storydocsRoot: parsed.storydocsRoot,
+    taskPrefix: parsed.taskPrefix ?? DEFAULT_CONFIG.taskPrefix,
+    taskTypes: parsed.taskTypes ?? DEFAULT_CONFIG.taskTypes,
+    templateRoot: parsed.templateRoot,
   };
 }
 
@@ -284,8 +314,12 @@ export function sortSprintsBySequence(sprints: string[], sprintSequence: string[
     }
 
     // One in sequence, one not: sequence first
-    if (indexA !== Infinity) { return -1; }
-    if (indexB !== Infinity) { return 1; }
+    if (indexA !== Infinity) {
+      return -1;
+    }
+    if (indexB !== Infinity) {
+      return 1;
+    }
 
     // Neither in sequence: sort alphabetically
     return a.localeCompare(b);
@@ -300,11 +334,11 @@ export function sortSprintsBySequence(sprints: string[], sprintSequence: string[
  */
 export function isCompletedStatus(status: string, statuses: StatusDef[]): boolean {
   if (statuses.length === 0) {
-    return status === 'done';
+    return status === "done";
   }
-  const hasExplicitCompletion = statuses.some(s => s.isCompletion === true);
+  const hasExplicitCompletion = statuses.some((s) => s.isCompletion === true);
   if (hasExplicitCompletion) {
-    return statuses.some(s => s.id === status && s.isCompletion === true);
+    return statuses.some((s) => s.id === status && s.isCompletion === true);
   }
   return status === statuses[statuses.length - 1].id;
 }
@@ -314,16 +348,13 @@ export function isCompletedStatus(status: string, statuses: StatusDef[]): boolea
  * Stories with excluded statuses don't count in ideal or actual burndown lines.
  */
 export function isExcludedStatus(status: string, statuses: StatusDef[]): boolean {
-  return statuses.some(s => s.id === status && s.isExcluded === true);
+  return statuses.some((s) => s.id === status && s.isExcluded === true);
 }
 
 /**
  * Generic debounce function
  */
-export function debounce<T extends (...args: unknown[]) => void>(
-  fn: T,
-  delay: number
-): (...args: Parameters<T>) => void {
+export function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number): (...args: Parameters<T>) => void {
   let timeoutId: NodeJS.Timeout | undefined;
 
   return (...args: Parameters<T>) => {
@@ -360,7 +391,7 @@ export interface ConfigUpgradeResult {
  * - Always: bump `version` to CURRENT_CONFIG_SCHEMA_VERSION
  */
 export function computeConfigUpgrade(raw: Record<string, unknown>): ConfigUpgradeResult | null {
-  const version = typeof raw.version === 'number' ? raw.version : 0;
+  const version = typeof raw.version === "number" ? raw.version : 0;
   if (version >= CURRENT_CONFIG_SCHEMA_VERSION) {
     return null;
   }
@@ -371,52 +402,69 @@ export function computeConfigUpgrade(raw: Record<string, unknown>): ConfigUpgrad
 
   // idMode
   if (upgraded.idMode === undefined) {
-    upgraded.idMode = 'auto';
-    fieldsAdded.push('idMode');
+    upgraded.idMode = "auto";
+    fieldsAdded.push("idMode");
   }
 
   // autoFilterCurrentSprint
   if (upgraded.autoFilterCurrentSprint === undefined) {
     upgraded.autoFilterCurrentSprint = true;
-    fieldsAdded.push('autoFilterCurrentSprint');
+    fieldsAdded.push("autoFilterCurrentSprint");
   }
 
   // quickCapture
   if (upgraded.quickCapture === undefined) {
     upgraded.quickCapture = { defaultToCurrentSprint: false };
-    fieldsAdded.push('quickCapture');
+    fieldsAdded.push("quickCapture");
   } else if (
-    typeof upgraded.quickCapture === 'object' &&
+    typeof upgraded.quickCapture === "object" &&
     upgraded.quickCapture !== null &&
     (upgraded.quickCapture as Record<string, unknown>).defaultToCurrentSprint === undefined
   ) {
     (upgraded.quickCapture as Record<string, unknown>).defaultToCurrentSprint = false;
-    fieldsAdded.push('quickCapture.defaultToCurrentSprint');
+    fieldsAdded.push("quickCapture.defaultToCurrentSprint");
   }
 
   // idPrefix.theme
-  if (typeof upgraded.idPrefix === 'object' && upgraded.idPrefix !== null) {
+  if (typeof upgraded.idPrefix === "object" && upgraded.idPrefix !== null) {
     const idPrefix = upgraded.idPrefix as Record<string, unknown>;
     if (idPrefix.theme === undefined) {
-      idPrefix.theme = 'THEME';
-      fieldsAdded.push('idPrefix.theme');
+      idPrefix.theme = "THEME";
+      fieldsAdded.push("idPrefix.theme");
     }
   }
 
   // storypoints (only if sizes has 7 items and storypoints missing)
-  if (
-    upgraded.storypoints === undefined &&
-    Array.isArray(upgraded.sizes) &&
-    upgraded.sizes.length === 7
-  ) {
+  if (upgraded.storypoints === undefined && Array.isArray(upgraded.sizes) && upgraded.sizes.length === 7) {
     upgraded.storypoints = [1, 2, 4, 8, 16, 32, 64];
-    fieldsAdded.push('storypoints');
+    fieldsAdded.push("storypoints");
   }
 
   // storydocs (default disabled so users discover the option)
   if (upgraded.storydocs === undefined) {
-    upgraded.storydocs = { enabled: false, root: 'docs/storydocs' };
-    fieldsAdded.push('storydocs');
+    upgraded.storydocs = { enabled: false, root: "docs/storydocs" };
+    fieldsAdded.push("storydocs");
+  }
+
+  // idPrefix.task
+  if (typeof upgraded.idPrefix === "object" && upgraded.idPrefix !== null) {
+    const idPrefix = upgraded.idPrefix as Record<string, unknown>;
+    if (idPrefix.task === undefined) {
+      idPrefix.task = "TASK";
+      fieldsAdded.push("idPrefix.task");
+    }
+  }
+
+  // taskTypes (default mapping)
+  if (upgraded.taskTypes === undefined) {
+    upgraded.taskTypes = { ...DEFAULT_TASK_TYPES };
+    fieldsAdded.push("taskTypes");
+  }
+
+  // templateRoot (default to .devstories/templates)
+  if (upgraded.templateRoot === undefined) {
+    upgraded.templateRoot = ".devstories/templates";
+    fieldsAdded.push("templateRoot");
   }
 
   // Always bump version
@@ -424,7 +472,7 @@ export function computeConfigUpgrade(raw: Record<string, unknown>): ConfigUpgrad
 
   if (fieldsAdded.length === 0 && version < CURRENT_CONFIG_SCHEMA_VERSION) {
     // Only version bump needed — still counts as an upgrade
-    return { upgraded, fieldsAdded: ['version'] };
+    return { upgraded, fieldsAdded: ["version"] };
   }
 
   return { upgraded, fieldsAdded };

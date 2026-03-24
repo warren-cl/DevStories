@@ -402,6 +402,19 @@ id: DS-001
       expect(getFileTypeFromPath('C:\\project\\.devstories\\stories\\DS-001.md')).toBe('story');
       expect(getFileTypeFromPath('C:\\project\\.devstories\\epics\\EPIC-001.md')).toBe('epic');
     });
+
+    it('should return task for task file paths (storydocs)', () => {
+      expect(getFileTypeFromPath('/project/docs/storydocs/stories/DS-001/tasks/TASK-001.md')).toBe('task');
+    });
+
+    it('should return task for Windows task paths', () => {
+      expect(getFileTypeFromPath('C:\\project\\docs\\storydocs\\stories\\DS-001\\tasks\\TASK-001.md')).toBe('task');
+    });
+
+    it('should prioritise task over story when path contains /tasks/', () => {
+      // Task files live inside stories folder, so /stories/ is also present in path
+      expect(getFileTypeFromPath('/docs/stories/DS-001/tasks/TASK-001.md')).toBe('task');
+    });
   });
 
   describe('isDevStoriesFile', () => {
@@ -451,6 +464,7 @@ created: 2025-01-15
       stories: new Set(['DS-001', 'DS-002', 'DS-003']),
       epics: new Set(['EPIC-001', 'EPIC-002', 'EPIC-INBOX']),
       themes: new Set<string>(),
+      tasks: new Set<string>(),
       epicStoryMap: new Map([
         ['EPIC-001', new Set(['DS-001', 'DS-002'])],
         ['EPIC-002', new Set(['DS-003'])],

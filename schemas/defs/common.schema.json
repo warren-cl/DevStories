@@ -28,6 +28,11 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "description": "Date in YYYY-MM-DD format"
     },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[A-Z]+-\\d+$",
+      "description": "Task identifier in PREFIX-NNN format (e.g., TASK-001)"
+    },
     "storyType": {
       "type": "string",
       "enum": ["feature", "bug", "task", "chore", "spike"],

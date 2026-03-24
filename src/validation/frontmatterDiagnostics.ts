@@ -99,12 +99,9 @@ export class FrontmatterDiagnosticsProvider implements vscode.Disposable {
    * Validate document if it's a devstories file
    */
   private validateDocumentIfDevStories(doc: vscode.TextDocument): void {
-    if (!isDevStoriesFile(doc.uri.fsPath)) {
-      return;
-    }
-
     const fileType = getFileTypeFromPath(doc.uri.fsPath);
-    if (!fileType) {
+    // Tasks live outside .devstories/ (in storydocs), so check fileType directly
+    if (!fileType || (!isDevStoriesFile(doc.uri.fsPath) && fileType !== 'task')) {
       return;
     }
 
@@ -115,12 +112,8 @@ export class FrontmatterDiagnosticsProvider implements vscode.Disposable {
    * Debounced validation for typing
    */
   private debouncedValidate(doc: vscode.TextDocument): void {
-    if (!isDevStoriesFile(doc.uri.fsPath)) {
-      return;
-    }
-
     const fileType = getFileTypeFromPath(doc.uri.fsPath);
-    if (!fileType) {
+    if (!fileType || (!isDevStoriesFile(doc.uri.fsPath) && fileType !== 'task')) {
       return;
     }
 
@@ -141,7 +134,7 @@ export class FrontmatterDiagnosticsProvider implements vscode.Disposable {
   /**
    * Validate a single document
    */
-  private validateDocument(doc: vscode.TextDocument, fileType: 'story' | 'epic' | 'theme'): void {
+  private validateDocument(doc: vscode.TextDocument, fileType: 'story' | 'epic' | 'theme' | 'task'): void {
     const content = doc.getText();
 
     // Build config from ConfigService
@@ -215,7 +208,13 @@ export class FrontmatterDiagnosticsProvider implements vscode.Disposable {
       themeEpicMap.set(theme.id, epicLinks);
     }
 
-    return { stories, epics, themes, epicStoryMap, themeEpicMap };
+    // Collect all task IDs
+    const tasks = new Set<string>();
+    for (const task of this.store.getTasks()) {
+      tasks.add(task.id);
+    }
+
+    return { stories, epics, themes, tasks, epicStoryMap, themeEpicMap };
   }
 
   /**

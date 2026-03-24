@@ -1,8 +1,10 @@
 import matter from 'gray-matter';
 import { Epic, EpicStatus } from '../types/epic';
 import { Story, StorySize, StoryStatus, StoryType } from '../types/story';
+import { Task, TaskType, TaskStatus } from '../types/task';
 import { Theme, ThemeStatus } from '../types/theme';
 import { validateStoryTitle, validateEpicName, validateThemeName } from '../utils/inputValidation';
+import { normalizeTaskFrontmatter, NormalizationResult } from './taskParserUtils';
 
 export class Parser {
   static parseStory(content: string, filePath?: string): Story {
@@ -110,6 +112,40 @@ export class Parser {
       owner: data.owner,
       content: parsed.content,
       filePath: filePath
+    };
+  }
+
+  static parseTask(content: string, filePath?: string): { task: Task; changed: boolean; normalizedData: Record<string, unknown>; markdownBody: string } {
+    const parsed = matter(content);
+    const data = parsed.data;
+
+    if (Object.keys(data).length === 0) {
+      throw new Error('Invalid frontmatter: No frontmatter found');
+    }
+
+    // Normalize: map aliases, derive from path/filename, fill defaults
+    const { normalized, changed }: NormalizationResult =
+      normalizeTaskFrontmatter(data as Record<string, unknown>, filePath ?? '');
+
+    return {
+      task: {
+        id: normalized.id as string,
+        title: normalized.title as string,
+        taskType: normalized.task_type as TaskType,
+        story: normalized.story as string,
+        assignedAgent: normalized.assigned_agent as string | undefined,
+        status: normalized.status as TaskStatus,
+        dependencies: (normalized.dependencies as string[]) || [],
+        priority: (normalized.priority as number) ?? 1,
+        created: new Date(normalized.created as string),
+        updated: normalized.updated ? new Date(normalized.updated as string) : undefined,
+        completedOn: normalized.completed_on ? new Date(normalized.completed_on as string) : undefined,
+        content: parsed.content,
+        filePath: filePath,
+      },
+      changed,
+      normalizedData: normalized,
+      markdownBody: parsed.content,
     };
   }
 }

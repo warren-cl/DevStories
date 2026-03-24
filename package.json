@@ -2,7 +2,7 @@
   "name": "devstories",
   "displayName": "DevStories",
   "description": "Stories as markdown files, version-controlled with your code. AI-readable. Git-tracked.",
-  "version": "2.4.1",
+  "version": "3.0.1",
   "publisher": "DhavalSavalia",
   "author": {
     "name": "Dhaval Savalia",
@@ -66,36 +66,44 @@
     "commands": [
       {
         "command": "devstories.init",
-        "title": "DevStories: Initialize Project"
+        "title": "Initialize Project",
+        "category": "DevStories"
       },
       {
         "command": "devstories.createEpic",
-        "title": "DevStories: Create Epic"
+        "title": "Create Epic",
+        "category": "DevStories"
       },
       {
         "command": "devstories.createStory",
-        "title": "DevStories: Create Story"
+        "title": "Create Story",
+        "category": "DevStories"
       },
       {
         "command": "devstories.quickCapture",
-        "title": "DevStories: Quick Capture"
+        "title": "Quick Capture",
+        "category": "DevStories"
       },
       {
         "command": "devstories.saveAsTemplate",
-        "title": "DevStories: Save as Template"
+        "title": "Save as Template",
+        "category": "DevStories"
       },
       {
         "command": "devstories.changeStatus",
-        "title": "DevStories: Change Status"
+        "title": "Change Status",
+        "category": "DevStories"
       },
       {
         "command": "devstories.pickSprint",
-        "title": "DevStories: Filter by Sprint",
+        "title": "Filter by Sprint",
+        "category": "DevStories",
         "icon": "$(filter)"
       },
       {
         "command": "devstories.clearSprintFilter",
-        "title": "DevStories: Clear Sprint Filter",
+        "title": "Clear Sprint Filter",
+        "category": "DevStories",
         "icon": {
           "light": "assets/filter-filled.svg",
           "dark": "assets/filter-filled.svg"
@@ -107,7 +115,8 @@
       },
       {
         "command": "devstories.createTheme",
-        "title": "DevStories: Create Theme",
+        "title": "Create Theme",
+        "category": "DevStories",
         "icon": "$(add)"
       },
       {
@@ -116,46 +125,60 @@
       },
       {
         "command": "devstories.createStoryMenu",
-        "title": "DevStories: Create Story...",
+        "title": "Create Story...",
+        "category": "DevStories",
         "icon": "$(add)"
       },
       {
         "command": "devstories.setCurrentSprint",
-        "title": "DevStories: Set Current Sprint",
+        "title": "Set Current Sprint",
+        "category": "DevStories",
         "icon": "$(milestone)"
       },
       {
         "command": "devstories.sortStories",
-        "title": "DevStories: Sort Stories",
+        "title": "Sort Stories",
+        "category": "DevStories",
         "icon": "$(sort-precedence)"
       },
       {
         "command": "devstories.switchToBreakdown",
-        "title": "DevStories: Switch to Breakdown View",
+        "title": "Switch to Breakdown View",
+        "category": "DevStories",
         "icon": "$(list-tree)"
       },
       {
         "command": "devstories.switchToBacklog",
-        "title": "DevStories: Switch to Backlog View",
+        "title": "Switch to Backlog View",
+        "category": "DevStories",
         "icon": "$(calendar)"
       },
       {
         "command": "devstories.textFilter",
-        "title": "DevStories: Search",
+        "title": "Search",
+        "category": "DevStories",
         "icon": "$(search)"
       },
       {
         "command": "devstories.clearTextFilter",
-        "title": "DevStories: Clear Search",
+        "title": "Clear Search",
+        "category": "DevStories",
         "icon": "$(search-stop)"
       },
       {
         "command": "devstories.reconcileStorydocs",
-        "title": "DevStories: Reconcile StoryDocs Folders"
+        "title": "Reconcile StoryDocs Folders",
+        "category": "DevStories"
       },
       {
         "command": "devstories.browseStorydocs",
-        "title": "DevStories: Browse StoryDocs"
+        "title": "Browse StoryDocs",
+        "category": "DevStories"
+      },
+      {
+        "command": "devstories.createTask",
+        "title": "Create Task",
+        "category": "DevStories"
       }
     ],
     "menus": {
@@ -265,6 +288,21 @@
         {
           "command": "devstories.browseStorydocs",
           "when": "view == devstories.views.explorer && viewItem == theme && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.createTask",
+          "when": "view == devstories.views.explorer && viewItem == story && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.changeStatus",
+          "when": "view == devstories.views.explorer && viewItem == task",
+          "group": "devstories@1"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == task && devstories:storydocsEnabled",
           "group": "devstories@3"
         }
       ],

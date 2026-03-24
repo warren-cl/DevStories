@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Task Support**: Tasks are lightweight sub-items of stories, stored as markdown files inside StoryDocs folders (`stories/DS-00001/tasks/TASK-001-build-api.md`). Tasks appear as children of their parent story in the tree view, support status changes via the context menu, and are loaded/watched automatically when StoryDocs is enabled. Includes resilient parsing with field-name auto-heal (`task_id`→`id`, `story_id`→`story`, `completed`→`completed_on`) and composite keys (`story::taskId`) to avoid ID collisions across stories.
 - **Theme Management**: Create and manage themes as a top-level grouping above epics
 - **Dual Views**: Toggle between Work Breakdown (Theme → Epic → Story hierarchy) and Backlog (Sprint → Story flat list) via title bar buttons
 - **Story Points**: Effort-based progress tracking via `storypoints` array in config (index-aligned with `sizes`); status bar and progress indicators now report points instead of story count
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Kebab-Case Filenames**: Stories and epics now created with title slugs (e.g. `DS-00001-login-form.md`)
 - **`completed_on` Field**: Auto-set when a story reaches a completion status, auto-cleared when moved away to support sprint burndown chart.
 - **`isCompletion` Status Flag**: Defines end of user story process.  Place "Cancelled", "Deferred" status after `isCompletion` flagged status to support correct user story progres pie chart icon selection.
+- **Post-Completion Status Icons**: Statuses defined after `isCompletion` now display distinct icons in the tree view: blocked (⊘), deferred (⏸), superseded (⊖), cancelled (⊗). Unknown post-completion statuses fall back to an empty circle.
 - **`isExcluded` Status Flag**: Fine-grained control over which statuses count as done or are excluded from burndown
 - **Expanded Default Sizes**: `XXS` and `XXL` added to default size options, can be tailored to other values.  Remember to also update story points.
 - **Theme Autocomplete**: `[[THEME-ID]]` links, `theme:` field completions, and theme hover previews in IntelliSense providers
@@ -35,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Progress Indicators**: Expanded from 5 to 6 stages (`○ ◎ ◔ ◐ ◕ ●`) for finer-grained visual feedback in the tree view
+- **Command Palette Prefix**: Moved "DevStories:" from the command `title` to the `category` field across all commands — context menus now show clean names while the Command Palette retains the prefixed form
 - **NB** Story IDs now zero-padded to 5 digits (was 3); Epic IDs to 4 digits (was 3) - requires existing user story filename migration.
 - **`date_done` → `completed_on`**: The completion-date frontmatter field has been renamed from `date_done` to `completed_on`. Existing files using `date_done` should be updated — the field will not be recognised under the old name.
 - file path construction.  Enabled for use on Windows, not just Linux variants.
@@ -53,6 +57,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Burndown chart "today" now derived from local system clock instead of UTC, so the actual line plots correctly for users in timezones ahead of UTC
 - Burndown x-axis date labels now use `Intl.DateTimeFormat` for locale-aware formatting (e.g. "3 Mar" in en-AU, "Mar 3" in en-US) instead of hardcoded English month names
 - Inbox drag-to-convert now always assigns the drop target's epic/theme, overriding any pre-existing `epic` field in the source file's frontmatter
+- Frontmatter date round-tripping: gray-matter auto-converts YAML date strings to JavaScript `Date` objects, causing `matter.stringify()` to emit full ISO timestamps (e.g. `2026-03-22T00:00:00.000Z`). All parse→modify→write paths now normalize dates back to `YYYY-MM-DD` before serialization.
+- Change Status and Browse StoryDocs context menu commands now work correctly on task nodes
+- File watcher routing: task file changes (paths containing both `/stories/` and `/tasks/`) are now correctly routed to the task parser instead of the story parser
 
 ### Security
 

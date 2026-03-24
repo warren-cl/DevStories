@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import matter from "gray-matter";
 import { BrokenFile } from "../types/brokenFile";
 import { Epic } from "../types/epic";
 import { InboxSpikeFile, InboxSpikeFolderType } from "../types/inboxSpikeNode";
 import { Story } from "../types/story";
+import { Task } from "../types/task";
 import { Theme } from "../types/theme";
 import { Parser } from "./parser";
 import { Watcher } from "./watcher";
@@ -17,13 +19,14 @@ export class Store {
   private brokenFiles = new Map<string, BrokenFile>(); // keyed by filePath
   private inboxFiles = new Map<string, InboxSpikeFile>(); // keyed by filePath
   private spikeFiles = new Map<string, InboxSpikeFile>(); // keyed by filePath
+  private tasks = new Map<string, Task>(); // keyed by task ID
   private _onDidUpdate = new vscode.EventEmitter<void>();
   readonly onDidUpdate = this._onDidUpdate.event;
 
   /** Fires before a node is removed from the store (on file deletion), carrying its info. */
   private _onWillDeleteNode = new vscode.EventEmitter<{
     id: string;
-    nodeType: "story" | "epic" | "theme";
+    nodeType: "story" | "epic" | "theme" | "task";
     epicId?: string;
     themeId?: string;
   }>();
@@ -33,10 +36,10 @@ export class Store {
     // Listen to watcher events
     this.watcher.onDidCreate((uri) => this.onFileChanged(uri));
     this.watcher.onDidChange((uri) => this.onFileChanged(uri));
-    this.watcher.onDidDelete((uri) => this.onFileDeleted(uri));
+    this.watcher.onDidDelete((uri) => this.handleFileDeleted(uri));
   }
 
-  async load() {
+  async load(storydocsRoot?: string) {
     const storyFiles = await vscode.workspace.findFiles("**/.devstories/stories/*.md");
     const epicFiles = await vscode.workspace.findFiles("**/.devstories/epics/*.md");
     const themeFiles = await vscode.workspace.findFiles("**/.devstories/themes/*.md");
@@ -49,6 +52,7 @@ export class Store {
     this.brokenFiles.clear();
     this.inboxFiles.clear();
     this.spikeFiles.clear();
+    this.tasks.clear();
 
     await Promise.all(storyFiles.map((uri) => this.parseAndAddStory(uri)));
     await Promise.all(epicFiles.map((uri) => this.parseAndAddEpic(uri)));
@@ -58,6 +62,13 @@ export class Store {
     }
     for (const uri of spikeFiles) {
       this.addInboxSpikeFile(uri, "spikes");
+    }
+
+    // Load task files from storydocs directories when root is known
+    if (storydocsRoot) {
+      const pattern = new vscode.RelativePattern(storydocsRoot, "stories/*/tasks/*.md");
+      const taskFiles = await vscode.workspace.findFiles(pattern);
+      await Promise.all(taskFiles.map((uri) => this.parseAndAddTask(uri)));
     }
 
     // Notify listeners that data has been loaded
@@ -133,6 +144,18 @@ export class Store {
     return Array.from(this.spikeFiles.values());
   }
 
+  getTask(compositeId: string): Task | undefined {
+    return this.tasks.get(compositeId);
+  }
+
+  getTasks(): Task[] {
+    return Array.from(this.tasks.values());
+  }
+
+  getTasksByStory(storyId: string): Task[] {
+    return Array.from(this.tasks.values()).filter((task) => task.story === storyId);
+  }
+
   /** Returns true if the store has any content (stories, epics, themes, broken files, inbox, or spikes). */
   hasContent(): boolean {
     return (
@@ -164,7 +187,11 @@ export class Store {
    * without relying solely on the FileSystemWatcher (which can be delayed on Windows).
    */
   async reloadFile(uri: vscode.Uri): Promise<void> {
-    if (uri.path.includes("/stories/")) {
+    // Check /tasks/ before /stories/ — task paths contain both segments
+    // (e.g. storydocs/stories/STORY-001/tasks/TASK-001.md)
+    if (uri.path.includes("/tasks/")) {
+      await this.parseAndAddTask(uri);
+    } else if (uri.path.includes("/stories/")) {
       await this.parseAndAddStory(uri);
     } else if (uri.path.includes("/epics/")) {
       await this.parseAndAddEpic(uri);
@@ -178,7 +205,7 @@ export class Store {
     this._onDidUpdate.fire();
   }
 
-  private onFileDeleted(uri: vscode.Uri) {
+  handleFileDeleted(uri: vscode.Uri) {
     // We don't know the ID from the URI easily without parsing, but we can iterate.
     // Or we can assume ID is filename? No, ID is in frontmatter.
     // But if file is deleted, we can't read it.
@@ -218,6 +245,15 @@ export class Store {
     // Remove from inbox/spike files
     this.inboxFiles.delete(uri.fsPath);
     this.spikeFiles.delete(uri.fsPath);
+
+    // Remove tasks
+    for (const [id, task] of this.tasks) {
+      if (task.filePath === uri.fsPath) {
+        this._onWillDeleteNode.fire({ id, nodeType: "task" });
+        this.tasks.delete(id);
+        break;
+      }
+    }
 
     this._onDidUpdate.fire();
   }
@@ -288,6 +324,27 @@ export class Store {
       this.inboxFiles.set(uri.fsPath, file);
     } else {
       this.spikeFiles.set(uri.fsPath, file);
+    }
+  }
+
+  private async parseAndAddTask(uri: vscode.Uri) {
+    try {
+      const content = await this.readFile(uri);
+      const { task, changed, normalizedData, markdownBody } = Parser.parseTask(content, uri.fsPath);
+      this.tasks.set(`${task.story}::${task.id}`, task);
+
+      // Auto-heal: write canonical frontmatter back if normalization changed anything
+      if (changed) {
+        const newContent = matter.stringify(markdownBody, normalizedData);
+        // Loop guard: only write if content actually changed on disk
+        if (newContent !== content) {
+          const encoder = new TextEncoder();
+          void vscode.workspace.fs.writeFile(uri, encoder.encode(newContent));
+          getLogger().info(`Auto-healed task frontmatter: ${uri.fsPath}`);
+        }
+      }
+    } catch (e) {
+      getLogger().error(`Failed to parse task ${uri.fsPath}:`, e);
     }
   }
 

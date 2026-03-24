@@ -10,7 +10,8 @@ import { getLogger } from "../core/logger";
 import { Story } from "../types/story";
 import { Epic } from "../types/epic";
 import { Theme } from "../types/theme";
-import { parseStatusesFromConfig, updateStoryStatus, updateEpicStatus, updateThemeStatus } from "./changeStatusUtils";
+import { Task, isTask } from "../types/task";
+import { parseStatusesFromConfig, updateStoryStatus, updateEpicStatus, updateThemeStatus, updateTaskStatus } from "./changeStatusUtils";
 
 /**
  * Read config.json from workspace
@@ -38,7 +39,7 @@ async function readConfigJson(): Promise<string | undefined> {
  * Shows a QuickPick with available statuses
  * @param configService - Optional ConfigService for live-reloaded config
  */
-export async function executeChangeStatus(store: Store, item: Story | Epic | Theme, configService?: ConfigService): Promise<boolean> {
+export async function executeChangeStatus(store: Store, item: Story | Epic | Theme | Task, configService?: ConfigService): Promise<boolean> {
   // DS-035: Use ConfigService if available, otherwise read from file
   let statuses: string[];
   if (configService) {
@@ -85,14 +86,17 @@ export async function executeChangeStatus(store: Store, item: Story | Epic | The
     const bytes = await vscode.workspace.fs.readFile(fileUri);
     const content = new TextDecoder().decode(bytes);
 
-    // Determine if story, epic, or theme.
-    // Use the store's theme map for a structural check — avoids relying on the configurable ID prefix.
-    const isStory = "type" in item;
-    const isTheme = !isStory && store.getTheme(item.id) !== undefined;
+    // Determine if story, epic, theme, or task.
+    // Use the store's maps for structural checks.
+    const isStoryNode = "type" in item;
+    const isTaskNode = isTask(item);
+    const isThemeNode = !isStoryNode && !isTaskNode && store.getTheme(item.id) !== undefined;
     let updatedContent: string;
-    if (isStory) {
+    if (isTaskNode) {
+      updatedContent = updateTaskStatus(content, newStatus, configService?.config.statuses);
+    } else if (isStoryNode) {
       updatedContent = updateStoryStatus(content, newStatus, configService?.config.statuses);
-    } else if (isTheme) {
+    } else if (isThemeNode) {
       updatedContent = updateThemeStatus(content, newStatus);
     } else {
       updatedContent = updateEpicStatus(content, newStatus);
