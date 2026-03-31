@@ -48,7 +48,7 @@ suite('ConfigService Integration Test', () => {
 		}, null, 2);
 		fs.writeFileSync(configFile, testConfig);
 
-		configService = new ConfigService();
+		configService = new ConfigService("0.0.0-test");
 		await configService.initialize();
 	});
 
@@ -133,7 +133,7 @@ types: [feature, task]
 
 		// Re-initialize to pick up template
 		configService.dispose();
-		configService = new ConfigService();
+		configService = new ConfigService("0.0.0-test");
 		await configService.initialize();
 
 		const templates = configService.templates;

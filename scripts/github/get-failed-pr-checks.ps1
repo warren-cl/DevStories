@@ -23,10 +23,16 @@
     The pull request number to query.
 
 .PARAMETER Owner
-    GitHub organisation or user name. Defaults to "Cortexa-Labs".
+    GitHub organisation or user name. If omitted, read from GH_OWNER or
+    the owner portion of GITHUB_REPOSITORY ("owner/repo" format).
+    One of these must be available — the parameter is mandatory if no
+    environment variable is set.
 
 .PARAMETER Repo
-    GitHub repository name. Defaults to "monorepo".
+    GitHub repository name. If omitted, read from GH_REPO or the repo
+    portion of GITHUB_REPOSITORY ("owner/repo" format).
+    One of these must be available — the parameter is mandatory if no
+    environment variable is set.
 
 .PARAMETER IncludePassing
     When specified, includes passing checks in the summary output.
@@ -38,13 +44,16 @@
     filtered output is insufficient.
 
 .EXAMPLE
-    .\get-failed-pr-checks.ps1 -PullNumber 19
+    # Explicit owner/repo
+    .\get-failed-pr-checks.ps1 -PullNumber 19 -Owner my-org -Repo my-repo
 
 .EXAMPLE
+    # Resolve owner/repo from GITHUB_REPOSITORY env var (e.g. in GitHub Actions)
+    $env:GITHUB_REPOSITORY = 'my-org/my-repo'
     .\get-failed-pr-checks.ps1 -PullNumber 19 | ConvertFrom-Json
 
 .EXAMPLE
-    .\get-failed-pr-checks.ps1 -PullNumber 19 -IncludePassing
+    .\get-failed-pr-checks.ps1 -PullNumber 19 -Owner my-org -Repo my-repo -IncludePassing
 
 .NOTES
     Prerequisites:
@@ -89,13 +98,22 @@
         - Test failure summaries
 #>
 
+# PSReviewUnusedParameter: $IncludePassing and $RawLogs are used inside nested
+# functions (Get-CheckOverview, Get-FailureDetails). PSScriptAnalyzer does not
+# track cross-function parameter references from the top-level param block.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSReviewUnusedParameter', 'IncludePassing',
+    Justification = 'Used inside nested function Get-CheckOverview via script scope')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute(
+    'PSReviewUnusedParameter', 'RawLogs',
+    Justification = 'Used inside nested function Get-FailureDetails via script scope')]
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
     [int]$PullNumber,
 
-    [string]$Owner = 'Cortexa-Labs',
-    [string]$Repo = 'monorepo',
+    [string]$Owner,
+    [string]$Repo,
 
     [switch]$IncludePassing,
     [switch]$RawLogs
@@ -103,6 +121,28 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# --------------------------------------------------------------------------
+# Resolve Owner / Repo from environment when not supplied on the command line.
+# Priority: explicit param > GH_OWNER/GH_REPO > GITHUB_REPOSITORY ("owner/repo").
+# --------------------------------------------------------------------------
+if (-not $Owner) { $Owner = $env:GH_OWNER }
+if (-not $Repo)  { $Repo  = $env:GH_REPO  }
+
+if ((-not $Owner -or -not $Repo) -and $env:GITHUB_REPOSITORY) {
+    $GhRepoParts = $env:GITHUB_REPOSITORY -split '/', 2
+    if (-not $Owner -and $GhRepoParts.Count -ge 1) { $Owner = $GhRepoParts[0] }
+    if (-not $Repo  -and $GhRepoParts.Count -ge 2) { $Repo  = $GhRepoParts[1] }
+}
+
+if (-not $Owner) {
+    Write-Error "Owner is required. Provide -Owner, or set the GH_OWNER or GITHUB_REPOSITORY environment variable."
+    exit 1
+}
+if (-not $Repo) {
+    Write-Error "Repo is required. Provide -Repo, or set the GH_REPO or GITHUB_REPOSITORY environment variable."
+    exit 1
+}
 
 # --------------------------------------------------------------------------
 # Helpers
@@ -136,7 +176,7 @@ function Get-CheckOverview {
         $raw = gh pr checks $PullNumber --repo "${Owner}/${Repo}" 2>&1
     }
     catch {
-        # Swallow — $raw will contain the error record
+        $null = $_ # Swallow — $raw will contain the error record when gh exits non-zero
     }
 
     # Handle "no checks reported" (CI run hasn't started yet)

@@ -34,14 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Text Filter**: Search across the entire tree view via the magnifier icon in the title bar (or `devstories.textFilter` command). Filters stories, epics, themes, broken files, and inbox/spike files by ID and title substring (case-insensitive). Ancestor nodes remain visible when a descendant matches. Active filter is shown in the view title (e.g. `Stories: Search "login"`); a second icon clears it. Activating the filter also clears any active sprint filter.
 - **`spike` Story Type**: New story type for time-boxed investigations and research. Appears alongside `feature`, `bug`, `task`, and `chore` in the create-story picker, frontmatter autocomplete, hover previews, and tree icons.
 - **StoryDocs**: Opt-in flat document folders that mirror the `.devstories/` directory layout. Enable via `storydocs` in `config.json` to automatically create and maintain type-based folders (`themes/THEME-001/`, `epics/EPIC-0001/`, `stories/DS-00001/`) wherever you choose in your repo. Folders are created when nodes are created (including inbox/spike conversion) and cleaned up when empty. No folder moves on drag-and-drop — the flat layout means reparenting a node doesn't affect its storydocs folder. Includes a **Reconcile StoryDocs Folders** command to rebuild the full structure on demand.
+- **Soft Archive & Restore**: Archive completed work by sprint without deleting it from the repo. `DevStories: Soft Archive Sprint...` moves completed stories up to a selected sprint into `.devstories/{archive.soft.devstories}` and, when StoryDocs is enabled, moves matching docs into `{storydocsRoot}/{archive.soft.storydocs}`. Eligible epics and themes cascade when all descendants are already archived or part of the same archive set and their current status has `canArchive: true`. Archived items remain visible in the tree with an `(archived)` marker and can be restored either in bulk via `DevStories: Restore from Archive...` or individually from the context menu. Bulk restore now restores the selected sprint and all newer archived sprints.
 
 ### Changed
 
 - **Progress Indicators**: Expanded from 5 to 6 stages (`○ ◎ ◔ ◐ ◕ ●`) for finer-grained visual feedback in the tree view
 - **Command Palette Prefix**: Moved "DevStories:" from the command `title` to the `category` field across all commands — context menus now show clean names while the Command Palette retains the prefixed form
+- **Config Schema v3**: Config upgrades now add archive defaults, sprint date defaults, task ID prefix/task type support, and `statuses[].canArchive` with `false` as the default when missing.
 - **NB** Story IDs now zero-padded to 5 digits (was 3); Epic IDs to 4 digits (was 3) - requires existing user story filename migration.
 - **`date_done` → `completed_on`**: The completion-date frontmatter field has been renamed from `date_done` to `completed_on`. Existing files using `date_done` should be updated — the field will not be recognised under the old name.
-- file path construction.  Enabled for use on Windows, not just Linux variants.
+- **Archive Path Handling**: Archive/storydocs path computation now normalizes path separators so archive detection and move targets behave consistently on Windows, macOS, and Linux.
 - `epic` field is now optional in stories — missing/empty values route to "No Epic" sentinel
 - Link resolution uses store `filePath` instead of ID-based path guessing (supports kebab-case filenames)
 - `pickSprint` simplified to use `sprintSequence` from config only

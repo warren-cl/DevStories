@@ -27,6 +27,7 @@ async function readProjectFiles(workspaceUri: vscode.Uri): Promise<Map<string, s
 
 interface InitOptions {
   createSamples?: boolean;
+  extensionVersion?: string;
 }
 
 /**
@@ -156,7 +157,7 @@ export async function executeInit(options: InitOptions = {}): Promise<boolean> {
 
   // Write config.json
   const configUri = vscode.Uri.joinPath(devstoriesUri, "config.json");
-  const configContent = generateConfigJson(config);
+  const configContent = generateConfigJson(config, options.extensionVersion ?? "0.0.0");
   await vscode.workspace.fs.writeFile(configUri, Buffer.from(configContent));
 
   // Create sample content if requested

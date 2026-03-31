@@ -15,20 +15,32 @@
     The pull request number to resolve threads on.
 
 .PARAMETER Owner
-    GitHub organisation or user name. Defaults to "Cortexa-Labs".
+    GitHub organisation or user name. If omitted, read from GH_OWNER or
+    the owner portion of GITHUB_REPOSITORY ("owner/repo" format).
+    One of these must be available — the parameter is mandatory if no
+    environment variable is set.
 
 .PARAMETER Repo
-    GitHub repository name. Defaults to "monorepo".
+    GitHub repository name. If omitted, read from GH_REPO or the repo
+    portion of GITHUB_REPOSITORY ("owner/repo" format).
+    One of these must be available — the parameter is mandatory if no
+    environment variable is set.
 
 .PARAMETER DryRun
     When specified, fetches and lists all unresolved threads without
     resolving them.
 
 .EXAMPLE
+    # Explicit owner/repo
+    .\resolve-pr-threads.ps1 -PullNumber 11 -Owner my-org -Repo my-repo
+
+.EXAMPLE
+    # Resolve owner/repo from GITHUB_REPOSITORY env var (e.g. in GitHub Actions)
+    $env:GITHUB_REPOSITORY = 'my-org/my-repo'
     .\resolve-pr-threads.ps1 -PullNumber 11
 
 .EXAMPLE
-    .\resolve-pr-threads.ps1 -PullNumber 11 -DryRun
+    .\resolve-pr-threads.ps1 -PullNumber 11 -Owner my-org -Repo my-repo -DryRun
 
 .NOTES
     Prerequisites:
@@ -48,15 +60,37 @@ param(
     [Parameter(Mandatory)]
     [int]$PullNumber,
 
-    [string]$Owner = "Cortexa-Labs",
+    [string]$Owner,
 
-    [string]$Repo = "monorepo",
+    [string]$Repo,
 
     [switch]$DryRun
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+# ---------------------------------------------------------------------------
+# Resolve Owner / Repo from environment when not supplied on the command line.
+# Priority: explicit param > GH_OWNER/GH_REPO > GITHUB_REPOSITORY ("owner/repo").
+# ---------------------------------------------------------------------------
+if (-not $Owner) { $Owner = $env:GH_OWNER }
+if (-not $Repo)  { $Repo  = $env:GH_REPO  }
+
+if ((-not $Owner -or -not $Repo) -and $env:GITHUB_REPOSITORY) {
+    $GhRepoParts = $env:GITHUB_REPOSITORY -split '/', 2
+    if (-not $Owner -and $GhRepoParts.Count -ge 1) { $Owner = $GhRepoParts[0] }
+    if (-not $Repo  -and $GhRepoParts.Count -ge 2) { $Repo  = $GhRepoParts[1] }
+}
+
+if (-not $Owner) {
+    Write-Error "Owner is required. Provide -Owner, or set the GH_OWNER or GITHUB_REPOSITORY environment variable."
+    exit 1
+}
+if (-not $Repo) {
+    Write-Error "Repo is required. Provide -Repo, or set the GH_REPO or GITHUB_REPOSITORY environment variable."
+    exit 1
+}
 
 # ---------------------------------------------------------------------------
 # Self-heal PATH for gh CLI.

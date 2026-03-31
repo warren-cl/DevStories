@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { formatDate, normalizeDatesInData } from "../../utils/dateUtils";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { formatDate, normalizeDatesInData, mondayOfCurrentWeek } from "../../utils/dateUtils";
 
 describe("formatDate", () => {
   it("formats a Date as YYYY-MM-DD using local time", () => {
@@ -105,5 +105,46 @@ updated: 2026-03-22
     expect(output).toContain("created: '2026-03-22'");
     expect(output).toContain("updated: '2026-03-22'");
     expect(output).not.toContain("T00:00:00");
+  });
+});
+
+describe("mondayOfCurrentWeek", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns same day when today is Monday", () => {
+    // 2026-03-23 is a Monday
+    vi.useFakeTimers({ now: new Date(2026, 2, 23, 10, 0, 0) });
+    expect(mondayOfCurrentWeek()).toBe("2026-03-23");
+  });
+
+  it("returns previous Monday when today is Wednesday", () => {
+    // 2026-03-25 is a Wednesday
+    vi.useFakeTimers({ now: new Date(2026, 2, 25, 10, 0, 0) });
+    expect(mondayOfCurrentWeek()).toBe("2026-03-23");
+  });
+
+  it("returns previous Monday when today is Sunday", () => {
+    // 2026-03-29 is a Sunday
+    vi.useFakeTimers({ now: new Date(2026, 2, 29, 10, 0, 0) });
+    expect(mondayOfCurrentWeek()).toBe("2026-03-23");
+  });
+
+  it("returns previous Monday when today is Saturday", () => {
+    // 2026-03-28 is a Saturday
+    vi.useFakeTimers({ now: new Date(2026, 2, 28, 10, 0, 0) });
+    expect(mondayOfCurrentWeek()).toBe("2026-03-23");
+  });
+
+  it("handles month boundary (Monday in previous month)", () => {
+    // 2026-04-01 is a Wednesday, Monday is 2026-03-30
+    vi.useFakeTimers({ now: new Date(2026, 3, 1, 10, 0, 0) });
+    expect(mondayOfCurrentWeek()).toBe("2026-03-30");
+  });
+
+  it("returns YYYY-MM-DD format", () => {
+    vi.useFakeTimers({ now: new Date(2026, 0, 5, 10, 0, 0) }); // 2026-01-05 Monday
+    expect(mondayOfCurrentWeek()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 });

@@ -31,11 +31,11 @@ suite('Init Command Integration Test', () => {
 			sprint: 'sprint-1',
 		};
 
-		const jsonStr = generateConfigJson(config);
+		const jsonStr = generateConfigJson(config, "3.2.2");
 		const parsed = JSON.parse(jsonStr);
 
 		// Verify structure
-		assert.strictEqual(parsed.version, 1, 'Should include version');
+		assert.strictEqual(parsed.version, "3.2.2", 'Should include version');
 		assert.strictEqual(parsed.project, 'test-project', 'Should include project name');
 		assert.strictEqual(parsed.idPrefix.epic, 'EPIC', 'Should include epic prefix');
 		assert.strictEqual(parsed.idPrefix.story, 'DS', 'Should include story prefix');

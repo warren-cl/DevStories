@@ -4,8 +4,7 @@
 [![Marketplace Version](https://vsmarketplacebadges.dev/version-short/DhavalSavalia.devstories.svg)](https://marketplace.visualstudio.com/items?itemName=DhavalSavalia.devstories)
 [![Downloads](https://vsmarketplacebadges.dev/downloads-short/DhavalSavalia.devstories.svg)](https://marketplace.visualstudio.com/items?itemName=DhavalSavalia.devstories)
 [![Installs](https://vsmarketplacebadges.dev/installs-short/DhavalSavalia.devstories.svg)](https://marketplace.visualstudio.com/items?itemName=DhavalSavalia.devstories)
-[![Rating](https://vsmarketplacebadges.dev/rating-short/DhavalSavalia.devstories.svg)](https:/Work
-/marketplace.visualstudio.com/items?itemName=DhavalSavalia.devstories)
+[![Rating](https://vsmarketplacebadges.dev/rating-short/DhavalSavalia.devstories.svg)](https://marketplace.visualstudio.com/items?itemName=DhavalSavalia.devstories)
 
 **Lightweight story management in VS Code. Stories that travel with your code.**
 
@@ -142,6 +141,7 @@ Once enabled:
 - **Folders are created automatically** when you create a theme, epic, or story (e.g. `docs/storydocs/stories/DS-00001/`)
 - **No folder moves on drag-and-drop** — the flat layout means reparenting a node doesn't affect its storydocs folder
 - **Empty folders are cleaned up** when the corresponding node is deleted
+- **Archive-aware** — when soft archive is used, matching StoryDocs folders move into `{storydocsRoot}/{archiveSegment}/...` and are restored alongside their parent story, epic, or theme
 - **Reconcile command** — run `DevStories: Reconcile StoryDocs Folders` from the Command Palette to rebuild the full folder structure on
   demand
 
@@ -159,6 +159,18 @@ docs/storydocs/
     ├── DS-00001/
     └── DS-00002/
 ```
+
+### 📦 Soft Archive
+
+Soft archive moves completed work out of the live folders without hiding it from DevStories.
+
+- Run **DevStories: Soft Archive Sprint...** to archive completed stories up to and including a selected sprint
+- Stories use `isCompletion: true` statuses for archive eligibility
+- Epics and themes archive only when all descendants are already archived or part of the same archive operation and their status has `canArchive: true`
+- Archived nodes remain visible in the tree with an `(archived)` suffix
+- Run **DevStories: Restore from Archive...** to restore the selected sprint and all newer archived sprints
+- Right-click an archived story, epic, or theme and choose **Restore from Archive** to restore a single item
+- If StoryDocs is enabled, matching StoryDocs folders move under the configured archive path and return on restore
 
 ### 🔄 Progress Indicators
 
@@ -193,6 +205,7 @@ The mapping is automatic — just define your statuses in `config.json` and the 
 - **Status Toggle** — Right-click stories, epics, themes, or tasks to change status
 - **Clickable Links** — `[[ID]]` links open the corresponding story, epic, or theme file
 - **Configurable Sizes & Story Points** — Map t-shirt sizes (XXS–XXL) to story-point values for progress tracking
+- **Archive-Aware Tree Items** — archived stories, epics, themes, and task files remain visible in the tree and can still be inspected in place
 - **Broken File Detection** — Parse failures are surfaced in the tree view for easy debugging
 
 ## Quick Start
@@ -209,6 +222,8 @@ The mapping is automatic — just define your statuses in `config.json` and the 
 
 6. **Break stories into tasks** — Right-click a story → **Create Task** (requires StoryDocs enabled)
 
+7. **Archive completed work** — Run `DevStories: Soft Archive Sprint...` when a sprint is done, and `DevStories: Restore from Archive...` if you need archived work back
+
 ## Keyboard Shortcuts
 
 | Action          | Shortcut      |
@@ -222,7 +237,7 @@ DevStories stores configuration in `.devstories/config.json`:
 
 ```json
 {
-  "version": 2,
+  "version": 3,
   "project": "My Project",
   "idMode": "auto",
   "idPrefix": {
@@ -238,11 +253,11 @@ DevStories stores configuration in `.devstories/config.json`:
     "validate": "validate.template.md"
   },
   "statuses": [
-    { "id": "todo", "label": "To Do" },
-    { "id": "in_progress", "label": "In Progress" },
-    { "id": "review", "label": "Review" },
-    { "id": "done", "label": "Done", "isCompletion": true },
-    { "id": "cancelled", "label": "Cancelled", "isExcluded": true }
+    { "id": "todo", "label": "To Do", "canArchive": false },
+    { "id": "in_progress", "label": "In Progress", "canArchive": false },
+    { "id": "review", "label": "Review", "canArchive": false },
+    { "id": "done", "label": "Done", "isCompletion": true, "canArchive": true },
+    { "id": "cancelled", "label": "Cancelled", "isExcluded": true, "canArchive": true }
   ],
   "sprints": {
     "current": "sprint-1",
@@ -259,6 +274,12 @@ DevStories stores configuration in `.devstories/config.json`:
   "storydocs": {
     "enabled": true,
     "root": "docs/storydocs"
+  },
+  "archive": {
+    "soft": {
+      "devstories": "archive",
+      "storydocs": "archive"
+    }
   }
 }
 ```
@@ -267,7 +288,7 @@ DevStories stores configuration in `.devstories/config.json`:
 
 | Field                                 | Description                                                                                  |
 | ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `version`                             | Schema version (always `1` or `2`)                                                           |
+| `version`                             | Schema version (current: `3`)                                                                |
 | `idMode`                              | `"auto"` for sequential IDs, `"manual"` for user-entered IDs                                 |
 | `idPrefix.theme`                      | Prefix for theme IDs (e.g., `THEME`)                                                         |
 | `idPrefix.epic`                       | Prefix for epic IDs (e.g., `EPIC`)                                                           |
@@ -277,6 +298,9 @@ DevStories stores configuration in `.devstories/config.json`:
 | `templateRoot`                        | Root folder for templates, relative to repo root (defaults to `.devstories/templates`)       |
 | `statuses[].isCompletion`             | Marks a status as "done" for progress & burndown calculations                                |
 | `statuses[].isExcluded`               | Excludes stories with this status from burndown (e.g., cancelled)                            |
+| `statuses[].canArchive`               | Marks epic/theme statuses that are eligible for soft archive once descendants are archived    |
+| `sprints.current`                     | Current sprint shown in the UI and used by quick-capture defaults when configured             |
+| `sprints.sequence`                    | Ordered sprint list used by backlog grouping, archive cutoff selection, and restore ordering  |
 | `sprints.length`                      | Days per sprint — used for burndown chart date ranges                                        |
 | `sprints.firstSprintStartDate`        | Start date of the first sprint (`YYYY-MM-DD`) — all sprint dates are derived from this       |
 | `sizes`                               | Available t-shirt sizes for stories                                                          |
@@ -285,6 +309,8 @@ DevStories stores configuration in `.devstories/config.json`:
 | `autoFilterCurrentSprint`             | When `true`, automatically filter the tree view to the current sprint on load                |
 | `storydocs.enabled`                   | When `true`, maintains flat, type-based document folders mirroring the `.devstories/` layout |
 | `storydocs.root`                      | Root folder for StoryDocs, relative to the repository root (e.g., `docs/storydocs`)          |
+| `archive.soft.devstories`             | Subdirectory name inside `.devstories/` for soft-archived files (defaults to `archive`)      |
+| `archive.soft.storydocs`              | Subdirectory name inside StoryDocs root for soft-archived docs (defaults to `archive`)       |
 
 ## File Structure
 
@@ -299,6 +325,10 @@ your-project/
 │   ├── stories/
 │   │   ├── DS-00001-login-form.md
 │   │   └── DS-00002-signup-flow.md
+│   ├── archive/
+│   │   ├── themes/
+│   │   ├── epics/
+│   │   └── stories/
 │   ├── inbox/
 │   │   └── 2026-03-03-dark-mode-idea.md
 │   ├── spikes/
@@ -308,18 +338,63 @@ your-project/
 │       ├── code.template.md
 │       └── validate.template.md
 └── docs/storydocs/              # When StoryDocs is enabled
-    ├── themes/
-    │   └── THEME-001/
-    ├── epics/
-    │   └── EPIC-0001/
-    └── stories/
-        └── DS-00001/
-            └── tasks/           # Task files live here
-                └── TASK-001-implement-validation.md
+  ├── archive/
+  │   ├── themes/
+  │   ├── epics/
+  │   └── stories/
+  ├── themes/
+  │   └── THEME-001/
+  ├── epics/
+  │   └── EPIC-0001/
+  └── stories/
+    └── DS-00001/
+      └── tasks/           # Task files live here
+        └── TASK-001-implement-validation.md
 ```
 
 Filenames use kebab-case slugs derived from the title. IDs use zero-padded numbers (5 digits for stories, 4 for epics, 3 for themes, 3 for
 tasks).
+
+## Configuring Soft Archive
+
+Soft archive keeps completed work in the repo and in the tree view by moving files into archive subfolders instead of deleting them.
+
+### Minimum config.json for soft archive
+
+```json
+{
+  "statuses": [
+    { "id": "todo", "label": "To Do", "canArchive": false },
+    { "id": "done", "label": "Done", "isCompletion": true, "canArchive": true }
+  ],
+  "sprints": {
+    "current": "sprint-2",
+    "sequence": ["sprint-1", "sprint-2", "sprint-3"],
+    "length": 14,
+    "firstSprintStartDate": "2026-01-05"
+  }
+}
+```
+
+### Optional archive path customization
+
+```json
+{
+  "archive": {
+    "soft": {
+      "devstories": "archive",
+      "storydocs": "archive"
+    }
+  }
+}
+```
+
+- `statuses[].isCompletion` controls story archive eligibility
+- `statuses[].canArchive` controls whether epics and themes with that status may archive once all descendants qualify
+- `sprints.sequence` defines the archive cutoff order and restore order
+- `sprints.length` and `sprints.firstSprintStartDate` are required if you want no-sprint items with `completed_on` dates to participate in date-based archive/restore decisions
+- `archive.soft.*` is optional; both paths default to `archive`
+- If StoryDocs is enabled, StoryDocs folders move with the archived story, epic, or theme
 
 ## Configuring Tasks
 
@@ -414,6 +489,16 @@ If a template file is missing, the built-in default template is used.
 | Task status change doesn't refresh the tree | External tool modified the file          | DevStories watches for file changes, but the watcher may have a brief delay on Windows. Re-save the file or collapse/expand the parent story to force a refresh                       |
 | `Create Task` command not available         | Story not selected or StoryDocs disabled | Right-click on a **story** node in the tree view (not an epic or theme). Ensure StoryDocs is enabled in config                                                                        |
 | Task type picker shows no options           | `taskTypes` not configured               | Add a `taskTypes` object to config.json mapping type IDs to template filenames (see [Configuring Tasks](#configuring-tasks))                                                          |
+
+### Soft archive or restore not doing what you expect
+
+| Problem                                   | Cause                                                   | Solution                                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Soft Archive Sprint...` finds nothing    | Stories are not in a completion status or wrong sprint  | Mark a story status with `"isCompletion": true` and ensure the story is in the selected sprint or an earlier one                                     |
+| Epics or themes do not archive            | Their status lacks `canArchive: true`, or children live | Add `"canArchive": true` to archive-eligible epic/theme statuses and make sure all descendant stories/epics are already archived or also eligible |
+| No-sprint completed items are skipped     | Missing sprint dates or `completed_on`                  | Set `sprints.length` and `sprints.firstSprintStartDate`, and let DevStories manage `completed_on` via status changes                                |
+| StoryDocs folders do not move with archive| StoryDocs disabled or root misconfigured                | Enable StoryDocs with a valid `storydocs.root`; `archive.soft.storydocs` only changes the archive folder name                                        |
+| Archived items seem to vanish after renaming the archive folder in config | Existing archived files still live in the old segment | Keep archive segment names stable, or move archived folders into the new `archive.soft.*` path before reloading                                     |
 
 ### Progress indicators look wrong
 

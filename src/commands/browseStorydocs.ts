@@ -10,6 +10,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import { Store } from "../core/store";
 import { ConfigService } from "../core/configService";
+import { StorydocsService } from "../core/storydocsService";
 import { getLogger } from "../core/logger";
 import { isStorydocsEnabled, computeNodeFolderPath, type NodeType } from "../core/storydocsUtils";
 import { buildQuickPickItems, type StorydocEntry } from "./browseStorydocsUtils";
@@ -42,6 +43,7 @@ export async function executeBrowseStorydocs(
   store: Store,
   configService: ConfigService,
   item: Record<string, unknown> | undefined,
+  storydocsService?: StorydocsService,
 ): Promise<void> {
   if (!item) {
     return;
@@ -67,13 +69,17 @@ export async function executeBrowseStorydocs(
   const folderPath = computeNodeFolderPath(root, node.id, node.nodeType);
   const folderUri = vscode.Uri.file(folderPath);
 
-  // Check if folder exists
+  // Check if folder exists; create it on-demand if missing
   let dirEntries: [string, vscode.FileType][];
   try {
     dirEntries = await vscode.workspace.fs.readDirectory(folderUri);
-  } catch (err) {
-    getLogger().debug(`StoryDocs: folder not found for ${node.id}`, err);
-    void vscode.window.showInformationMessage(`No StoryDocs folder found for ${node.id}.`);
+  } catch {
+    getLogger().debug(`StoryDocs: folder not found for ${node.id}, creating it`);
+    if (storydocsService) {
+      await storydocsService.ensureFolder(node.id, node.nodeType);
+    }
+    // After creation the folder is empty — show empty message
+    void vscode.window.showInformationMessage(`StoryDocs folder for ${node.id} is empty.`);
     return;
   }
 
