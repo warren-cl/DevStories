@@ -7,6 +7,8 @@ import {
   sortThemesByEpicSprintOrder,
   getTreeViewTitle,
   getStatusIndicator,
+  getNodeContextValue,
+  getArchivedDescription,
 } from "../../view/storiesProviderUtils";
 import { Story, StoryType, StorySize } from "../../types/story";
 import { Epic } from "../../types/epic";
@@ -623,5 +625,65 @@ describe("Tree View Sorting Utils", () => {
       expect(getStatusIndicator("in_progress", statuses)).toBe("◔");
       expect(getStatusIndicator("review", statuses)).toBe("◐");
     });
+  });
+});
+
+describe("getNodeContextValue", () => {
+  it('returns "story" for non-archived story', () => {
+    expect(getNodeContextValue("story", false)).toBe("story");
+  });
+
+  it('returns "story-archived" for archived story', () => {
+    expect(getNodeContextValue("story", true)).toBe("story-archived");
+  });
+
+  it('returns "epic" for non-archived epic', () => {
+    expect(getNodeContextValue("epic", false)).toBe("epic");
+  });
+
+  it('returns "epic-archived" for archived epic', () => {
+    expect(getNodeContextValue("epic", true)).toBe("epic-archived");
+  });
+
+  it('returns "theme" for non-archived theme', () => {
+    expect(getNodeContextValue("theme", false)).toBe("theme");
+  });
+
+  it('returns "theme-archived" for archived theme', () => {
+    expect(getNodeContextValue("theme", true)).toBe("theme-archived");
+  });
+
+  it('returns "task" for non-archived task', () => {
+    expect(getNodeContextValue("task", false)).toBe("task");
+  });
+
+  it('returns "task-archived" for archived task', () => {
+    expect(getNodeContextValue("task", true)).toBe("task-archived");
+  });
+
+  it("returns base contextValue when isArchived is undefined", () => {
+    expect(getNodeContextValue("story", undefined)).toBe("story");
+  });
+});
+
+describe("getArchivedDescription", () => {
+  it('appends " (archived)" when isArchived is true', () => {
+    expect(getArchivedDescription("● done", true)).toBe("● done (archived)");
+  });
+
+  it("returns description unchanged when not archived", () => {
+    expect(getArchivedDescription("● done", false)).toBe("● done");
+  });
+
+  it("returns description unchanged when isArchived is undefined", () => {
+    expect(getArchivedDescription("○ todo", undefined)).toBe("○ todo");
+  });
+
+  it("handles undefined description with archived flag", () => {
+    expect(getArchivedDescription(undefined, true)).toBe("(archived)");
+  });
+
+  it("returns undefined when description is undefined and not archived", () => {
+    expect(getArchivedDescription(undefined, false)).toBeUndefined();
   });
 });

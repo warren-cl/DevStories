@@ -4,6 +4,7 @@
  */
 
 import { StoryType, StorySize } from "../types/story";
+import { mondayOfCurrentWeek } from "../utils/dateUtils";
 
 const matter = require("gray-matter");
 
@@ -19,6 +20,9 @@ export interface StatusDef {
   /** When true, stories with this status are excluded from burndown calculations
    *  (e.g., cancelled, deferred). They don't count in ideal or actual lines. */
   isExcluded?: boolean;
+  /** When true, epics/themes with this status are eligible for archiving.
+   *  Stories use isCompletion for archive eligibility instead. */
+  canArchive?: boolean;
 }
 
 /**
@@ -60,16 +64,19 @@ export interface ConfigData {
   taskTypes: Record<string, string>;
   /** Root folder for templates (story and task), relative to workspace root. Falls back to .devstories/templates */
   templateRoot?: string;
+  /** Subdirectory name inside .devstories/ for soft-archived files (e.g. "archive") */
+  archiveSoftDevstories?: string;
+  /** Subdirectory name inside storydocs root for soft-archived docs (e.g. "archive") */
+  archiveSoftStorydocs?: string;
+  /** Subdirectory name inside .devstories/ for glacierd files (e.g. "glacier") */
+  archiveHardDevstories?: string;
+  /** Subdirectory name inside storydocs root for glacierd docs (e.g. "glacier") */
+  archiveHardStorydocs?: string;
 }
 
 /**
  * Default configuration values
  */
-/**
- * Current config schema version.
- * Bump this when adding new fields that should be auto-populated in existing configs.
- */
-export const CURRENT_CONFIG_SCHEMA_VERSION = 3;
 
 export const DEFAULT_TASK_TYPES: Record<string, string> = {
   code: "code.template.md",
@@ -97,6 +104,8 @@ export const DEFAULT_CONFIG: ConfigData = {
   storypoints: [1, 2, 4, 8, 16, 32, 64],
   quickCaptureDefaultToCurrentSprint: false,
   autoFilterCurrentSprint: true,
+  sprintLength: 7,
+  firstSprintStartDate: mondayOfCurrentWeek(),
 };
 
 /**
@@ -170,12 +179,15 @@ export function parseConfigJsonContent(content: string): Partial<ConfigData> {
 
     // Statuses
     if (Array.isArray(parsed.statuses)) {
-      result.statuses = parsed.statuses.map((s: { id: string; label?: string; isCompletion?: boolean; isExcluded?: boolean }) => ({
-        id: s.id,
-        label: s.label ?? s.id,
-        ...(s.isCompletion === true ? { isCompletion: true } : {}),
-        ...(s.isExcluded === true ? { isExcluded: true } : {}),
-      }));
+      result.statuses = parsed.statuses.map(
+        (s: { id: string; label?: string; isCompletion?: boolean; isExcluded?: boolean; canArchive?: boolean }) => ({
+          id: s.id,
+          label: s.label ?? s.id,
+          ...(s.isCompletion === true ? { isCompletion: true } : {}),
+          ...(s.isExcluded === true ? { isExcluded: true } : {}),
+          ...(typeof s.canArchive === "boolean" ? { canArchive: s.canArchive } : {}),
+        }),
+      );
     }
 
     // Sizes
@@ -225,6 +237,22 @@ export function parseConfigJsonContent(content: string): Partial<ConfigData> {
       result.templateRoot = parsed.templateRoot.trim();
     }
 
+    // Archive config
+    if (typeof parsed.archive?.soft?.devstories === "string" && parsed.archive.soft.devstories.trim()) {
+      result.archiveSoftDevstories = parsed.archive.soft.devstories.trim();
+    }
+    if (typeof parsed.archive?.soft?.storydocs === "string" && parsed.archive.soft.storydocs.trim()) {
+      result.archiveSoftStorydocs = parsed.archive.soft.storydocs.trim();
+    }
+
+    // Archive config — hard
+    if (typeof parsed.archive?.hard?.devstories === "string" && parsed.archive.hard.devstories.trim()) {
+      result.archiveHardDevstories = parsed.archive.hard.devstories.trim();
+    }
+    if (typeof parsed.archive?.hard?.storydocs === "string" && parsed.archive.hard.storydocs.trim()) {
+      result.archiveHardStorydocs = parsed.archive.hard.storydocs.trim();
+    }
+
     return result;
   } catch {
     // Invalid JSON config - return empty to use defaults
@@ -263,13 +291,17 @@ export function mergeConfigWithDefaults(parsed: Partial<ConfigData>): ConfigData
     storypoints: parsed.storypoints ?? DEFAULT_CONFIG.storypoints,
     quickCaptureDefaultToCurrentSprint: parsed.quickCaptureDefaultToCurrentSprint ?? DEFAULT_CONFIG.quickCaptureDefaultToCurrentSprint,
     autoFilterCurrentSprint: parsed.autoFilterCurrentSprint ?? DEFAULT_CONFIG.autoFilterCurrentSprint,
-    sprintLength: parsed.sprintLength,
-    firstSprintStartDate: parsed.firstSprintStartDate,
+    sprintLength: parsed.sprintLength ?? DEFAULT_CONFIG.sprintLength,
+    firstSprintStartDate: parsed.firstSprintStartDate ?? DEFAULT_CONFIG.firstSprintStartDate,
     storydocsEnabled: parsed.storydocsEnabled,
     storydocsRoot: parsed.storydocsRoot,
     taskPrefix: parsed.taskPrefix ?? DEFAULT_CONFIG.taskPrefix,
     taskTypes: parsed.taskTypes ?? DEFAULT_CONFIG.taskTypes,
     templateRoot: parsed.templateRoot,
+    archiveSoftDevstories: parsed.archiveSoftDevstories,
+    archiveSoftStorydocs: parsed.archiveSoftStorydocs,
+    archiveHardDevstories: parsed.archiveHardDevstories,
+    archiveHardStorydocs: parsed.archiveHardStorydocs,
   };
 }
 
@@ -352,6 +384,14 @@ export function isExcludedStatus(status: string, statuses: StatusDef[]): boolean
 }
 
 /**
+ * Check if a status allows archiving of epics/themes.
+ * Only statuses with canArchive: true qualify.
+ */
+export function isCanArchiveStatus(status: string, statuses: StatusDef[]): boolean {
+  return statuses.some((s) => s.id === status && s.canArchive === true);
+}
+
+/**
  * Generic debounce function
  */
 export function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number): (...args: Parameters<T>) => void {
@@ -377,7 +417,10 @@ export interface ConfigUpgradeResult {
 
 /**
  * Compute config upgrades needed to bring a raw config.json object up to the
- * current schema version. Returns null if no changes are needed.
+ * given target version. Returns null if no changes are needed.
+ *
+ * The targetVersion is typically the extension's semver string (e.g. "3.2.2").
+ * Old integer versions (1, 2, 3) are always considered older than any semver string.
  *
  * Rules:
  * - Add `idMode` → "auto" if missing
@@ -387,13 +430,21 @@ export interface ConfigUpgradeResult {
  * - Add `idPrefix.theme` → "THEME" if idPrefix exists but theme missing
  * - Add `storypoints` → [1,2,4,8,16,32,64] only if sizes has 7 items AND storypoints missing
  * - Add `storydocs` → { enabled: false, root: "docs/storydocs" } if missing
- * - Never add: sprints (user-specific)
- * - Always: bump `version` to CURRENT_CONFIG_SCHEMA_VERSION
+ * - Add `archive` → { soft: { devstories, storydocs }, hard: { devstories, storydocs } } if missing
+ * - Add `sprints.length` → 7 if sprints exists but length missing
+ * - Add `sprints.firstSprintStartDate` → mondayOfCurrentWeek() if sprints exists but field missing
+ * - Never add: sprints object itself (user-specific)
+ * - Always: bump `version` to targetVersion
  */
-export function computeConfigUpgrade(raw: Record<string, unknown>): ConfigUpgradeResult | null {
-  const version = typeof raw.version === "number" ? raw.version : 0;
-  if (version >= CURRENT_CONFIG_SCHEMA_VERSION) {
-    return null;
+export function computeConfigUpgrade(raw: Record<string, unknown>, targetVersion: string): ConfigUpgradeResult | null {
+  const rawVersion = raw.version;
+  // If version is already the target semver, no upgrade needed.
+  // If version is a higher semver string, no upgrade needed.
+  // Integer versions (1, 2, 3) are always considered older.
+  if (typeof rawVersion === "string") {
+    if (rawVersion === targetVersion || rawVersion > targetVersion) {
+      return null;
+    }
   }
 
   // Deep-clone to avoid mutating the input
@@ -467,10 +518,56 @@ export function computeConfigUpgrade(raw: Record<string, unknown>): ConfigUpgrad
     fieldsAdded.push("templateRoot");
   }
 
-  // Always bump version
-  upgraded.version = CURRENT_CONFIG_SCHEMA_VERSION;
+  // archive (soft + hard defaults)
+  if (upgraded.archive === undefined) {
+    upgraded.archive = {
+      soft: { devstories: "archive", storydocs: "archive" },
+      hard: { devstories: "glacier", storydocs: "glacier" },
+    };
+    fieldsAdded.push("archive");
+  } else if (typeof upgraded.archive === "object" && upgraded.archive !== null) {
+    const archive = upgraded.archive as Record<string, unknown>;
+    if (archive.soft === undefined) {
+      archive.soft = { devstories: "archive", storydocs: "archive" };
+      fieldsAdded.push("archive.soft");
+    }
+    if (archive.hard === undefined) {
+      archive.hard = { devstories: "glacier", storydocs: "glacier" };
+      fieldsAdded.push("archive.hard");
+    }
+  }
 
-  if (fieldsAdded.length === 0 && version < CURRENT_CONFIG_SCHEMA_VERSION) {
+  // sprints.length and sprints.firstSprintStartDate (only if sprints object exists)
+  if (typeof upgraded.sprints === "object" && upgraded.sprints !== null) {
+    const sprints = upgraded.sprints as Record<string, unknown>;
+    if (sprints.length === undefined) {
+      sprints.length = 7;
+      fieldsAdded.push("sprints.length");
+    }
+    if (sprints.firstSprintStartDate === undefined) {
+      sprints.firstSprintStartDate = mondayOfCurrentWeek();
+      fieldsAdded.push("sprints.firstSprintStartDate");
+    }
+  }
+
+  // statuses[].canArchive — add false to every status missing the field
+  if (Array.isArray(upgraded.statuses)) {
+    let touched = false;
+    for (const s of upgraded.statuses as Array<Record<string, unknown>>) {
+      if (s.canArchive === undefined) {
+        s.canArchive = false;
+        touched = true;
+      }
+    }
+    if (touched) {
+      fieldsAdded.push("statuses[].canArchive");
+    }
+  }
+
+  // Always bump version
+  upgraded.version = targetVersion;
+
+  if (fieldsAdded.length === 0) {
     // Only version bump needed — still counts as an upgrade
     return { upgraded, fieldsAdded: ["version"] };
   }

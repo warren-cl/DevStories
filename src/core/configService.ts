@@ -16,7 +16,6 @@ import {
   validateSprintConfig,
   DEFAULT_CONFIG,
   computeConfigUpgrade,
-  CURRENT_CONFIG_SCHEMA_VERSION,
 } from './configServiceUtils';
 import { showConfigErrorNotification, showSprintValidationErrorNotification } from './configServiceNotifications';
 
@@ -27,6 +26,7 @@ export class ConfigService implements vscode.Disposable {
   private _config: ConfigData = DEFAULT_CONFIG;
   private _templates: TemplateData[] = [];
   private _lastGoodConfig: ConfigData = DEFAULT_CONFIG;
+  private _extensionVersion: string;
 
   private configWatcher: vscode.FileSystemWatcher | undefined;
   private templateWatcher: vscode.FileSystemWatcher | undefined;
@@ -41,6 +41,10 @@ export class ConfigService implements vscode.Disposable {
   readonly onDidConfigChange = this._onDidConfigChange.event;
   readonly onDidTemplatesChange = this._onDidTemplatesChange.event;
   readonly onParseError = this._onParseError.event;
+
+  constructor(extensionVersion: string) {
+    this._extensionVersion = extensionVersion;
+  }
 
   /**
    * Get current config (synchronous)
@@ -310,7 +314,7 @@ export class ConfigService implements vscode.Disposable {
       const contentStr = new TextDecoder().decode(content);
       const raw: Record<string, unknown> = JSON.parse(contentStr);
 
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, this._extensionVersion);
       if (!result) {
         return [];
       }
@@ -328,7 +332,7 @@ export class ConfigService implements vscode.Disposable {
       await vscode.workspace.fs.writeFile(configUri, new TextEncoder().encode(upgraded));
 
       getLogger().info(
-        `Config upgraded to v${CURRENT_CONFIG_SCHEMA_VERSION}. Fields added: ${result.fieldsAdded.join(', ')}`
+        `Config upgraded to v${this._extensionVersion}. Fields added: ${result.fieldsAdded.join(', ')}`
       );
 
       // Reload config so the in-memory state reflects the upgrade

@@ -23,6 +23,18 @@ export function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Get the Monday of the current week as YYYY-MM-DD using local time.
+ * If today is Monday, returns today. Otherwise returns the most recent Monday.
+ */
+export function mondayOfCurrentWeek(): string {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const diff = day === 0 ? 6 : day - 1; // days since Monday
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+  return formatDate(monday);
+}
+
 /** Known date field names in DevStories frontmatter. */
 const DATE_FIELDS = new Set(["created", "updated", "completed_on"]);
 

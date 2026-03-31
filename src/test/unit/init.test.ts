@@ -13,15 +13,17 @@ describe("Init Command", () => {
         sprint: "sprint-1",
       };
 
-      const json = generateConfigJson(config);
+      const json = generateConfigJson(config, "3.2.2");
       const parsed = JSON.parse(json);
 
-      expect(parsed.version).toBe(3);
+      expect(parsed.version).toBe("3.2.2");
       expect(parsed.project).toBe("my-project");
       expect(parsed.idPrefix.epic).toBe("EPIC");
       expect(parsed.idPrefix.story).toBe("DS");
       expect(parsed.idPrefix.task).toBe("TASK");
       expect(parsed.sprints.current).toBe("sprint-1");
+      expect(parsed.sprints.length).toBe(7);
+      expect(parsed.sprints.firstSprintStartDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(parsed.statuses).toHaveLength(4);
       expect(parsed.statuses[0].id).toBe("todo");
       expect(parsed.statuses[1].id).toBe("in_progress");
@@ -36,6 +38,10 @@ describe("Init Command", () => {
       expect(Object.keys(parsed.taskTypes)).toContain("code");
       expect(Object.keys(parsed.taskTypes)).toContain("document");
       expect(parsed.templateRoot).toBe(".devstories/templates");
+      expect(parsed.archive).toEqual({
+        soft: { devstories: "archive", storydocs: "archive" },
+        hard: { devstories: "glacier", storydocs: "glacier" },
+      });
     });
 
     it("should handle custom prefixes", () => {
@@ -48,7 +54,7 @@ describe("Init Command", () => {
         sprint: "iteration-1",
       };
 
-      const json = generateConfigJson(config);
+      const json = generateConfigJson(config, "3.2.2");
       const parsed = JSON.parse(json);
 
       expect(parsed.idPrefix.epic).toBe("EP");
@@ -67,7 +73,7 @@ describe("Init Command", () => {
         sprint: "sprint-1",
       };
 
-      const json = generateConfigJson(config);
+      const json = generateConfigJson(config, "3.2.2");
       const parsed = JSON.parse(json);
 
       expect(parsed.project).toBe('my "quoted" project');
@@ -83,7 +89,7 @@ describe("Init Command", () => {
         sprint: "sprint-1",
       };
 
-      const json = generateConfigJson(config);
+      const json = generateConfigJson(config, "3.2.2");
       const parsed = JSON.parse(json);
 
       expect(parsed.sprints.sequence).toContain("sprint-1");

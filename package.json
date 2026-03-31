@@ -2,7 +2,7 @@
   "name": "devstories",
   "displayName": "DevStories",
   "description": "Stories as markdown files, version-controlled with your code. AI-readable. Git-tracked.",
-  "version": "3.0.2",
+  "version": "3.2.2",
   "publisher": "DhavalSavalia",
   "author": {
     "name": "Dhaval Savalia",
@@ -179,9 +179,34 @@
         "command": "devstories.createTask",
         "title": "Create Task",
         "category": "DevStories"
+      },
+      {
+        "command": "devstories.softArchive",
+        "title": "Soft Archive Sprint...",
+        "category": "DevStories"
+      },
+      {
+        "command": "devstories.restoreFromArchive",
+        "title": "Restore from Archive...",
+        "category": "DevStories"
+      },
+      {
+        "command": "devstories.restoreItem",
+        "title": "Restore from Archive",
+        "category": "DevStories"
       }
     ],
     "menus": {
+      "commandPalette": [
+        {
+          "command": "devstories.createStory",
+          "when": "false"
+        },
+        {
+          "command": "devstories.restoreItem",
+          "when": "false"
+        }
+      ],
       "view/title": [
         {
           "command": "devstories.switchToBreakdown",
@@ -303,6 +328,56 @@
         {
           "command": "devstories.browseStorydocs",
           "when": "view == devstories.views.explorer && viewItem == task && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.restoreItem",
+          "when": "view == devstories.views.explorer && viewItem =~ /^(story|epic|theme)-archived$/",
+          "group": "devstories@4"
+        },
+        {
+          "command": "devstories.changeStatus",
+          "when": "view == devstories.views.explorer && viewItem == story-archived",
+          "group": "devstories@1"
+        },
+        {
+          "command": "devstories.changeStatus",
+          "when": "view == devstories.views.explorer && viewItem == epic-archived",
+          "group": "devstories@1"
+        },
+        {
+          "command": "devstories.changeStatus",
+          "when": "view == devstories.views.explorer && viewItem == theme-archived",
+          "group": "devstories@1"
+        },
+        {
+          "command": "devstories.changeStatus",
+          "when": "view == devstories.views.explorer && viewItem == task-archived",
+          "group": "devstories@1"
+        },
+        {
+          "command": "devstories.openEpic",
+          "when": "view == devstories.views.explorer && viewItem == epic-archived",
+          "group": "navigation"
+        },
+        {
+          "command": "devstories.openTheme",
+          "when": "view == devstories.views.explorer && viewItem == theme-archived",
+          "group": "navigation"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == story-archived && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == epic-archived && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == theme-archived && devstories:storydocsEnabled",
           "group": "devstories@3"
         }
       ],

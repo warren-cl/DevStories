@@ -58,16 +58,8 @@ async function discoverAgents(workspaceUri: vscode.Uri): Promise<AgentInfo[]> {
  * Collect existing task IDs for a given story by scanning its tasks folder on disk.
  * Combines disk-based filenames with store IDs for accuracy.
  */
-async function collectExistingTaskIds(
-  storydocsRoot: string,
-  storyId: string,
-  taskPrefix: string,
-  store: Store,
-): Promise<string[]> {
-  const tasksGlob = new vscode.RelativePattern(
-    vscode.Uri.file(storydocsRoot),
-    `stories/${storyId}/tasks/${taskPrefix}-*.md`,
-  );
+async function collectExistingTaskIds(storydocsRoot: string, storyId: string, taskPrefix: string, store: Store): Promise<string[]> {
+  const tasksGlob = new vscode.RelativePattern(vscode.Uri.file(storydocsRoot), `stories/${storyId}/tasks/${taskPrefix}-*.md`);
   const diskFiles = await vscode.workspace.findFiles(tasksGlob);
   const diskIds = diskFiles
     .map((uri) => {
@@ -85,11 +77,7 @@ async function collectExistingTaskIds(
 /**
  * Load a task type template from the template root or fall back to default.
  */
-async function loadTaskTemplate(
-  workspaceUri: vscode.Uri,
-  templateRoot: string | undefined,
-  templateFilename: string,
-): Promise<string> {
+async function loadTaskTemplate(workspaceUri: vscode.Uri, templateRoot: string | undefined, templateFilename: string): Promise<string> {
   const baseUri = templateRoot
     ? vscode.Uri.joinPath(workspaceUri, templateRoot)
     : vscode.Uri.joinPath(workspaceUri, ".devstories", "templates");
@@ -129,9 +117,7 @@ export async function executeCreateTask(
   const config = configService?.config;
 
   if (!config || !isStorydocsEnabled(config)) {
-    void vscode.window.showErrorMessage(
-      "DevStories: Tasks require storydocs to be enabled. Set storydocs.enabled = true in config.json.",
-    );
+    void vscode.window.showErrorMessage("DevStories: Tasks require storydocs to be enabled. Set storydocs.enabled = true in config.json.");
     return false;
   }
 
@@ -261,8 +247,8 @@ export async function executeCreateTask(
   const filePath = buildTaskFilePath(absoluteStorydocsRoot, selectedStoryId, taskId, title);
   const fileUri = vscode.Uri.file(filePath);
 
-  // Ensure the tasks folder exists
-  void storydocsService?.ensureTaskFolder(selectedStoryId);
+  // Ensure the story + tasks folder exists (must complete before file write)
+  await storydocsService?.ensureTaskFolder(selectedStoryId);
 
   try {
     await vscode.workspace.fs.writeFile(fileUri, Buffer.from(markdown, "utf8"));

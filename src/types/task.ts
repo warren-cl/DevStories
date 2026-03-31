@@ -15,6 +15,7 @@ export interface Task {
   completedOn?: Date; // Auto-set when status reaches isCompletion, cleared otherwise
   content: string; // The markdown body
   filePath?: string; // Absolute path to the file
+  isArchived?: boolean; // Derived from file path — true when in archive directory
 }
 
 /**
@@ -22,10 +23,5 @@ export interface Task {
  * Tasks are distinguished by having both `taskType` and `story` fields.
  */
 export function isTask(element: unknown): element is Task {
-  return (
-    typeof element === 'object' &&
-    element !== null &&
-    'taskType' in element &&
-    'story' in element
-  );
+  return typeof element === "object" && element !== null && "taskType" in element && "story" in element;
 }

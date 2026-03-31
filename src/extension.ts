@@ -13,6 +13,7 @@ import { executeSaveAsTemplate } from "./commands/saveAsTemplate";
 import { executeSetCurrentSprint } from "./commands/setCurrentSprint";
 import { executeSortStories } from "./commands/sortStories";
 import { executeTextFilter } from "./commands/textFilter";
+import { executeSoftArchive, executeRestoreFromArchive, executeRestoreItem } from "./commands/archiveSprint";
 import { executeBrowseStorydocs } from "./commands/browseStorydocs";
 import { applyAutoFilterSprint } from "./core/autoFilterSprint";
 import { AutoTimestamp } from "./core/autoTimestamp";
@@ -44,10 +45,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const logger = initializeLogger();
   logger.info("DevStories is now active!");
 
+  const extensionVersion: string = context.extension.packageJSON.version ?? "0.0.0";
+
   // Initialize Core Components
   const watcher = new Watcher();
   const store = new Store(watcher);
-  const configService = new ConfigService();
+  const configService = new ConfigService(extensionVersion);
   const sprintFilterService = new SprintFilterService();
   const sortService = new SortService();
   const textFilterService = new TextFilterService();
@@ -176,23 +179,34 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Helper: create (or recreate) TaskWatcher, wiring events to store
   let taskWatcher: TaskWatcher | undefined;
-  function ensureTaskWatcher(absRoot: string | undefined): void {
+  let archiveTaskWatcher: TaskWatcher | undefined;
+  function ensureTaskWatcher(absRoot: string | undefined, archiveStorydocsSegment?: string): void {
     taskWatcher?.dispose();
     taskWatcher = undefined;
+    archiveTaskWatcher?.dispose();
+    archiveTaskWatcher = undefined;
     if (absRoot) {
       taskWatcher = new TaskWatcher(absRoot);
       taskWatcher.onDidCreate((uri) => store.reloadFile(uri));
       taskWatcher.onDidChange((uri) => store.reloadFile(uri));
       taskWatcher.onDidDelete((uri) => store.handleFileDeleted(uri));
+
+      // Second watcher for archived task files
+      const archiveSeg = archiveStorydocsSegment ?? "archive";
+      const archiveRoot = vscode.Uri.joinPath(vscode.Uri.file(absRoot), archiveSeg).fsPath;
+      archiveTaskWatcher = new TaskWatcher(archiveRoot);
+      archiveTaskWatcher.onDidCreate((uri) => store.reloadFile(uri));
+      archiveTaskWatcher.onDidChange((uri) => store.reloadFile(uri));
+      archiveTaskWatcher.onDidDelete((uri) => store.handleFileDeleted(uri));
     }
   }
 
   // Load initial data (including tasks when storydocs is enabled)
   const absRoot = getAbsStorydocsRoot(configService.config);
-  await store.load(absRoot);
+  await store.load(absRoot, configService.config.archiveSoftDevstories, configService.config.archiveSoftStorydocs);
 
   // Create initial TaskWatcher for storydocs task files
-  ensureTaskWatcher(absRoot);
+  ensureTaskWatcher(absRoot, configService.config.archiveSoftStorydocs);
 
   // Reconcile storydocs folders after store is populated
   if (isStorydocsEnabled(configService.config)) {
@@ -203,20 +217,12 @@ export async function activate(context: vscode.ExtensionContext) {
   // Re-reconcile when storydocs config changes (e.g. feature enabled mid-session)
   configService.onDidConfigChange(async (newConfig) => {
     const newRoot = getAbsStorydocsRoot(newConfig);
-    ensureTaskWatcher(newRoot);
+    ensureTaskWatcher(newRoot, newConfig.archiveSoftStorydocs);
     if (isStorydocsEnabled(newConfig)) {
       void storydocsService.reconcileAll();
     }
     // Reload store so task data reflects the new config
-    await store.load(newRoot);
-  });
-
-  // Cleanup empty storydocs folders when nodes are deleted
-  store.onWillDeleteNode((info) => {
-    // Tasks don't have their own storydocs type folder; they live inside story folders
-    if (info.nodeType !== "task") {
-      void storydocsService.cleanupEmptyFolder(info.id, info.nodeType);
-    }
+    await store.load(newRoot, newConfig.archiveSoftDevstories, newConfig.archiveSoftStorydocs);
   });
 
   // Update welcome context based on folder and epic state
@@ -229,10 +235,14 @@ export async function activate(context: vscode.ExtensionContext) {
   const initCommand = vscode.commands.registerCommand(
     "devstories.init",
     wrapCommand("init", async () => {
-      const success = await executeInit();
+      const success = await executeInit({ extensionVersion });
       if (success) {
         // Reload store to pick up new files (including tasks if storydocs enabled)
-        await store.load(getAbsStorydocsRoot(configService.config));
+        await store.load(
+          getAbsStorydocsRoot(configService.config),
+          configService.config.archiveSoftDevstories,
+          configService.config.archiveSoftStorydocs,
+        );
         // Update welcome context (folder now exists)
         await updateWelcomeContext(store.getEpics().length);
       }
@@ -389,7 +399,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const browseStorydocsCommand = vscode.commands.registerCommand(
     "devstories.browseStorydocs",
     wrapCommand("browseStorydocs", async (item) => {
-      await executeBrowseStorydocs(store, configService, item);
+      await executeBrowseStorydocs(store, configService, item, storydocsService);
     }),
   );
 
@@ -413,6 +423,43 @@ export async function activate(context: vscode.ExtensionContext) {
     "devstories.createTask",
     wrapCommand("createTask", async (item) => {
       await executeCreateTask(store, item?.id, storydocsService, configService);
+    }),
+  );
+
+  // Soft Archive command
+  const reloadStore = async () => {
+    const root = getAbsStorydocsRoot(configService.config);
+    await store.load(root, configService.config.archiveSoftDevstories, configService.config.archiveSoftStorydocs);
+  };
+
+  const softArchiveCommand = vscode.commands.registerCommand(
+    "devstories.softArchive",
+    wrapCommand("softArchive", async () => {
+      await executeSoftArchive(store, configService, reloadStore, storydocsService);
+    }),
+  );
+
+  // Restore from Archive command (sprint-based)
+  const restoreFromArchiveCommand = vscode.commands.registerCommand(
+    "devstories.restoreFromArchive",
+    wrapCommand("restoreFromArchive", async () => {
+      await executeRestoreFromArchive(store, configService, reloadStore, storydocsService);
+    }),
+  );
+
+  // Restore single item command (context menu)
+  const restoreItemCommand = vscode.commands.registerCommand(
+    "devstories.restoreItem",
+    wrapCommand("restoreItem", async (item) => {
+      if (!item?.id) {
+        return;
+      }
+      // VS Code passes the data element from getChildren(), not the TreeItem.
+      // Use store lookups to determine type (same pattern as changeStatus).
+      const epic = store.getEpic(item.id);
+      const theme = store.getTheme(item.id);
+      const itemType = epic ? ("epic" as const) : theme ? ("theme" as const) : ("story" as const);
+      await executeRestoreItem(store, configService, item.id, itemType, reloadStore, storydocsService);
     }),
   );
 
@@ -453,9 +500,17 @@ export async function activate(context: vscode.ExtensionContext) {
     browseStorydocsCommand,
     reconcileStorydocsCommand,
     createTaskCommand,
+    softArchiveCommand,
+    restoreFromArchiveCommand,
+    restoreItemCommand,
   );
   // TaskWatcher is managed by ensureTaskWatcher(); register a disposal wrapper
-  context.subscriptions.push({ dispose: () => taskWatcher?.dispose() });
+  context.subscriptions.push({
+    dispose: () => {
+      taskWatcher?.dispose();
+      archiveTaskWatcher?.dispose();
+    },
+  });
 }
 
 export function deactivate() {

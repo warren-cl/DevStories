@@ -11,9 +11,9 @@ import {
   getSprintIndex,
   isCompletedStatus,
   isExcludedStatus,
+  isCanArchiveStatus,
   StatusDef,
   computeConfigUpgrade,
-  CURRENT_CONFIG_SCHEMA_VERSION,
 } from "../../core/configServiceUtils";
 
 describe("ConfigService Utils", () => {
@@ -181,6 +181,23 @@ describe("ConfigService Utils", () => {
         { id: "done", label: "Done", isCompletion: true },
         { id: "blocked", label: "Blocked" },
         { id: "cancelled", label: "Cancelled" },
+      ]);
+    });
+
+    it("should preserve canArchive flag when parsing statuses", () => {
+      const json = JSON.stringify({
+        version: 1,
+        statuses: [
+          { id: "todo", label: "To Do", canArchive: false },
+          { id: "done", label: "Done", isCompletion: true, canArchive: true },
+          { id: "cancelled", label: "Cancelled", canArchive: true },
+        ],
+      });
+      const result = parseConfigJsonContent(json);
+      expect(result.statuses).toEqual([
+        { id: "todo", label: "To Do", canArchive: false },
+        { id: "done", label: "Done", isCompletion: true, canArchive: true },
+        { id: "cancelled", label: "Cancelled", canArchive: true },
       ]);
     });
   });
@@ -499,6 +516,40 @@ Some content`;
     });
   });
 
+  describe("isCanArchiveStatus", () => {
+    it("returns true for statuses with canArchive flag", () => {
+      const statuses: StatusDef[] = [
+        { id: "todo", label: "To Do" },
+        { id: "done", label: "Done", isCompletion: true, canArchive: true },
+        { id: "cancelled", label: "Cancelled", canArchive: true },
+      ];
+      expect(isCanArchiveStatus("done", statuses)).toBe(true);
+      expect(isCanArchiveStatus("cancelled", statuses)).toBe(true);
+    });
+
+    it("returns false for statuses without canArchive flag", () => {
+      const statuses: StatusDef[] = [
+        { id: "todo", label: "To Do" },
+        { id: "done", label: "Done", isCompletion: true, canArchive: true },
+      ];
+      expect(isCanArchiveStatus("todo", statuses)).toBe(false);
+    });
+
+    it("returns false for unknown status", () => {
+      const statuses: StatusDef[] = [{ id: "done", label: "Done", canArchive: true }];
+      expect(isCanArchiveStatus("unknown", statuses)).toBe(false);
+    });
+
+    it("returns false for empty statuses", () => {
+      expect(isCanArchiveStatus("done", [])).toBe(false);
+    });
+
+    it("returns false when canArchive is explicitly false", () => {
+      const statuses: StatusDef[] = [{ id: "done", label: "Done", canArchive: false }];
+      expect(isCanArchiveStatus("done", statuses)).toBe(false);
+    });
+  });
+
   describe("sprint date config parsing", () => {
     it("parses sprints.length from config JSON", () => {
       const config = parseConfigJsonContent(
@@ -545,10 +596,10 @@ Some content`;
       expect(merged.firstSprintStartDate).toBe("2026-01-06");
     });
 
-    it("mergeConfigWithDefaults leaves sprint date fields undefined when not set", () => {
+    it("mergeConfigWithDefaults applies default sprint date fields when not set", () => {
       const merged = mergeConfigWithDefaults({});
-      expect(merged.sprintLength).toBeUndefined();
-      expect(merged.firstSprintStartDate).toBeUndefined();
+      expect(merged.sprintLength).toBe(7);
+      expect(merged.firstSprintStartDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     });
   });
 
@@ -583,19 +634,35 @@ Some content`;
   });
 
   describe("computeConfigUpgrade", () => {
-    it("returns null when config is already at current version", () => {
-      const raw = { version: CURRENT_CONFIG_SCHEMA_VERSION, idMode: "auto" };
-      expect(computeConfigUpgrade(raw)).toBeNull();
+    const TARGET = "3.2.2";
+
+    it("returns null when config is already at target version", () => {
+      const raw = { version: TARGET, idMode: "auto" };
+      expect(computeConfigUpgrade(raw, TARGET)).toBeNull();
     });
 
-    it("returns null when config is ahead of current version", () => {
-      const raw = { version: CURRENT_CONFIG_SCHEMA_VERSION + 1 };
-      expect(computeConfigUpgrade(raw)).toBeNull();
+    it("returns null when config version is a higher semver", () => {
+      const raw = { version: "99.0.0" };
+      expect(computeConfigUpgrade(raw, TARGET)).toBeNull();
+    });
+
+    it("upgrades from old integer version 1", () => {
+      const raw = { version: 1, idPrefix: { epic: "EP", story: "ST", theme: "TH" } };
+      const result = computeConfigUpgrade(raw, TARGET);
+      expect(result).not.toBeNull();
+      expect(result!.upgraded.version).toBe(TARGET);
+    });
+
+    it("upgrades from old integer version 3 to semver", () => {
+      const raw = { version: 3, idMode: "auto" };
+      const result = computeConfigUpgrade(raw, TARGET);
+      expect(result).not.toBeNull();
+      expect(result!.upgraded.version).toBe(TARGET);
     });
 
     it("adds idMode when missing", () => {
       const raw = { version: 1, idPrefix: { epic: "EP", story: "ST", theme: "TH" } };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result).not.toBeNull();
       expect(result!.upgraded.idMode).toBe("auto");
       expect(result!.fieldsAdded).toContain("idMode");
@@ -603,42 +670,42 @@ Some content`;
 
     it("does not overwrite existing idMode", () => {
       const raw = { version: 1, idMode: "manual", idPrefix: { epic: "E", story: "S", theme: "T" } };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.idMode).toBe("manual");
       expect(result!.fieldsAdded).not.toContain("idMode");
     });
 
     it("adds autoFilterCurrentSprint when missing", () => {
       const raw = { version: 1 };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.autoFilterCurrentSprint).toBe(true);
       expect(result!.fieldsAdded).toContain("autoFilterCurrentSprint");
     });
 
     it("does not overwrite existing autoFilterCurrentSprint", () => {
       const raw = { version: 1, autoFilterCurrentSprint: false };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.autoFilterCurrentSprint).toBe(false);
       expect(result!.fieldsAdded).not.toContain("autoFilterCurrentSprint");
     });
 
     it("adds quickCapture when entirely missing", () => {
       const raw = { version: 1 };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.quickCapture).toEqual({ defaultToCurrentSprint: false });
       expect(result!.fieldsAdded).toContain("quickCapture");
     });
 
     it("adds quickCapture.defaultToCurrentSprint when quickCapture exists but field missing", () => {
       const raw = { version: 1, quickCapture: {} };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect((result!.upgraded.quickCapture as Record<string, unknown>).defaultToCurrentSprint).toBe(false);
       expect(result!.fieldsAdded).toContain("quickCapture.defaultToCurrentSprint");
     });
 
     it("does not overwrite existing quickCapture.defaultToCurrentSprint", () => {
       const raw = { version: 1, quickCapture: { defaultToCurrentSprint: true } };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect((result!.upgraded.quickCapture as Record<string, unknown>).defaultToCurrentSprint).toBe(true);
       expect(result!.fieldsAdded).not.toContain("quickCapture");
       expect(result!.fieldsAdded).not.toContain("quickCapture.defaultToCurrentSprint");
@@ -646,49 +713,49 @@ Some content`;
 
     it("adds idPrefix.theme when idPrefix exists but theme missing", () => {
       const raw = { version: 1, idPrefix: { epic: "EPIC", story: "DS" } };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect((result!.upgraded.idPrefix as Record<string, unknown>).theme).toBe("THEME");
       expect(result!.fieldsAdded).toContain("idPrefix.theme");
     });
 
     it("does not add idPrefix.theme when idPrefix is absent", () => {
       const raw = { version: 1 };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.fieldsAdded).not.toContain("idPrefix.theme");
     });
 
     it("does not overwrite existing idPrefix.theme", () => {
       const raw = { version: 1, idPrefix: { epic: "EP", story: "ST", theme: "TH" } };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect((result!.upgraded.idPrefix as Record<string, unknown>).theme).toBe("TH");
       expect(result!.fieldsAdded).not.toContain("idPrefix.theme");
     });
 
     it("adds storypoints when sizes has 7 items and storypoints missing", () => {
       const raw = { version: 1, sizes: ["XXS", "XS", "S", "M", "L", "XL", "XXL"] };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.storypoints).toEqual([1, 2, 4, 8, 16, 32, 64]);
       expect(result!.fieldsAdded).toContain("storypoints");
     });
 
     it("does not add storypoints when sizes has non-7 items", () => {
       const raw = { version: 1, sizes: ["S", "M", "L"] };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.storypoints).toBeUndefined();
       expect(result!.fieldsAdded).not.toContain("storypoints");
     });
 
     it("does not overwrite existing storypoints", () => {
       const raw = { version: 1, sizes: ["XXS", "XS", "S", "M", "L", "XL", "XXL"], storypoints: [1, 1, 2, 3, 5, 8, 13] };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.storypoints).toEqual([1, 1, 2, 3, 5, 8, 13]);
       expect(result!.fieldsAdded).not.toContain("storypoints");
     });
 
-    it("bumps version to CURRENT_CONFIG_SCHEMA_VERSION", () => {
+    it("bumps version to target version string", () => {
       const raw = { version: 1 };
-      const result = computeConfigUpgrade(raw);
-      expect(result!.upgraded.version).toBe(CURRENT_CONFIG_SCHEMA_VERSION);
+      const result = computeConfigUpgrade(raw, TARGET);
+      expect(result!.upgraded.version).toBe(TARGET);
     });
 
     it("handles version-only upgrade when all fields already present", () => {
@@ -700,80 +767,90 @@ Some content`;
         idPrefix: { epic: "EP", story: "ST", theme: "TH", task: "TASK" },
         storypoints: [1, 2, 4, 8, 16, 32, 64],
         sizes: ["XXS", "XS", "S", "M", "L", "XL", "XXL"],
+        statuses: [
+          { id: "todo", label: "To Do", canArchive: false },
+          { id: "done", label: "Done", isCompletion: true, canArchive: true },
+        ],
         storydocs: { enabled: false, root: "docs/storydocs" },
         taskTypes: { code: "code.template.md" },
         templateRoot: ".devstories/templates",
+        archive: { soft: { devstories: "archive", storydocs: "archive" }, hard: { devstories: "glacier", storydocs: "glacier" } },
+        sprints: { current: "sprint-1", sequence: ["sprint-1"], length: 14, firstSprintStartDate: "2026-01-05" },
       };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result).not.toBeNull();
-      expect(result!.upgraded.version).toBe(CURRENT_CONFIG_SCHEMA_VERSION);
+      expect(result!.upgraded.version).toBe(TARGET);
       expect(result!.fieldsAdded).toEqual(["version"]);
     });
 
     it("does not mutate the input object", () => {
       const raw = { version: 1 };
       const originalStr = JSON.stringify(raw);
-      computeConfigUpgrade(raw);
+      computeConfigUpgrade(raw, TARGET);
       expect(JSON.stringify(raw)).toBe(originalStr);
     });
 
     it("handles missing version field (treats as v0)", () => {
       const raw = { idPrefix: { epic: "EP", story: "ST" } };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result).not.toBeNull();
-      expect(result!.upgraded.version).toBe(CURRENT_CONFIG_SCHEMA_VERSION);
+      expect(result!.upgraded.version).toBe(TARGET);
     });
 
-    it("preserves fields not managed by upgrade (e.g. sprints)", () => {
+    it("preserves non-sprint fields and augments sprints with defaults", () => {
       const raw = {
         version: 1,
         sprints: { current: "sprint-1", sequence: ["sprint-1"] },
         storydocs: { enabled: true, root: "docs" },
         project: "My Project",
       };
-      const result = computeConfigUpgrade(raw);
-      expect(result!.upgraded.sprints).toEqual({ current: "sprint-1", sequence: ["sprint-1"] });
+      const result = computeConfigUpgrade(raw, TARGET);
+      const sprints = result!.upgraded.sprints as Record<string, unknown>;
+      expect(sprints.current).toBe("sprint-1");
+      expect(sprints.sequence).toEqual(["sprint-1"]);
+      expect(sprints.length).toBe(7);
+      expect(sprints.firstSprintStartDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(result!.upgraded.storydocs).toEqual({ enabled: true, root: "docs" });
       expect(result!.upgraded.project).toBe("My Project");
     });
 
     it("adds storydocs with enabled:false when missing", () => {
       const raw = { version: 1 };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.storydocs).toEqual({ enabled: false, root: "docs/storydocs" });
       expect(result!.fieldsAdded).toContain("storydocs");
     });
 
     it("does not overwrite existing storydocs config", () => {
       const raw = { version: 1, storydocs: { enabled: true, root: "my-docs" } };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.storydocs).toEqual({ enabled: true, root: "my-docs" });
       expect(result!.fieldsAdded).not.toContain("storydocs");
     });
 
     it("adds idPrefix.task when idPrefix exists but task missing", () => {
       const raw = { version: 1, idPrefix: { epic: "EPIC", story: "DS", theme: "TH" } };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect((result!.upgraded.idPrefix as Record<string, unknown>).task).toBe("TASK");
       expect(result!.fieldsAdded).toContain("idPrefix.task");
     });
 
     it("does not overwrite existing idPrefix.task", () => {
       const raw = { version: 1, idPrefix: { epic: "EP", story: "ST", theme: "TH", task: "TSK" } };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect((result!.upgraded.idPrefix as Record<string, unknown>).task).toBe("TSK");
       expect(result!.fieldsAdded).not.toContain("idPrefix.task");
     });
 
     it("does not add idPrefix.task when idPrefix is absent", () => {
       const raw = { version: 1 };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.fieldsAdded).not.toContain("idPrefix.task");
     });
 
     it("adds taskTypes when missing", () => {
       const raw = { version: 1 };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.taskTypes).toBeDefined();
       expect(Object.keys(result!.upgraded.taskTypes as Record<string, string>)).toContain("code");
       expect(result!.fieldsAdded).toContain("taskTypes");
@@ -781,23 +858,330 @@ Some content`;
 
     it("does not overwrite existing taskTypes", () => {
       const raw = { version: 1, taskTypes: { custom: "custom.template.md" } };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.taskTypes).toEqual({ custom: "custom.template.md" });
       expect(result!.fieldsAdded).not.toContain("taskTypes");
     });
 
     it("adds templateRoot when missing", () => {
       const raw = { version: 1 };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.templateRoot).toBe(".devstories/templates");
       expect(result!.fieldsAdded).toContain("templateRoot");
     });
 
     it("does not overwrite existing templateRoot", () => {
       const raw = { version: 1, templateRoot: "docs/my-templates" };
-      const result = computeConfigUpgrade(raw);
+      const result = computeConfigUpgrade(raw, TARGET);
       expect(result!.upgraded.templateRoot).toBe("docs/my-templates");
       expect(result!.fieldsAdded).not.toContain("templateRoot");
+    });
+
+    it("adds archive with full defaults when missing", () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw, TARGET);
+      expect(result!.upgraded.archive).toEqual({
+        soft: { devstories: "archive", storydocs: "archive" },
+        hard: { devstories: "glacier", storydocs: "glacier" },
+      });
+      expect(result!.fieldsAdded).toContain("archive");
+    });
+
+    it("does not overwrite existing archive config", () => {
+      const raw = {
+        version: 1,
+        archive: {
+          soft: { devstories: "my-archive", storydocs: "my-docs-archive" },
+          hard: { devstories: "my-hard", storydocs: "my-hard-docs" },
+        },
+      };
+      const result = computeConfigUpgrade(raw, TARGET);
+      expect(result!.upgraded.archive).toEqual(raw.archive);
+      expect(result!.fieldsAdded).not.toContain("archive");
+      expect(result!.fieldsAdded).not.toContain("archive.soft");
+      expect(result!.fieldsAdded).not.toContain("archive.hard");
+    });
+
+    it("adds archive.hard when archive.soft exists but hard missing", () => {
+      const raw = {
+        version: 1,
+        archive: {
+          soft: { devstories: "my-archive", storydocs: "my-docs-archive" },
+        },
+      };
+      const result = computeConfigUpgrade(raw, TARGET);
+      const archive = result!.upgraded.archive as Record<string, unknown>;
+      expect(archive.soft).toEqual({ devstories: "my-archive", storydocs: "my-docs-archive" });
+      expect(archive.hard).toEqual({ devstories: "glacier", storydocs: "glacier" });
+      expect(result!.fieldsAdded).toContain("archive.hard");
+    });
+
+    it("adds archive.soft when archive.hard exists but soft missing", () => {
+      const raw = {
+        version: 1,
+        archive: {
+          hard: { devstories: "my-hard", storydocs: "my-hard-docs" },
+        },
+      };
+      const result = computeConfigUpgrade(raw, TARGET);
+      const archive = result!.upgraded.archive as Record<string, unknown>;
+      expect(archive.soft).toEqual({ devstories: "archive", storydocs: "archive" });
+      expect(archive.hard).toEqual({ devstories: "my-hard", storydocs: "my-hard-docs" });
+      expect(result!.fieldsAdded).toContain("archive.soft");
+    });
+
+    it("adds sprints.length and sprints.firstSprintStartDate when sprints exists but fields missing", () => {
+      const raw = {
+        version: 1,
+        sprints: { current: "sprint-1", sequence: ["sprint-1"] },
+      };
+      const result = computeConfigUpgrade(raw, TARGET);
+      const sprints = result!.upgraded.sprints as Record<string, unknown>;
+      expect(sprints.length).toBe(7);
+      expect(sprints.firstSprintStartDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(result!.fieldsAdded).toContain("sprints.length");
+      expect(result!.fieldsAdded).toContain("sprints.firstSprintStartDate");
+    });
+
+    it("does not overwrite existing sprints.length", () => {
+      const raw = {
+        version: 1,
+        sprints: { current: "sprint-1", sequence: ["sprint-1"], length: 14 },
+      };
+      const result = computeConfigUpgrade(raw, TARGET);
+      const sprints = result!.upgraded.sprints as Record<string, unknown>;
+      expect(sprints.length).toBe(14);
+      expect(result!.fieldsAdded).not.toContain("sprints.length");
+    });
+
+    it("does not overwrite existing sprints.firstSprintStartDate", () => {
+      const raw = {
+        version: 1,
+        sprints: { current: "sprint-1", sequence: ["sprint-1"], firstSprintStartDate: "2026-01-05" },
+      };
+      const result = computeConfigUpgrade(raw, TARGET);
+      const sprints = result!.upgraded.sprints as Record<string, unknown>;
+      expect(sprints.firstSprintStartDate).toBe("2026-01-05");
+      expect(result!.fieldsAdded).not.toContain("sprints.firstSprintStartDate");
+    });
+
+    it("does not add sprint fields when sprints object is absent", () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw, TARGET);
+      expect(result!.upgraded.sprints).toBeUndefined();
+      expect(result!.fieldsAdded).not.toContain("sprints.length");
+      expect(result!.fieldsAdded).not.toContain("sprints.firstSprintStartDate");
+    });
+
+    it("adds canArchive: false to all statuses when missing", () => {
+      const raw = {
+        version: 1,
+        statuses: [
+          { id: "todo", label: "To Do" },
+          { id: "done", label: "Done", isCompletion: true },
+        ],
+      };
+      const result = computeConfigUpgrade(raw, TARGET);
+      const statuses = result!.upgraded.statuses as Array<Record<string, unknown>>;
+      expect(statuses[0].canArchive).toBe(false);
+      expect(statuses[1].canArchive).toBe(false);
+      expect(result!.fieldsAdded).toContain("statuses[].canArchive");
+    });
+
+    it("does not overwrite existing canArchive values", () => {
+      const raw = {
+        version: 1,
+        statuses: [
+          { id: "todo", label: "To Do", canArchive: false },
+          { id: "done", label: "Done", isCompletion: true, canArchive: true },
+        ],
+      };
+      const result = computeConfigUpgrade(raw, TARGET);
+      const statuses = result!.upgraded.statuses as Array<Record<string, unknown>>;
+      expect(statuses[0].canArchive).toBe(false);
+      expect(statuses[1].canArchive).toBe(true);
+      expect(result!.fieldsAdded).not.toContain("statuses[].canArchive");
+    });
+
+    it("adds canArchive: false only to statuses missing the field", () => {
+      const raw = {
+        version: 1,
+        statuses: [
+          { id: "todo", label: "To Do" },
+          { id: "done", label: "Done", canArchive: true },
+        ],
+      };
+      const result = computeConfigUpgrade(raw, TARGET);
+      const statuses = result!.upgraded.statuses as Array<Record<string, unknown>>;
+      expect(statuses[0].canArchive).toBe(false);
+      expect(statuses[1].canArchive).toBe(true);
+      expect(result!.fieldsAdded).toContain("statuses[].canArchive");
+    });
+
+    it("does not touch canArchive when statuses array is absent", () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw, TARGET);
+      expect(result!.upgraded.statuses).toBeUndefined();
+      expect(result!.fieldsAdded).not.toContain("statuses[].canArchive");
+    });
+  });
+
+  describe("archive config (soft archive)", () => {
+    describe("parseConfigJsonContent — archive fields", () => {
+      it("parses archive.soft.devstories path", () => {
+        const json = JSON.stringify({
+          version: 3,
+          archive: { soft: { devstories: "archived" } },
+        });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveSoftDevstories).toBe("archived");
+      });
+
+      it("parses archive.soft.storydocs path", () => {
+        const json = JSON.stringify({
+          version: 3,
+          archive: { soft: { storydocs: "archived-docs" } },
+        });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveSoftStorydocs).toBe("archived-docs");
+      });
+
+      it("parses both archive.soft paths together", () => {
+        const json = JSON.stringify({
+          version: 3,
+          archive: { soft: { devstories: "soft-archive", storydocs: "soft-docs" } },
+        });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveSoftDevstories).toBe("soft-archive");
+        expect(result.archiveSoftStorydocs).toBe("soft-docs");
+      });
+
+      it("leaves archive fields undefined when archive section is absent", () => {
+        const json = JSON.stringify({ version: 3 });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveSoftDevstories).toBeUndefined();
+        expect(result.archiveSoftStorydocs).toBeUndefined();
+      });
+
+      it("leaves archive fields undefined when archive.soft is absent", () => {
+        const json = JSON.stringify({ version: 3, archive: {} });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveSoftDevstories).toBeUndefined();
+        expect(result.archiveSoftStorydocs).toBeUndefined();
+      });
+
+      it("ignores empty-string archive paths", () => {
+        const json = JSON.stringify({
+          version: 3,
+          archive: { soft: { devstories: "", storydocs: "  " } },
+        });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveSoftDevstories).toBeUndefined();
+        expect(result.archiveSoftStorydocs).toBeUndefined();
+      });
+
+      it("trims whitespace from archive paths", () => {
+        const json = JSON.stringify({
+          version: 3,
+          archive: { soft: { devstories: "  archive  ", storydocs: " docs/archive " } },
+        });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveSoftDevstories).toBe("archive");
+        expect(result.archiveSoftStorydocs).toBe("docs/archive");
+      });
+    });
+
+    describe("mergeConfigWithDefaults — archive fields", () => {
+      it("passes through archive fields when present", () => {
+        const merged = mergeConfigWithDefaults({
+          archiveSoftDevstories: "archive",
+          archiveSoftStorydocs: "docs/archive",
+        });
+        expect(merged.archiveSoftDevstories).toBe("archive");
+        expect(merged.archiveSoftStorydocs).toBe("docs/archive");
+      });
+
+      it("leaves archive fields undefined when not set (no default)", () => {
+        const merged = mergeConfigWithDefaults({});
+        expect(merged.archiveSoftDevstories).toBeUndefined();
+        expect(merged.archiveSoftStorydocs).toBeUndefined();
+      });
+    });
+  });
+
+  describe("archive config (hard archive)", () => {
+    describe("parseConfigJsonContent — hard archive fields", () => {
+      it("parses archive.hard.devstories path", () => {
+        const json = JSON.stringify({
+          version: 3,
+          archive: { hard: { devstories: "glacierd" } },
+        });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveHardDevstories).toBe("glacierd");
+      });
+
+      it("parses archive.hard.storydocs path", () => {
+        const json = JSON.stringify({
+          version: 3,
+          archive: { hard: { storydocs: "glacierd-docs" } },
+        });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveHardStorydocs).toBe("glacierd-docs");
+      });
+
+      it("parses both archive.hard paths together", () => {
+        const json = JSON.stringify({
+          version: 3,
+          archive: { hard: { devstories: "glacier", storydocs: "hard-docs" } },
+        });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveHardDevstories).toBe("glacier");
+        expect(result.archiveHardStorydocs).toBe("hard-docs");
+      });
+
+      it("leaves hard archive fields undefined when archive.hard is absent", () => {
+        const json = JSON.stringify({ version: 3, archive: {} });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveHardDevstories).toBeUndefined();
+        expect(result.archiveHardStorydocs).toBeUndefined();
+      });
+
+      it("ignores empty-string hard archive paths", () => {
+        const json = JSON.stringify({
+          version: 3,
+          archive: { hard: { devstories: "", storydocs: "  " } },
+        });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveHardDevstories).toBeUndefined();
+        expect(result.archiveHardStorydocs).toBeUndefined();
+      });
+
+      it("trims whitespace from hard archive paths", () => {
+        const json = JSON.stringify({
+          version: 3,
+          archive: { hard: { devstories: "  glacier  ", storydocs: " docs/glacier " } },
+        });
+        const result = parseConfigJsonContent(json);
+        expect(result.archiveHardDevstories).toBe("glacier");
+        expect(result.archiveHardStorydocs).toBe("docs/glacier");
+      });
+    });
+
+    describe("mergeConfigWithDefaults — hard archive fields", () => {
+      it("passes through hard archive fields when present", () => {
+        const merged = mergeConfigWithDefaults({
+          archiveHardDevstories: "glacier",
+          archiveHardStorydocs: "docs/glacier",
+        });
+        expect(merged.archiveHardDevstories).toBe("glacier");
+        expect(merged.archiveHardStorydocs).toBe("docs/glacier");
+      });
+
+      it("leaves hard archive fields undefined when not set (no default)", () => {
+        const merged = mergeConfigWithDefaults({});
+        expect(merged.archiveHardDevstories).toBeUndefined();
+        expect(merged.archiveHardStorydocs).toBeUndefined();
+      });
     });
   });
 });

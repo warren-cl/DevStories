@@ -402,3 +402,21 @@ export function sortTasks(tasks: Task[]): Task[] {
     return numA - numB;
   });
 }
+
+/**
+ * Returns the contextValue for a tree item, appending "-archived" suffix
+ * when the item is archived. Enables `when` clause menu filtering.
+ */
+export function getNodeContextValue(baseContextValue: string, isArchived: boolean | undefined): string {
+  return isArchived ? `${baseContextValue}-archived` : baseContextValue;
+}
+
+/**
+ * Returns the description with " (archived)" appended when the item is archived.
+ */
+export function getArchivedDescription(description: string | undefined, isArchived: boolean | undefined): string | undefined {
+  if (!isArchived) {
+    return description;
+  }
+  return description ? `${description} (archived)` : "(archived)";
+}

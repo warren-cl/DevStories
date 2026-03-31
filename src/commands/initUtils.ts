@@ -3,7 +3,7 @@
  * These can be unit tested with Vitest
  */
 
-import { localToday } from "../utils/dateUtils";
+import { localToday, mondayOfCurrentWeek } from "../utils/dateUtils";
 
 export interface InitConfig {
   projectName: string;
@@ -17,9 +17,9 @@ export interface InitConfig {
 /**
  * Generates config.json content from InitConfig
  */
-export function generateConfigJson(config: InitConfig): string {
+export function generateConfigJson(config: InitConfig, extensionVersion: string): string {
   const configObj = {
-    version: 3,
+    version: extensionVersion,
     project: config.projectName,
     idMode: "auto",
     idPrefix: {
@@ -37,6 +37,8 @@ export function generateConfigJson(config: InitConfig): string {
     sprints: {
       current: config.sprint,
       sequence: [config.sprint, "backlog"],
+      length: 7,
+      firstSprintStartDate: mondayOfCurrentWeek(),
     },
     sizes: ["XXS", "XS", "S", "M", "L", "XL", "XXL"],
     storypoints: [1, 2, 4, 8, 16, 32, 64],
@@ -57,6 +59,10 @@ export function generateConfigJson(config: InitConfig): string {
       validate: "validate.template.md",
     },
     templateRoot: ".devstories/templates",
+    archive: {
+      soft: { devstories: "archive", storydocs: "archive" },
+      hard: { devstories: "glacier", storydocs: "glacier" },
+    },
   };
   return JSON.stringify(configObj, null, 2);
 }

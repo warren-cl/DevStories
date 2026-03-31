@@ -62,3 +62,19 @@ export function computeNodeFolderPath(root: string, nodeId: string, nodeType: No
 export function computeTaskFolderPath(root: string, storyId: string): string {
   return path.join(root, TYPE_FOLDERS.story, storyId, "tasks");
 }
+
+/**
+ * Compute the storydocs folder path for an archived node.
+ * Layout: {root}/{archiveSegment}/{typeFolder}/{nodeId}
+ */
+export function computeArchivedNodeFolderPath(root: string, archiveSegment: string, nodeId: string, nodeType: NodeType): string {
+  return path.join(root, archiveSegment, TYPE_FOLDERS[nodeType], nodeId);
+}
+
+/**
+ * Given a list of folder names found on disk and a set of known node IDs,
+ * return the folder names that are NOT in the known set (orphans).
+ */
+export function computeOrphanFolders(directoryEntries: string[], knownIds: Set<string>): string[] {
+  return directoryEntries.filter((name) => !knownIds.has(name));
+}

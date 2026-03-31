@@ -13,4 +13,5 @@ export interface Epic {
   owner?: string;
   content: string;
   filePath?: string;
+  isArchived?: boolean; // Derived from file path — true when in archive directory
 }

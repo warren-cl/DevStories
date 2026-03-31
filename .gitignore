@@ -31,3 +31,7 @@ npm-debug.log*
 # Compiled config files
 vitest.config.js
 vitest.config.js.map
+
+# ignore VS Code extension package files
+*.vsix
+

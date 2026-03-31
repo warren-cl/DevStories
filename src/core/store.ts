@@ -10,6 +10,7 @@ import { Theme } from "../types/theme";
 import { Parser } from "./parser";
 import { Watcher } from "./watcher";
 import { getLogger } from "./logger";
+import { isArchivedPath } from "./storeUtils";
 import { sortEpicsBySprintOrder } from "../view/storiesProviderUtils";
 
 export class Store {
@@ -20,6 +21,8 @@ export class Store {
   private inboxFiles = new Map<string, InboxSpikeFile>(); // keyed by filePath
   private spikeFiles = new Map<string, InboxSpikeFile>(); // keyed by filePath
   private tasks = new Map<string, Task>(); // keyed by task ID
+  private archiveDevstoriesSegment = "archive";
+  private archiveStorydocsSegment = "archive";
   private _onDidUpdate = new vscode.EventEmitter<void>();
   readonly onDidUpdate = this._onDidUpdate.event;
 
@@ -39,12 +42,20 @@ export class Store {
     this.watcher.onDidDelete((uri) => this.handleFileDeleted(uri));
   }
 
-  async load(storydocsRoot?: string) {
+  async load(storydocsRoot?: string, archiveDevstoriesSegment?: string, archiveStorydocsSegment?: string) {
+    this.archiveDevstoriesSegment = archiveDevstoriesSegment ?? "archive";
+    this.archiveStorydocsSegment = archiveStorydocsSegment ?? "archive";
+
     const storyFiles = await vscode.workspace.findFiles("**/.devstories/stories/*.md");
     const epicFiles = await vscode.workspace.findFiles("**/.devstories/epics/*.md");
     const themeFiles = await vscode.workspace.findFiles("**/.devstories/themes/*.md");
     const inboxFiles = await vscode.workspace.findFiles("**/.devstories/inbox/*.md");
     const spikeFiles = await vscode.workspace.findFiles("**/.devstories/spikes/*.md");
+
+    // Scan archive paths for soft-archived files
+    const archiveStoryFiles = await vscode.workspace.findFiles(`**/.devstories/${this.archiveDevstoriesSegment}/stories/*.md`);
+    const archiveEpicFiles = await vscode.workspace.findFiles(`**/.devstories/${this.archiveDevstoriesSegment}/epics/*.md`);
+    const archiveThemeFiles = await vscode.workspace.findFiles(`**/.devstories/${this.archiveDevstoriesSegment}/themes/*.md`);
 
     this.stories.clear();
     this.epics.clear();
@@ -54,9 +65,9 @@ export class Store {
     this.spikeFiles.clear();
     this.tasks.clear();
 
-    await Promise.all(storyFiles.map((uri) => this.parseAndAddStory(uri)));
-    await Promise.all(epicFiles.map((uri) => this.parseAndAddEpic(uri)));
-    await Promise.all(themeFiles.map((uri) => this.parseAndAddTheme(uri)));
+    await Promise.all([...storyFiles, ...archiveStoryFiles].map((uri) => this.parseAndAddStory(uri)));
+    await Promise.all([...epicFiles, ...archiveEpicFiles].map((uri) => this.parseAndAddEpic(uri)));
+    await Promise.all([...themeFiles, ...archiveThemeFiles].map((uri) => this.parseAndAddTheme(uri)));
     for (const uri of inboxFiles) {
       this.addInboxSpikeFile(uri, "inbox");
     }
@@ -68,7 +79,10 @@ export class Store {
     if (storydocsRoot) {
       const pattern = new vscode.RelativePattern(storydocsRoot, "stories/*/tasks/*.md");
       const taskFiles = await vscode.workspace.findFiles(pattern);
-      await Promise.all(taskFiles.map((uri) => this.parseAndAddTask(uri)));
+      // Also scan archive task files
+      const archiveTaskPattern = new vscode.RelativePattern(storydocsRoot, `${this.archiveStorydocsSegment}/stories/*/tasks/*.md`);
+      const archiveTaskFiles = await vscode.workspace.findFiles(archiveTaskPattern);
+      await Promise.all([...taskFiles, ...archiveTaskFiles].map((uri) => this.parseAndAddTask(uri)));
     }
 
     // Notify listeners that data has been loaded
@@ -262,6 +276,7 @@ export class Store {
     try {
       const content = await this.readFile(uri);
       const story = Parser.parseStory(content, uri.fsPath);
+      story.isArchived = isArchivedPath(uri.fsPath, this.archiveDevstoriesSegment);
       this.stories.set(story.id, story);
       this.brokenFiles.delete(uri.fsPath); // clear if previously broken
     } catch (e) {
@@ -280,6 +295,7 @@ export class Store {
     try {
       const content = await this.readFile(uri);
       const epic = Parser.parseEpic(content, uri.fsPath);
+      epic.isArchived = isArchivedPath(uri.fsPath, this.archiveDevstoriesSegment);
       this.epics.set(epic.id, epic);
       this.brokenFiles.delete(uri.fsPath); // clear if previously broken
     } catch (e) {
@@ -298,6 +314,7 @@ export class Store {
     try {
       const content = await this.readFile(uri);
       const theme = Parser.parseTheme(content, uri.fsPath);
+      theme.isArchived = isArchivedPath(uri.fsPath, this.archiveDevstoriesSegment);
       this.themes.set(theme.id, theme);
       this.brokenFiles.delete(uri.fsPath); // clear if previously broken
     } catch (e) {
@@ -331,6 +348,7 @@ export class Store {
     try {
       const content = await this.readFile(uri);
       const { task, changed, normalizedData, markdownBody } = Parser.parseTask(content, uri.fsPath);
+      task.isArchived = isArchivedPath(uri.fsPath, this.archiveStorydocsSegment);
       this.tasks.set(`${task.story}::${task.id}`, task);
 
       // Auto-heal: write canonical frontmatter back if normalization changed anything

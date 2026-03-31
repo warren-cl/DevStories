@@ -1,4 +1,4 @@
-export type StoryType = 'feature' | 'bug' | 'task' | 'chore' | 'spike';
+export type StoryType = "feature" | "bug" | "task" | "chore" | "spike";
 export type StoryStatus = string; // Defined in config
 export type StorySize = string; // Defined in config (default: XS, S, M, L, XL)
 
@@ -21,4 +21,5 @@ export interface Story {
   owner?: string;
   content: string; // The markdown body
   filePath?: string; // Path to the file
+  isArchived?: boolean; // Derived from file path — true when in archive directory
 }

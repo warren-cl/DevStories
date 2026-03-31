@@ -6,9 +6,8 @@
   "required": ["version", "project", "idPrefix", "statuses", "sizes"],
   "properties": {
     "version": {
-      "type": "integer",
-      "enum": [1, 2],
-      "description": "Configuration schema version"
+      "type": ["integer", "string"],
+      "description": "Configuration schema version (integer for legacy configs, semver string for current)"
     },
     "project": {
       "type": "string",
@@ -73,6 +72,10 @@
           "isExcluded": {
             "type": "boolean",
             "description": "When true, stories with this status are excluded from burndown calculations (e.g., cancelled, deferred)."
+          },
+          "canArchive": {
+            "type": "boolean",
+            "description": "When true, epics and themes with this status are eligible for archiving. Stories use isCompletion for archive eligibility instead."
           }
         },
         "additionalProperties": false
@@ -172,6 +175,47 @@
       "type": "string",
       "minLength": 1,
       "description": "Root folder for templates (story and task), relative to the repository root. Defaults to .devstories/templates if not set."
+    },
+    "archive": {
+      "type": "object",
+      "properties": {
+        "soft": {
+          "type": "object",
+          "properties": {
+            "devstories": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Subdirectory name inside .devstories/ for soft-archived files (default: archive)"
+            },
+            "storydocs": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Subdirectory name inside storydocs root for soft-archived docs (default: archive)"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Soft archive paths — files remain visible in the tree with an (archived) indicator"
+        },
+        "hard": {
+          "type": "object",
+          "properties": {
+            "devstories": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Subdirectory name inside .devstories/ for glacierd files (default: glacier)"
+            },
+            "storydocs": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Subdirectory name inside storydocs root for glacierd docs (default: glacier)"
+            }
+          },
+          "additionalProperties": false,
+          "description": "Hard archive paths — files are excluded from the tree view (Phase 2)"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Archive configuration for soft and hard archiving of completed sprints"
     }
   },
   "additionalProperties": false

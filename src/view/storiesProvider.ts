@@ -19,6 +19,8 @@ import {
   sortThemesByEpicSprintOrder,
   sortTasks,
   getStatusIndicator,
+  getNodeContextValue,
+  getArchivedDescription,
   isBacklogStory,
   ViewMode,
 } from "./storiesProviderUtils";
@@ -717,10 +719,11 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
     const label = `${element.id}: ${element.title}`;
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Expanded);
-    item.contextValue = "theme";
+    item.contextValue = getNodeContextValue("theme", element.isArchived);
     item.id = element.id;
     item.iconPath = this.getIconPath("epic") ?? new vscode.ThemeIcon("symbol-namespace");
-    item.description = element.status ? `${this.getStatusIndicator(element.status)} ${element.status}` : undefined;
+    const statusDesc = element.status ? `${this.getStatusIndicator(element.status)} ${element.status}` : undefined;
+    item.description = getArchivedDescription(statusDesc, element.isArchived);
     const epicCount = this.store.getEpicsByTheme(element.id).length;
     const createdDate = element.created.toISOString().split("T")[0];
     item.tooltip = new vscode.MarkdownString(
@@ -746,10 +749,10 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
 
     const label = `${element.id}: ${element.title}`;
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
-    item.contextValue = "epic";
+    item.contextValue = getNodeContextValue("epic", element.isArchived);
     item.id = element.id;
     item.iconPath = this.getIconPath("epic");
-    item.description = `${this.getStatusIndicator(element.status)} ${element.status}`;
+    item.description = getArchivedDescription(`${this.getStatusIndicator(element.status)} ${element.status}`, element.isArchived);
     const storyCount = this.store.getStoriesByEpic(element.id).length;
     const createdDate = element.created.toISOString().split("T")[0];
     item.tooltip = new vscode.MarkdownString(
@@ -766,10 +769,10 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
     const tasks = this.store.getTasksByStory(element.id);
     const collapsibleState = tasks.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
     const item = new vscode.TreeItem(label, collapsibleState);
-    item.contextValue = "story";
+    item.contextValue = getNodeContextValue("story", element.isArchived);
     item.id = element.id;
     item.iconPath = this.getStoryIcon(element.type);
-    item.description = `${this.getStatusIndicator(element.status)} ${element.status}`;
+    item.description = getArchivedDescription(`${this.getStatusIndicator(element.status)} ${element.status}`, element.isArchived);
     item.tooltip = new vscode.MarkdownString(
       `**${element.id}**: ${element.title}\n\n` +
         `Type: ${element.type}\n` +
@@ -789,10 +792,10 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
   private createTaskTreeItem(element: Task): vscode.TreeItem {
     const label = `${element.id}: ${element.title}`;
     const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
-    item.contextValue = "task";
+    item.contextValue = getNodeContextValue("task", element.isArchived);
     item.id = `${element.story}::${element.id}`;
     item.iconPath = this.getIconPath("task");
-    item.description = `${this.getStatusIndicator(element.status)} ${element.status}`;
+    item.description = getArchivedDescription(`${this.getStatusIndicator(element.status)} ${element.status}`, element.isArchived);
     const agentLabel = element.assignedAgent ? `Agent: ${element.assignedAgent}\n` : "";
     item.tooltip = new vscode.MarkdownString(
       `**${element.id}**: ${element.title}\n\n` +

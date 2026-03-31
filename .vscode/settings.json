@@ -4,5 +4,6 @@
     "npx vitest": true,
     "npx tsc": true,
     "npx eslint": true
-  }
+  },
+  "specstory.cloudSync.enabled": "never"
 }
