@@ -3,8 +3,6 @@
  * These can be unit tested with Vitest
  */
 
-import { StoryType } from '../types/story';
-
 /**
  * Fixed ID for the inbox epic where quick captures are routed
  */
@@ -20,23 +18,13 @@ export const OPEN_STORY_ACTION = 'Open Story';
  */
 export interface ParsedQuickInput {
   title: string;
-  type: StoryType;
+  type: string;
   notes?: string;
 }
 
 /**
- * Type prefix mapping (case-insensitive)
- */
-const TYPE_PREFIXES: Record<string, StoryType> = {
-  'bug': 'bug',
-  'feat': 'feature',
-  'feature': 'feature',
-  'chore': 'chore',
-  'task': 'task',
-};
-
-/**
- * Parse quick capture input with type shorthand and pipe syntax
+ * Parse quick capture input with type shorthand and pipe syntax.
+ * Type prefixes are auto-derived from the storyTypes config keys.
  *
  * Examples:
  * - "Add feature" → { title: "Add feature", type: "task" }
@@ -44,17 +32,20 @@ const TYPE_PREFIXES: Record<string, StoryType> = {
  * - "Fix login | users report 500" → { title: "Fix login", type: "task", notes: "users report 500" }
  * - "bug: Login error | Details here" → { title: "Login error", type: "bug", notes: "Details here" }
  */
-export function parseQuickInput(input: string): ParsedQuickInput {
+export function parseQuickInput(input: string, storyTypeKeys?: string[]): ParsedQuickInput {
   let text = input.trim();
-  let type: StoryType = 'task';
+  const defaultType = storyTypeKeys?.[0] ?? 'task';
+  let type: string = defaultType;
   let notes: string | undefined;
 
-  // Check for type prefix (case-insensitive)
+  // Check for type prefix (case-insensitive) — match config keys
   const prefixMatch = text.match(/^(\w+):\s*/i);
-  if (prefixMatch) {
+  if (prefixMatch && storyTypeKeys) {
     const prefix = prefixMatch[1].toLowerCase();
-    if (TYPE_PREFIXES[prefix]) {
-      type = TYPE_PREFIXES[prefix];
+    // Exact match on config key
+    const matched = storyTypeKeys.find(k => k.toLowerCase() === prefix);
+    if (matched) {
+      type = matched;
       text = text.slice(prefixMatch[0].length);
     }
   }

@@ -87,7 +87,7 @@ DevStories/
 │   │   ├── statusBar.ts          # Status bar progress (story-point based)
 │   │   └── statusBarUtils.ts     # Pure stats/formatting functions
 │   ├── types/
-│   │   ├── story.ts              # Story interface + StoryType, StorySize, StoryStatus
+│   │   ├── story.ts              # Story interface + StoryType (string), StoryTypeConfig, StorySize, StoryStatus
 │   │   ├── epic.ts               # Epic interface (with theme + priority fields)
 │   │   ├── theme.ts              # Theme interface (top-level grouping)
 │   │   ├── task.ts               # Task interface + TaskType, isTask() type guard
@@ -101,7 +101,7 @@ DevStories/
 │   │   └── dateUtils.ts          # formatDate(), localToday(), normalizeDatesInData()
 │   └── test/
 │       ├── suite/                # @vscode/test-electron integration tests
-│       └── unit/                 # Vitest unit tests (~51 files, ~1215 tests)
+│       └── unit/                 # Vitest unit tests (~52 files, ~1220 tests)
 ├── schemas/                      # JSON Schema definitions
 │   ├── devstories.schema.json    # config.json schema
 │   ├── story.schema.json         # Story frontmatter schema
@@ -203,7 +203,7 @@ FileWatcher detects change → Store reloads → UI refreshes
 ---
 id: DS-00001
 title: Login Form Implementation
-type: feature # feature | bug | task | chore | spike
+type: feature # Any key from config.json storyTypes (default: feature, bug, task, chore, spike)
 epic: EPIC-0001 # Optional — missing/empty routes to "No Epic" sentinel
 status: todo # Defined in config.json statuses
 sprint: sprint-4
@@ -276,10 +276,13 @@ Key sections (see `schemas/devstories.schema.json` for full schema):
 - `autoFilterCurrentSprint` — auto-apply sprint filter on load
 - `storydocs`: `{ enabled, root }` — StoryDocs flat folder layout (required for tasks)
 - `taskTypes`: `{ code: "code.template.md", ... }` — maps task type ID → template filename
-- `templateRoot` — root folder for templates (defaults to `.devstories/templates`)
+- `storyTypes`: `{ feature: { template, description, icon, emoji }, ... }` — maps story type ID → `StoryTypeConfig`
+- `storyTemplateRoot` — root folder for story templates (defaults to `.devstories/templates`)
+- `taskTemplateRoot` — root folder for task templates (defaults to `.devstories/templates`)
 - `archive.soft`: `{ devstories, storydocs }` — subdirectory names for soft-archived files and StoryDocs folders
-- Config schema version: `3` (auto-upgrades older configs, adding archive defaults, sprint date defaults, `taskTypes`, `idPrefix.task`, and
-  `statuses[].canArchive`)
+- Config upgrade uses extension version from `package.json` (semver string, not integer). Auto-upgrades older configs: adds `storyTypes`
+  defaults, migrates `templateRoot` → `storyTemplateRoot` + `taskTemplateRoot`, adds archive defaults, sprint date defaults,
+  `taskTypes`, `idPrefix.task`, and `statuses[].canArchive`
 
 ## Key Features & How They Work
 
@@ -429,7 +432,7 @@ write succeeds.
 
 ### Commands
 
-- `npm test` — Vitest unit tests (~1215 tests, ~51 files)
+- `npm test` — Vitest unit tests (~1220 tests, ~52 files)
 - `npm run test:integration` — @vscode/test-electron (compiles first, runs in extension host)
 - `npx tsc --noEmit` — Type check
 - `npm run lint` — ESLint 9 (flat config)
@@ -549,6 +552,21 @@ Extension activates when:
     folders to be deleted.
 26. **Archived tasks are implicit** — Tasks become archived because their parent StoryDocs folder moves under the archive segment. There is
     no standalone task archive command.
+27. **StoryType is `string`, not a union** — `StoryType` in `src/types/story.ts` is `string` (not a hardcoded union). Validation happens at
+    runtime against `config.storyTypes` keys. The JSON Schema uses `{ type: "string", minLength: 1 }`, not an enum.
+28. **StoryTypeConfig drives UI** — `StoryTypeConfig` (`{ template, description, icon, emoji }`) in `src/types/story.ts` is used by the
+    create-story wizard, tree view icons (`storiesProvider.ts`), hover previews (`storyHoverProviderUtils.ts`), and frontmatter autocomplete
+    (`frontmatterCompletionProviderUtils.ts`). All four UI surfaces must stay in sync when changing the config shape.
+29. **storyTemplateRoot vs taskTemplateRoot** — Story templates resolve from `config.storyTemplateRoot`, task templates from
+    `config.taskTemplateRoot`. Both default to `.devstories/templates`. The legacy `templateRoot` field is auto-migrated and removed by
+    `computeConfigUpgrade()`.
+30. **Quick capture type detection uses exact config keys** — `parseQuickInput()` in `quickCaptureUtils.ts` receives `storyTypeKeys` (the
+    keys from `config.storyTypes`) and matches only exact prefixes. There are no abbreviation aliases (e.g., `feat:` does NOT match
+    `feature`).
+31. **Tree view story icons are ThemeIcons** — `storiesProvider.ts` reads `config.storyTypes[type].icon` and creates a
+    `vscode.ThemeIcon(iconName)`. Falls back to the SVG `"story"` icon if the type is not in config. Epic/theme icons are unchanged.
+32. **Inbox drop default type** — `inboxDropHandler.ts` uses `Object.keys(config.storyTypes)[0]` as the default story type when converting
+    inbox/spike files, replacing the previously hardcoded `"feature"`.
 
 ## File Structure on Disk
 

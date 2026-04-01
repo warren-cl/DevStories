@@ -48,7 +48,7 @@ Break stories down into granular, agent-assignable tasks:
 
 ### ⚡ Quick Capture
 
-Press `Cmd+Shift+S` to capture ideas without leaving your code. Supports type prefixes (`bug:`, `feat:`) and inline notes.
+Press `Cmd+Shift+S` to capture ideas without leaving your code. Supports type prefixes (e.g., `bug:`, `feature:`, or any key from your `storyTypes` config) and inline notes.
 
 ![Quick Capture](assets/screenshots/quick-capture.png)
 
@@ -198,8 +198,9 @@ The mapping is automatic — just define your statuses in `config.json` and the 
 
 ### More Features
 
-- **Story Templates** — Different templates per type (feature/bug/task/chore/spike)
-- **Task Templates** — Each task type can have its own template file
+- **Configurable Story Types** — Define your own story types (e.g. `feature`, `bug`, `spike`, or anything you need) in `config.json` with icons, emojis, descriptions, and dedicated templates. See [Configuring Story Types](#configuring-story-types).
+- **Story Templates** — Each story type can have its own template file, resolved from `storyTemplateRoot`
+- **Task Templates** — Each task type can have its own template file, resolved from `taskTemplateRoot`
 - **Auto-timestamps** — `updated` field auto-updates on save
 - **Completion Tracking** — `completed_on` is auto-set when a story or task reaches a completion status, and cleared when moved back
 - **Status Toggle** — Right-click stories, epics, themes, or tasks to change status
@@ -237,7 +238,7 @@ DevStories stores configuration in `.devstories/config.json`:
 
 ```json
 {
-  "version": 3,
+  "version": "3.4.0",
   "project": "My Project",
   "idMode": "auto",
   "idPrefix": {
@@ -252,6 +253,15 @@ DevStories stores configuration in `.devstories/config.json`:
     "investigate": "investigate.template.md",
     "validate": "validate.template.md"
   },
+  "storyTypes": {
+    "feature": { "template": "feature.template.md", "description": "New functionality or capability", "icon": "lightbulb", "emoji": "✨" },
+    "bug": { "template": "bug.template.md", "description": "Defect or issue to fix", "icon": "bug", "emoji": "🐛" },
+    "task": { "template": "task.template.md", "description": "Work item or action", "icon": "tasklist", "emoji": "📋" },
+    "chore": { "template": "chore.template.md", "description": "Maintenance or housekeeping", "icon": "tools", "emoji": "🔧" },
+    "spike": { "template": "spike.template.md", "description": "Time-boxed investigation or research", "icon": "beaker", "emoji": "🔬" }
+  },
+  "storyTemplateRoot": ".devstories/templates",
+  "taskTemplateRoot": ".devstories/templates",
   "statuses": [
     { "id": "todo", "label": "To Do", "canArchive": false },
     { "id": "in_progress", "label": "In Progress", "canArchive": false },
@@ -295,7 +305,9 @@ DevStories stores configuration in `.devstories/config.json`:
 | `idPrefix.story`                      | Prefix for story IDs (e.g., `DS`, `STORY`)                                                   |
 | `idPrefix.task`                       | Prefix for task IDs (e.g., `TASK`)                                                           |
 | `taskTypes`                           | Map of task type ID → template filename (e.g., `{ "code": "code.template.md" }`)             |
-| `templateRoot`                        | Root folder for templates, relative to repo root (defaults to `.devstories/templates`)       |
+| `storyTypes`                          | Map of story type ID → type config with `template`, `description`, `icon`, and `emoji`        |
+| `storyTemplateRoot`                   | Root folder for story templates, relative to repo root (defaults to `.devstories/templates`)  |
+| `taskTemplateRoot`                    | Root folder for task templates, relative to repo root (defaults to `.devstories/templates`)   |
 | `statuses[].isCompletion`             | Marks a status as "done" for progress & burndown calculations                                |
 | `statuses[].isExcluded`               | Excludes stories with this status from burndown (e.g., cancelled)                            |
 | `statuses[].canArchive`               | Marks epic/theme statuses that are eligible for soft archive once descendants are archived    |
@@ -436,7 +448,7 @@ For custom task types with dedicated templates:
     "plan": "plan.template.md",
     "remediate": "remediate.template.md"
   },
-  "templateRoot": ".devstories/templates",
+  "taskTemplateRoot": ".devstories/templates",
   "storydocs": {
     "enabled": true,
     "root": "docs/storydocs"
@@ -446,7 +458,7 @@ For custom task types with dedicated templates:
 
 ### Task template files
 
-Each entry in `taskTypes` maps to a template file under `templateRoot`. Create the template files with any default markdown body you want:
+Each entry in `taskTypes` maps to a template file under `taskTemplateRoot`. Create the template files with any default markdown body you want:
 
 ```markdown
 ## Description
@@ -476,7 +488,77 @@ If a template file is missing, the built-in default template is used.
 | `updated`        | Auto     | Last modified date                                |
 | `completed_on`   | Auto     | Auto-set when status reaches completion           |
 
+## Configuring Story Types
+
+Story types are fully configurable in `config.json`. Each key in `storyTypes` becomes a selectable type when creating stories, and appears in quick capture, tree view icons, hover previews, and frontmatter autocomplete.
+
+### Default story types
+
+The `init` command creates these defaults:
+
+```json
+{
+  "storyTypes": {
+    "feature": { "template": "feature.template.md", "description": "New functionality or capability", "icon": "lightbulb", "emoji": "✨" },
+    "bug": { "template": "bug.template.md", "description": "Defect or issue to fix", "icon": "bug", "emoji": "🐛" },
+    "task": { "template": "task.template.md", "description": "Work item or action", "icon": "tasklist", "emoji": "📋" },
+    "chore": { "template": "chore.template.md", "description": "Maintenance or housekeeping", "icon": "tools", "emoji": "🔧" },
+    "spike": { "template": "spike.template.md", "description": "Time-boxed investigation or research", "icon": "beaker", "emoji": "🔬" }
+  },
+  "storyTemplateRoot": ".devstories/templates"
+}
+```
+
+### Adding a custom story type
+
+Add a new key to `storyTypes` and optionally create a matching template file:
+
+```json
+{
+  "storyTypes": {
+    "feature": { "template": "feature.template.md", "description": "New functionality", "icon": "lightbulb", "emoji": "✨" },
+    "experiment": { "template": "experiment.template.md", "description": "A/B test or hypothesis", "icon": "flask", "emoji": "🧪" }
+  }
+}
+```
+
+### Story type config fields
+
+| Field         | Required | Description                                                                          |
+| ------------- | -------- | ------------------------------------------------------------------------------------ |
+| `template`    | Yes      | Template filename (resolved from `storyTemplateRoot`)                                |
+| `description` | Yes      | Short description shown in the type picker and autocomplete                          |
+| `icon`        | Yes      | VS Code [ThemeIcon](https://code.visualstudio.com/api/references/icons-in-labels) ID |
+| `emoji`       | Yes      | Emoji shown in hover previews                                                        |
+
+### Where story types appear
+
+- **Create Story wizard** — type picker shows all configured types with descriptions
+- **Quick capture** — prefix your title with any type key (e.g., `bug: fix login crash`)
+- **Tree view** — each story shows its type's ThemeIcon instead of the generic story icon
+- **Hover preview** — `[[ID]]` hovers show the type's emoji
+- **Frontmatter autocomplete** — `type:` field suggests all configured types with descriptions
+
+### Upgrading from a previous version
+
+If your `config.json` was created before story types were configurable:
+
+- **`storyTypes`** is added automatically with the 5 default types on config upgrade
+- **`templateRoot`** is renamed to `storyTemplateRoot` and `taskTemplateRoot` (both receive the old value)
+- Existing story files with standard types (`feature`, `bug`, `task`, `chore`, `spike`) continue working unchanged
+- Stories with custom type values will work — the `type` field now accepts any string
+
 ## Troubleshooting
+
+### Story types not working as expected
+
+| Problem                                        | Cause                                         | Solution                                                                                                                                     |
+| ---------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create Story wizard shows no types             | `storyTypes` missing or empty in config       | Add a `storyTypes` object to `config.json` (or re-run init to get defaults)                                                                  |
+| Custom type not appearing in quick capture     | Using an abbreviation instead of the full key | Quick capture matches exact config keys — use `feature:` not `feat:`                                                                         |
+| Story shows generic icon instead of type icon  | Type key in frontmatter doesn't match config  | Ensure the story's `type` value exactly matches a key in `storyTypes`                                                                        |
+| Old `templateRoot` field not working           | Field was renamed in this version             | Rename to `storyTemplateRoot` and `taskTemplateRoot`, or delete it and let the auto-upgrade handle it on next load                           |
+| Template not found for a custom type           | Template file missing from `storyTemplateRoot`| Create the template file (e.g., `experiment.template.md`) in your `storyTemplateRoot` folder. If missing, a blank template is used            |
 
 ### Tasks not appearing in the tree view
 

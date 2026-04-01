@@ -163,6 +163,33 @@
       "additionalProperties": false,
       "description": "StoryDocs: hierarchical document folders mirroring the breakdown tree view"
     },
+    "storyTypes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["template", "description", "icon", "emoji"],
+        "properties": {
+          "template": {
+            "type": "string",
+            "description": "Template filename (with .template.md suffix) for this story type"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description shown in QuickPick and hover"
+          },
+          "icon": {
+            "type": "string",
+            "description": "VS Code codicon name for tree view (e.g., 'lightbulb', 'bug')"
+          },
+          "emoji": {
+            "type": "string",
+            "description": "Emoji character for hover cards (e.g., '✨', '🐛')"
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Mapping of story type ID to type configuration (template, description, icon, emoji)"
+    },
     "taskTypes": {
       "type": "object",
       "additionalProperties": {
@@ -171,10 +198,15 @@
       },
       "description": "Mapping of task type ID to template filename (e.g., { \"code\": \"code.template.md\" })"
     },
-    "templateRoot": {
+    "storyTemplateRoot": {
       "type": "string",
       "minLength": 1,
-      "description": "Root folder for templates (story and task), relative to the repository root. Defaults to .devstories/templates if not set."
+      "description": "Root folder for story templates, relative to the repository root. Defaults to .devstories/templates if not set."
+    },
+    "taskTemplateRoot": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Root folder for task templates, relative to the repository root. Defaults to .devstories/templates if not set."
     },
     "archive": {
       "type": "object",

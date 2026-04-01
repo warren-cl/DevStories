@@ -125,9 +125,11 @@ export async function executeQuickCapture(
   // Get prefilled value from selection (if any)
   const prefillValue = getSelectedText() || "";
 
+  const storyTypeKeys = Object.keys(config.storyTypes);
+
   // Show input box with validation
   const rawInput = await vscode.window.showInputBox({
-    prompt: "Quick capture (prefix: bug:|feat:|chore: | pipe: for notes)",
+    prompt: "Quick capture (prefix with type key and colon, e.g., bug: | pipe: for notes)",
     placeHolder: "e.g., bug: Fix login | users report 500",
     value: prefillValue,
     valueSelection: prefillValue ? [0, prefillValue.length] : undefined,
@@ -136,7 +138,7 @@ export async function executeQuickCapture(
         return "Title is required";
       }
       // Parse to extract title, then validate
-      const parsed = parseQuickInput(value);
+      const parsed = parseQuickInput(value, storyTypeKeys);
       const validation = validateStoryTitle(parsed.title);
       return validation.valid ? undefined : validation.error;
     },
@@ -147,7 +149,7 @@ export async function executeQuickCapture(
   }
 
   // Parse input
-  const parsed = parseQuickInput(rawInput);
+  const parsed = parseQuickInput(rawInput, storyTypeKeys);
 
   // Ensure inbox epic exists
   const { id: inboxEpicId, uri: inboxEpicUri } = await ensureInboxEpic(workspaceUri, config, store);
@@ -170,7 +172,7 @@ export async function executeQuickCapture(
   const sprint = config.quickCaptureDefaultToCurrentSprint && config.currentSprint ? config.currentSprint : "backlog";
 
   // Get template and add notes if provided
-  let template = DEFAULT_TEMPLATES[parsed.type];
+  let template = DEFAULT_TEMPLATES[parsed.type] ?? DEFAULT_TEMPLATES.task ?? "";
   if (parsed.notes) {
     // Prepend notes to template
     template = `## Notes\n${parsed.notes}\n\n${template}`;

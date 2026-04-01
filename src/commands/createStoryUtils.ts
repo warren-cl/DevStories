@@ -4,7 +4,7 @@
  */
 
 import { StoryType, StorySize } from "../types/story";
-import { substituteTemplateVariables, resolveTemplateReference } from "./templateUtils";
+import { substituteTemplateVariables } from "./templateUtils";
 import { localToday } from "../utils/dateUtils";
 
 const matter = require("gray-matter");
@@ -114,34 +114,6 @@ export function findNextStoryId(existingIds: string[], prefix: string): number {
 }
 
 /**
- * Get suggested size based on story type using index-based selection
- * Bug/Chore → first size, Feature → middle size, Task → second size
- */
-export function getSuggestedSize(type: StoryType, sizes: StorySize[]): StorySize {
-  if (sizes.length === 0) {
-    return "M" as StorySize; // Fallback for edge case (shouldn't happen with valid config)
-  }
-
-  const middleIndex = Math.floor(sizes.length / 2);
-  const secondIndex = Math.min(1, sizes.length - 1);
-
-  switch (type) {
-    case "bug":
-      return sizes[0];
-    case "feature":
-      return sizes[middleIndex];
-    case "task":
-      return sizes[secondIndex];
-    case "chore":
-      return sizes[0];
-    case "spike":
-      return sizes[secondIndex];
-    default:
-      return sizes[middleIndex];
-  }
-}
-
-/**
  * Simple word overlap for duplicate detection
  * Returns similarity score 0-1
  */
@@ -189,11 +161,8 @@ export function generateStoryMarkdown(data: StoryData, template: string, options
   const escapedTitle = data.title.replace(/"/g, '\\"');
   const deps = data.dependencies && data.dependencies.length > 0 ? `\n  - ${data.dependencies.map((d) => `[[${d}]]`).join("\n  - ")}` : "";
 
-  // Resolve library reference if template is like "@library/api-endpoint"
-  const resolvedTemplate = resolveTemplateReference(template) ?? template;
-
   // Substitute template variables
-  const processedTemplate = substituteTemplateVariables(resolvedTemplate, {
+  const processedTemplate = substituteTemplateVariables(template, {
     date: today,
     title: data.title,
     id: data.id,

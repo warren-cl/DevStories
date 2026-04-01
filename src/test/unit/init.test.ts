@@ -37,7 +37,10 @@ describe("Init Command", () => {
       expect(parsed.taskTypes).toBeDefined();
       expect(Object.keys(parsed.taskTypes)).toContain("code");
       expect(Object.keys(parsed.taskTypes)).toContain("document");
-      expect(parsed.templateRoot).toBe(".devstories/templates");
+      expect(parsed.storyTemplateRoot).toBe(".devstories/templates");
+      expect(parsed.taskTemplateRoot).toBe(".devstories/templates");
+      expect(parsed.storyTypes).toBeDefined();
+      expect(Object.keys(parsed.storyTypes)).toContain("feature");
       expect(parsed.archive).toEqual({
         soft: { devstories: "archive", storydocs: "archive" },
         hard: { devstories: "glacier", storydocs: "glacier" },

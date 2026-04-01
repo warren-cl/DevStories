@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { getLogger } from '../core/logger';
 import { Story } from '../types/story';
 import { extractTemplateContent, generateTemplateFileName } from './saveAsTemplateUtils';
+import { ConfigService } from '../core/configService';
 
 // Re-export for convenience
 export { extractTemplateContent, generateTemplateFileName } from './saveAsTemplateUtils';
@@ -10,7 +11,7 @@ export { extractTemplateContent, generateTemplateFileName } from './saveAsTempla
  * Execute the saveAsTemplate command
  * Can be called from tree view context menu or command palette
  */
-export async function executeSaveAsTemplate(storyArg?: Story): Promise<boolean> {
+export async function executeSaveAsTemplate(storyArg?: Story, configService?: ConfigService): Promise<boolean> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (!workspaceFolders || workspaceFolders.length === 0) {
     void vscode.window.showErrorMessage('DevStories: No workspace folder open');
@@ -77,7 +78,10 @@ export async function executeSaveAsTemplate(storyArg?: Story): Promise<boolean> 
   }
 
   // Create templates directory if needed
-  const templatesDir = vscode.Uri.joinPath(workspaceUri, '.devstories', 'templates');
+  const storyTemplateRoot = configService?.config?.storyTemplateRoot;
+  const templatesDir = storyTemplateRoot
+    ? vscode.Uri.joinPath(workspaceUri, storyTemplateRoot)
+    : vscode.Uri.joinPath(workspaceUri, '.devstories', 'templates');
   try {
     await vscode.workspace.fs.createDirectory(templatesDir);
   } catch {

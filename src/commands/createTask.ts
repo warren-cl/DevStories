@@ -228,7 +228,7 @@ export async function executeCreateTask(
 
   // Load template for the selected task type
   const templateFilename = taskTypes[pickedType.value];
-  const template = await loadTaskTemplate(workspaceUri, config.templateRoot, templateFilename);
+  const template = await loadTaskTemplate(workspaceUri, config.taskTemplateRoot, templateFilename);
 
   const firstStatus = statuses.length > 0 ? statuses[0].id : "todo";
 

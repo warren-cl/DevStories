@@ -17,7 +17,7 @@
     },
     "type": {
       "$ref": "defs/common.schema.json#/$defs/storyType",
-      "description": "Story type: feature, bug, task, chore, or spike"
+      "description": "Story type (validated against config.json storyTypes)"
     },
     "epic": {
       "$ref": "defs/common.schema.json#/$defs/epicId",

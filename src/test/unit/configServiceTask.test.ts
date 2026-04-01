@@ -3,12 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  parseConfigJsonContent,
-  mergeConfigWithDefaults,
-  DEFAULT_CONFIG,
-  DEFAULT_TASK_TYPES,
-} from "../../core/configServiceUtils";
+import { parseConfigJsonContent, mergeConfigWithDefaults, DEFAULT_CONFIG, DEFAULT_TASK_TYPES } from "../../core/configServiceUtils";
 
 describe("ConfigServiceUtils — Task config", () => {
   describe("DEFAULT_CONFIG", () => {
@@ -55,12 +50,20 @@ describe("ConfigServiceUtils — Task config", () => {
       expect(parsed.taskTypes).toEqual({ custom1: "c1.md", custom2: "c2.md" });
     });
 
-    it("parses templateRoot", () => {
+    it("parses storyTemplateRoot", () => {
       const json = JSON.stringify({
-        templateRoot: "docs/templates",
+        storyTemplateRoot: "docs/templates",
       });
       const parsed = parseConfigJsonContent(json);
-      expect(parsed.templateRoot).toBe("docs/templates");
+      expect(parsed.storyTemplateRoot).toBe("docs/templates");
+    });
+
+    it("parses taskTemplateRoot", () => {
+      const json = JSON.stringify({
+        taskTemplateRoot: "docs/task-templates",
+      });
+      const parsed = parseConfigJsonContent(json);
+      expect(parsed.taskTemplateRoot).toBe("docs/task-templates");
     });
 
     it("returns defaults when task fields are missing", () => {

@@ -35,8 +35,8 @@
     },
     "storyType": {
       "type": "string",
-      "enum": ["feature", "bug", "task", "chore", "spike"],
-      "description": "Story type: feature (new functionality), bug (fix), task (general work), chore (maintenance), spike (time-boxed investigation)"
+      "minLength": 1,
+      "description": "Story type (validated against config.json storyTypes)"
     },
     "storySize": {
       "type": "string",

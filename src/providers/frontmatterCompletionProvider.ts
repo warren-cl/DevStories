@@ -6,10 +6,10 @@
  * - Wiki-style links: [[ID]]
  */
 
-import * as vscode from 'vscode';
-import { ConfigService } from '../core/configService';
-import { Store } from '../core/store';
-import { isInFrontmatter } from './storyHoverProviderUtils';
+import * as vscode from "vscode";
+import { ConfigService } from "../core/configService";
+import { Store } from "../core/store";
+import { isInFrontmatter } from "./storyHoverProviderUtils";
 import {
   detectFieldAtCursor,
   getStatusCompletions,
@@ -25,26 +25,26 @@ import {
   getStoryCompletions,
   getAllIdCompletions,
   CompletionData,
-} from './frontmatterCompletionProviderUtils';
+} from "./frontmatterCompletionProviderUtils";
 
 export class FrontmatterCompletionProvider implements vscode.CompletionItemProvider {
   constructor(
     private configService: ConfigService,
-    private store: Store
+    private store: Store,
   ) {}
 
   provideCompletionItems(
     document: vscode.TextDocument,
     position: vscode.Position,
     _token: vscode.CancellationToken,
-    _context: vscode.CompletionContext
+    _context: vscode.CompletionContext,
   ): vscode.CompletionItem[] | null {
     // Only process files in .devstories directory
-    if (!document.uri.fsPath.includes('.devstories')) {
+    if (!document.uri.fsPath.includes(".devstories")) {
       return null;
     }
 
-    const allLines = document.getText().split('\n');
+    const allLines = document.getText().split("\n");
     const line = document.lineAt(position.line).text;
 
     // Check for [[ID]] link pattern first (can be anywhere in file)
@@ -97,13 +97,13 @@ export class FrontmatterCompletionProvider implements vscode.CompletionItemProvi
     const config = this.configService.config;
 
     switch (field) {
-      case 'status':
+      case "status":
         return getStatusCompletions(config.statuses);
-      case 'type':
-        return getTypeCompletions();
-      case 'size':
+      case "type":
+        return getTypeCompletions(config.storyTypes);
+      case "size":
         return getSizeCompletions(config.sizes);
-      case 'sprint':
+      case "sprint":
         return getSprintCompletions(config.sprintSequence);
       default:
         return [];
@@ -117,7 +117,7 @@ export class FrontmatterCompletionProvider implements vscode.CompletionItemProvi
         item.detail = d.detail;
       }
       // Set sort order to preserve original order
-      item.sortText = String(index).padStart(3, '0');
+      item.sortText = String(index).padStart(3, "0");
       return item;
     });
   }

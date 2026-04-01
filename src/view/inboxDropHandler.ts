@@ -71,6 +71,7 @@ export interface InboxDropConfigService {
     sprintSequence: string[];
     sizes: string[];
     statuses: { id: string }[];
+    storyTypes: Record<string, unknown>;
   };
 }
 
@@ -255,7 +256,7 @@ export async function handleInboxDropOnBacklog(params: InboxBacklogDropParams): 
     const mergedData = fillMissingStoryFrontmatter(existingData, {
       id: storyId,
       title: defaultTitle,
-      type: "feature",
+      type: Object.keys(config.storyTypes)[0] ?? "feature",
       epic: (existingData.epic as string) ?? "",
       status: getDefaultStatus(config.statuses),
       sprint,
@@ -465,7 +466,7 @@ async function convertToStory(params: ConvertToStoryParams): Promise<void> {
   const mergedData = fillMissingStoryFrontmatter(existingData, {
     id: storyId,
     title: defaultTitle,
-    type: "feature",
+    type: Object.keys(config.storyTypes)[0] ?? "feature",
     epic: epicId,
     status: getDefaultStatus(config.statuses),
     sprint,

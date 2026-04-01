@@ -3,8 +3,8 @@
  * These can be unit tested with Vitest
  */
 
-import { StatusDef } from '../core/configServiceUtils';
-import { StorySize } from '../types/story';
+import { StatusDef } from "../core/configServiceUtils";
+import { StorySize, StoryTypeConfig } from "../types/story";
 
 /**
  * Completion data returned by utility functions
@@ -18,30 +18,19 @@ export interface CompletionData {
 /**
  * Enum fields that support autocomplete
  */
-const ENUM_FIELDS = ['status', 'type', 'size', 'sprint'];
+const ENUM_FIELDS = ["status", "type", "size", "sprint"];
 
 /**
  * Size descriptions for display
  */
 const SIZE_DESCRIPTIONS: Record<string, string> = {
-  XXS: 'Extra Extra Small',
-  XS: 'Extra Small',
-  S: 'Small',
-  M: 'Medium',
-  L: 'Large',
-  XL: 'Extra Large',
-  XXL: 'Extra Extra Large',
-};
-
-/**
- * Type descriptions for display
- */
-const TYPE_DESCRIPTIONS: Record<string, string> = {
-  feature: 'New functionality or capability',
-  bug: 'Defect or issue to fix',
-  task: 'Work item or action',
-  chore: 'Maintenance or housekeeping',
-  spike: 'Time-boxed investigation or research',
+  XXS: "Extra Extra Small",
+  XS: "Extra Small",
+  S: "Small",
+  M: "Medium",
+  L: "Large",
+  XL: "Extra Large",
+  XXL: "Extra Extra Large",
 };
 
 /**
@@ -57,7 +46,7 @@ export function detectFieldAtCursor(line: string, charPos: number): string | nul
   }
 
   // Find colon position
-  const colonIndex = line.indexOf(':');
+  const colonIndex = line.indexOf(":");
   if (colonIndex === -1) {
     return null;
   }
@@ -84,7 +73,7 @@ export function detectFieldAtCursor(line: string, charPos: number): string | nul
  * @returns Completion data array
  */
 export function getStatusCompletions(statuses: StatusDef[]): CompletionData[] {
-  return statuses.map(status => ({
+  return statuses.map((status) => ({
     value: status.id,
     detail: status.label,
   }));
@@ -92,12 +81,13 @@ export function getStatusCompletions(statuses: StatusDef[]): CompletionData[] {
 
 /**
  * Generate completion items for type field
- * @returns Completion data array with fixed story types
+ * @param storyTypes Story type configuration from config
+ * @returns Completion data array from config storyTypes
  */
-export function getTypeCompletions(): CompletionData[] {
-  return ['feature', 'bug', 'task', 'chore', 'spike'].map(type => ({
-    value: type,
-    detail: TYPE_DESCRIPTIONS[type],
+export function getTypeCompletions(storyTypes: Record<string, StoryTypeConfig>): CompletionData[] {
+  return Object.entries(storyTypes).map(([key, config]) => ({
+    value: key,
+    detail: config.description,
   }));
 }
 
@@ -107,7 +97,7 @@ export function getTypeCompletions(): CompletionData[] {
  * @returns Completion data array
  */
 export function getSizeCompletions(sizes: StorySize[]): CompletionData[] {
-  return sizes.map(size => ({
+  return sizes.map((size) => ({
     value: size,
     detail: SIZE_DESCRIPTIONS[size],
   }));
@@ -119,7 +109,7 @@ export function getSizeCompletions(sizes: StorySize[]): CompletionData[] {
  * @returns Completion data array
  */
 export function getSprintCompletions(sprints: string[]): CompletionData[] {
-  return sprints.map(sprint => ({
+  return sprints.map((sprint) => ({
     value: sprint,
   }));
 }
@@ -131,12 +121,12 @@ export function getSprintCompletions(sprints: string[]): CompletionData[] {
  * @returns true if on theme field after colon
  */
 export function detectThemeField(line: string, charPos: number): boolean {
-  const colonIndex = line.indexOf(':');
+  const colonIndex = line.indexOf(":");
   if (colonIndex === -1 || charPos <= colonIndex) {
     return false;
   }
   const fieldPart = line.substring(0, colonIndex).trim();
-  return fieldPart === 'theme';
+  return fieldPart === "theme";
 }
 
 /**
@@ -146,12 +136,12 @@ export function detectThemeField(line: string, charPos: number): boolean {
  * @returns true if on epic field after colon
  */
 export function detectEpicField(line: string, charPos: number): boolean {
-  const colonIndex = line.indexOf(':');
+  const colonIndex = line.indexOf(":");
   if (colonIndex === -1 || charPos <= colonIndex) {
     return false;
   }
   const fieldPart = line.substring(0, colonIndex).trim();
-  return fieldPart === 'epic';
+  return fieldPart === "epic";
 }
 
 /**
@@ -173,7 +163,7 @@ export function detectDependencyContext(lines: string[], lineNum: number, _charP
   let inFrontmatter = false;
   let frontmatterStart = -1;
   for (let i = 0; i <= lineNum; i++) {
-    if (lines[i].trim() === '---') {
+    if (lines[i].trim() === "---") {
       if (!inFrontmatter) {
         inFrontmatter = true;
         frontmatterStart = i;
@@ -195,8 +185,8 @@ export function detectDependencyContext(lines: string[], lineNum: number, _charP
     const prevLine = lines[i];
     // If we hit a non-indented line with a colon, that's the parent field
     if (prevLine.match(/^[a-z_]+:/i)) {
-      const fieldName = prevLine.split(':')[0].trim();
-      return fieldName === 'dependencies';
+      const fieldName = prevLine.split(":")[0].trim();
+      return fieldName === "dependencies";
     }
     // If we hit another array item, continue looking back
     if (prevLine.match(/^\s+-/)) {
@@ -221,14 +211,14 @@ export function detectLinkTrigger(line: string, charPos: number): boolean {
   const textBefore = line.substring(0, charPos);
 
   // Find last [[ before cursor
-  const lastOpenBracket = textBefore.lastIndexOf('[[');
+  const lastOpenBracket = textBefore.lastIndexOf("[[");
   if (lastOpenBracket === -1) {
     return false;
   }
 
   // Check if there's a ]] after the [[ but before cursor
   const textAfterOpen = textBefore.substring(lastOpenBracket);
-  if (textAfterOpen.includes(']]')) {
+  if (textAfterOpen.includes("]]")) {
     return false;
   }
 
@@ -257,7 +247,7 @@ interface StoryLike {
  * @returns Completion data array
  */
 export function getThemeCompletions(themes: EpicLike[]): CompletionData[] {
-  return themes.map(theme => ({
+  return themes.map((theme) => ({
     value: theme.id,
     detail: theme.title,
   }));
@@ -270,9 +260,7 @@ export function getThemeCompletions(themes: EpicLike[]): CompletionData[] {
  * @returns Completion data array
  */
 export function getEpicCompletions(epics: EpicLike[]): CompletionData[] {
-  const completions: CompletionData[] = [
-    { value: 'EPIC-INBOX', detail: 'Inbox for uncategorized stories' },
-  ];
+  const completions: CompletionData[] = [{ value: "EPIC-INBOX", detail: "Inbox for uncategorized stories" }];
 
   for (const epic of epics) {
     completions.push({
@@ -290,7 +278,7 @@ export function getEpicCompletions(epics: EpicLike[]): CompletionData[] {
  * @returns Completion data array
  */
 export function getStoryCompletions(stories: StoryLike[]): CompletionData[] {
-  return stories.map(story => ({
+  return stories.map((story) => ({
     value: story.id,
     detail: story.title,
   }));

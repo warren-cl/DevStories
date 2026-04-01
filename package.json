@@ -2,7 +2,7 @@
   "name": "devstories",
   "displayName": "DevStories",
   "description": "Stories as markdown files, version-controlled with your code. AI-readable. Git-tracked.",
-  "version": "3.2.2",
+  "version": "3.4.0",
   "publisher": "DhavalSavalia",
   "author": {
     "name": "Dhaval Savalia",
@@ -176,6 +176,12 @@
         "category": "DevStories"
       },
       {
+        "command": "devstories.openStorydocsFolder",
+        "title": "Open StoryDocs Folder",
+        "category": "DevStories",
+        "icon": "$(folder-opened)"
+      },
+      {
         "command": "devstories.createTask",
         "title": "Create Task",
         "category": "DevStories"
@@ -306,12 +312,27 @@
           "group": "devstories@3"
         },
         {
+          "command": "devstories.openStorydocsFolder",
+          "when": "view == devstories.views.explorer && viewItem == story && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
           "command": "devstories.browseStorydocs",
           "when": "view == devstories.views.explorer && viewItem == epic && devstories:storydocsEnabled",
           "group": "devstories@3"
         },
         {
+          "command": "devstories.openStorydocsFolder",
+          "when": "view == devstories.views.explorer && viewItem == epic && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
           "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == theme && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.openStorydocsFolder",
           "when": "view == devstories.views.explorer && viewItem == theme && devstories:storydocsEnabled",
           "group": "devstories@3"
         },
@@ -327,6 +348,11 @@
         },
         {
           "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == task && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.openStorydocsFolder",
           "when": "view == devstories.views.explorer && viewItem == task && devstories:storydocsEnabled",
           "group": "devstories@3"
         },
@@ -371,12 +397,27 @@
           "group": "devstories@3"
         },
         {
+          "command": "devstories.openStorydocsFolder",
+          "when": "view == devstories.views.explorer && viewItem == story-archived && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
           "command": "devstories.browseStorydocs",
           "when": "view == devstories.views.explorer && viewItem == epic-archived && devstories:storydocsEnabled",
           "group": "devstories@3"
         },
         {
+          "command": "devstories.openStorydocsFolder",
+          "when": "view == devstories.views.explorer && viewItem == epic-archived && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
           "command": "devstories.browseStorydocs",
+          "when": "view == devstories.views.explorer && viewItem == theme-archived && devstories:storydocsEnabled",
+          "group": "devstories@3"
+        },
+        {
+          "command": "devstories.openStorydocsFolder",
           "when": "view == devstories.views.explorer && viewItem == theme-archived && devstories:storydocsEnabled",
           "group": "devstories@3"
         }

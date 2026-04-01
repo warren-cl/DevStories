@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Configurable Story Types**: Story types (previously hardcoded to `feature`, `bug`, `task`, `chore`, `spike`) are now fully configurable in `config.json` via the `storyTypes` object. Each type has a `template`, `description`, `icon` (VS Code ThemeIcon name), and `emoji`. Custom types appear throughout the UI: create-story wizard, quick capture, tree view icons, hover previews, and frontmatter autocomplete. The `type` frontmatter field now accepts any string matching a key in `storyTypes`.
+- **Separate Template Roots**: The `templateRoot` config field has been split into `storyTemplateRoot` and `taskTemplateRoot`, allowing story and task templates to live in different folders. Existing `templateRoot` values are auto-migrated to both new fields on config upgrade.
 - **Task Support**: Tasks are lightweight sub-items of stories, stored as markdown files inside StoryDocs folders (`stories/DS-00001/tasks/TASK-001-build-api.md`). Tasks appear as children of their parent story in the tree view, support status changes via the context menu, and are loaded/watched automatically when StoryDocs is enabled. Includes resilient parsing with field-name auto-heal (`task_id`→`id`, `story_id`→`story`, `completed`→`completed_on`) and composite keys (`story::taskId`) to avoid ID collisions across stories.
 - **Theme Management**: Create and manage themes as a top-level grouping above epics
 - **Dual Views**: Toggle between Work Breakdown (Theme → Epic → Story hierarchy) and Backlog (Sprint → Story flat list) via title bar buttons
@@ -38,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Story Type is now config-driven**: The `type` field in story frontmatter is no longer validated against a hardcoded enum — it accepts any string matching a key in `config.json`'s `storyTypes` object. The JSON Schema (`common.schema.json`) changed from `enum` to `{ type: "string", minLength: 1 }`.
+- **`templateRoot` → `storyTemplateRoot` + `taskTemplateRoot`**: The legacy `templateRoot` config field has been replaced with two separate fields. Config upgrade automatically migrates the old value to both new fields and removes `templateRoot`.
+- **Bundled library templates removed**: The `@library/*` template reference system has been removed. All templates are now resolved from the configured `storyTemplateRoot` folder.
+- **Quick capture type prefixes derived from config**: Quick capture type detection (e.g., `bug: fix login`) now matches exact config keys instead of hardcoded abbreviations. The `feat:` shorthand no longer maps to `feature` — use the full key `feature:` instead.
+- **Tree view story icons from config**: Story type icons in the tree view now use the `icon` field from `storyTypes` config (rendered as VS Code ThemeIcons) instead of the static SVG story icon.
 - **Progress Indicators**: Expanded from 5 to 6 stages (`○ ◎ ◔ ◐ ◕ ●`) for finer-grained visual feedback in the tree view
 - **Command Palette Prefix**: Moved "DevStories:" from the command `title` to the `category` field across all commands — context menus now show clean names while the Command Palette retains the prefixed form
 - **Config Schema v3**: Config upgrades now add archive defaults, sprint date defaults, task ID prefix/task type support, and `statuses[].canArchive` with `false` as the default when missing.

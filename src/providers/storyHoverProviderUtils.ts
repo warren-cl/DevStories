@@ -1,7 +1,7 @@
-import { LINK_PATTERN, BARE_ID_PATTERN } from '../utils/linkResolver';
-import { Story, StoryType } from '../types/story';
-import { Epic } from '../types/epic';
-import { Theme } from '../types/theme';
+import { LINK_PATTERN, BARE_ID_PATTERN } from "../utils/linkResolver";
+import { Story, StoryType, StoryTypeConfig } from "../types/story";
+import { Epic } from "../types/epic";
+import { Theme } from "../types/theme";
 
 /**
  * Represents a link match with position info
@@ -17,41 +17,30 @@ export interface HoverLinkMatch {
  */
 export function getStatusIndicator(status: string): string {
   switch (status) {
-    case 'todo':
-      return '○';
-    case 'in_progress':
-      return '◐';
-    case 'review':
-      return '◑';
-    case 'done':
-      return '●';
+    case "todo":
+      return "○";
+    case "in_progress":
+      return "◐";
+    case "review":
+      return "◑";
+    case "done":
+      return "●";
     default:
-      return '◇';
+      return "◇";
   }
 }
 
 /**
  * Get type icon emoji for display
  */
-export function getTypeIcon(type: StoryType | 'epic' | 'theme'): string {
-  switch (type) {
-    case 'feature':
-      return '✨';
-    case 'bug':
-      return '🐛';
-    case 'task':
-      return '📋';
-    case 'chore':
-      return '🔧';
-    case 'spike':
-      return '🔬';
-    case 'epic':
-      return '📁';
-    case 'theme':
-      return '🗂️';
-    default:
-      return '📄';
+export function getTypeIcon(type: StoryType | "epic" | "theme", storyTypes?: Record<string, StoryTypeConfig>): string {
+  if (type === "epic") {
+    return "📁";
   }
+  if (type === "theme") {
+    return "🗂️";
+  }
+  return storyTypes?.[type]?.emoji ?? "📄";
 }
 
 /**
@@ -74,19 +63,20 @@ export interface EpicProgress {
  */
 export function formatHoverCard(
   item: Story | Epic | Theme,
-  type: 'story' | 'epic' | 'theme',
-  progress?: EpicProgress
+  type: "story" | "epic" | "theme",
+  progress?: EpicProgress,
+  storyTypes?: Record<string, StoryTypeConfig>,
 ): string {
-  const isStory = type === 'story';
-  const isTheme = type === 'theme';
+  const isStory = type === "story";
+  const isTheme = type === "theme";
   const story = item as Story;
-  const icon = isStory ? getTypeIcon(story.type) : getTypeIcon(type);
+  const icon = isStory ? getTypeIcon(story.type, storyTypes) : getTypeIcon(type, storyTypes);
 
   const lines: string[] = [];
 
   // Title line
   lines.push(`### ${icon} ${item.id}: ${item.title}`);
-  lines.push('');
+  lines.push("");
 
   // Status
   lines.push(`**Status:** ${getStatusIndicator(item.status)} ${item.status}  `);
@@ -112,7 +102,7 @@ export function formatHoverCard(
   }
 
   // Theme (epics only, when present)
-  if (type === 'epic' && (item as Epic).theme) {
+  if (type === "epic" && (item as Epic).theme) {
     lines.push(`**Theme:** ${(item as Epic).theme}  `);
   }
 
@@ -122,7 +112,7 @@ export function formatHoverCard(
   }
 
   // Progress (epics only)
-  if (type === 'epic' && progress) {
+  if (type === "epic" && progress) {
     lines.push(`**Progress:** ${progress.done}/${progress.total} stories done  `);
   }
 
@@ -131,7 +121,7 @@ export function formatHoverCard(
     lines.push(`**Epics:** ${progress.total}  `);
   }
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -140,7 +130,7 @@ export function formatHoverCard(
  */
 export function findLinkAtPosition(text: string, position: number): HoverLinkMatch | null {
   // Create new regex instance to reset lastIndex
-  const regex = new RegExp(LINK_PATTERN.source, 'g');
+  const regex = new RegExp(LINK_PATTERN.source, "g");
 
   let match;
   while ((match = regex.exec(text)) !== null) {
@@ -167,7 +157,7 @@ export function findLinkAtPosition(text: string, position: number): HoverLinkMat
  */
 export function findBareIdAtPosition(text: string, position: number): HoverLinkMatch | null {
   // Create new regex instance to reset lastIndex
-  const regex = new RegExp(BARE_ID_PATTERN.source, 'g');
+  const regex = new RegExp(BARE_ID_PATTERN.source, "g");
 
   let match;
   while ((match = regex.exec(text)) !== null) {
@@ -201,7 +191,7 @@ export function isInFrontmatter(lines: string[], lineNumber: number): boolean {
   }
 
   // First line must be ---
-  if (lines[0].trim() !== '---') {
+  if (lines[0].trim() !== "---") {
     return false;
   }
 
@@ -213,7 +203,7 @@ export function isInFrontmatter(lines: string[], lineNumber: number): boolean {
   // Find the closing ---
   let closingLine = -1;
   for (let i = 1; i < lines.length; i++) {
-    if (lines[i].trim() === '---') {
+    if (lines[i].trim() === "---") {
       closingLine = i;
       break;
     }
@@ -243,7 +233,7 @@ export interface FieldNameMatch {
  */
 export function findFieldNameAtPosition(text: string, position: number): FieldNameMatch | null {
   // Find colon position
-  const colonIndex = text.indexOf(':');
+  const colonIndex = text.indexOf(":");
   if (colonIndex === -1) {
     return null;
   }
@@ -255,7 +245,7 @@ export function findFieldNameAtPosition(text: string, position: number): FieldNa
 
   // Check if this is a YAML array item (starts with -)
   const trimmedLine = text.trimStart();
-  if (trimmedLine.startsWith('-')) {
+  if (trimmedLine.startsWith("-")) {
     return null;
   }
 
@@ -289,35 +279,35 @@ export function findFieldNameAtPosition(text: string, position: number): FieldNa
  * Loaded statically to avoid file I/O in hover provider
  */
 const STORY_FIELD_DESCRIPTIONS: Record<string, string> = {
-  id: 'Unique story identifier (e.g., DS-001)',
-  title: 'Story title - brief description of the work',
-  type: 'Story type: feature, bug, task, chore, or spike',
-  epic: 'Parent epic ID this story belongs to',
-  status: 'Current workflow status (validated against config.yaml statuses)',
-  sprint: 'Sprint identifier (validated against config.yaml sprints)',
-  size: 'Complexity estimate (valid values defined in config.json)',
-  priority: 'Sort priority - lower values appear first',
-  assignee: 'Person assigned to this story',
-  dependencies: 'List of story IDs this story depends on',
-  created: 'Date story was created (YYYY-MM-DD)',
-  updated: 'Date story was last modified (auto-updated on save)',
+  id: "Unique story identifier (e.g., DS-001)",
+  title: "Story title - brief description of the work",
+  type: "Story type (validated against config.json storyTypes)",
+  epic: "Parent epic ID this story belongs to",
+  status: "Current workflow status (validated against config.yaml statuses)",
+  sprint: "Sprint identifier (validated against config.yaml sprints)",
+  size: "Complexity estimate (valid values defined in config.json)",
+  priority: "Sort priority - lower values appear first",
+  assignee: "Person assigned to this story",
+  dependencies: "List of story IDs this story depends on",
+  created: "Date story was created (YYYY-MM-DD)",
+  updated: "Date story was last modified (auto-updated on save)",
 };
 
 const EPIC_FIELD_DESCRIPTIONS: Record<string, string> = {
-  id: 'Unique epic identifier (e.g., EPIC-001 or EPIC-INBOX)',
-  title: 'Epic title - thematic grouping of related stories',
-  theme: 'Parent theme ID this epic belongs to (optional)',
-  status: 'Current workflow status (validated against config.yaml statuses)',
-  created: 'Date epic was created (YYYY-MM-DD)',
-  updated: 'Date epic was last modified (auto-updated on save)',
+  id: "Unique epic identifier (e.g., EPIC-001 or EPIC-INBOX)",
+  title: "Epic title - thematic grouping of related stories",
+  theme: "Parent theme ID this epic belongs to (optional)",
+  status: "Current workflow status (validated against config.yaml statuses)",
+  created: "Date epic was created (YYYY-MM-DD)",
+  updated: "Date epic was last modified (auto-updated on save)",
 };
 
 const THEME_FIELD_DESCRIPTIONS: Record<string, string> = {
-  id: 'Unique theme identifier (e.g., THEME-001)',
-  title: 'Theme title - top-level strategic grouping of related epics',
-  status: 'Current workflow status (validated against config.yaml statuses)',
-  created: 'Date theme was created (YYYY-MM-DD)',
-  updated: 'Date theme was last modified (auto-updated on save)',
+  id: "Unique theme identifier (e.g., THEME-001)",
+  title: "Theme title - top-level strategic grouping of related epics",
+  status: "Current workflow status (validated against config.yaml statuses)",
+  created: "Date theme was created (YYYY-MM-DD)",
+  updated: "Date theme was last modified (auto-updated on save)",
 };
 
 /**
@@ -326,11 +316,11 @@ const THEME_FIELD_DESCRIPTIONS: Record<string, string> = {
  * @param fileType 'story' or 'epic'
  * @returns Description string or null if field not found
  */
-export function getFieldDescription(fieldName: string, fileType: 'story' | 'epic' | 'theme'): string | null {
+export function getFieldDescription(fieldName: string, fileType: "story" | "epic" | "theme"): string | null {
   let descriptions: Record<string, string>;
-  if (fileType === 'story') {
+  if (fileType === "story") {
     descriptions = STORY_FIELD_DESCRIPTIONS;
-  } else if (fileType === 'theme') {
+  } else if (fileType === "theme") {
     descriptions = THEME_FIELD_DESCRIPTIONS;
   } else {
     descriptions = EPIC_FIELD_DESCRIPTIONS;

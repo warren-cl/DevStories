@@ -58,7 +58,15 @@ export function generateConfigJson(config: InitConfig, extensionVersion: string)
       plan: "plan.template.md",
       validate: "validate.template.md",
     },
-    templateRoot: ".devstories/templates",
+    storyTypes: {
+      feature: { template: "feature.template.md", description: "New functionality or capability", icon: "lightbulb", emoji: "✨" },
+      bug: { template: "bug.template.md", description: "Defect or issue to fix", icon: "bug", emoji: "🐛" },
+      task: { template: "task.template.md", description: "Work item or action", icon: "tasklist", emoji: "📋" },
+      chore: { template: "chore.template.md", description: "Maintenance or housekeeping", icon: "tools", emoji: "🔧" },
+      spike: { template: "spike.template.md", description: "Time-boxed investigation or research", icon: "beaker", emoji: "🔬" },
+    },
+    storyTemplateRoot: ".devstories/templates",
+    taskTemplateRoot: ".devstories/templates",
     archive: {
       soft: { devstories: "archive", storydocs: "archive" },
       hard: { devstories: "glacier", storydocs: "glacier" },

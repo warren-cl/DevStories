@@ -3,7 +3,7 @@
  * These can be unit tested with Vitest
  */
 
-import { StoryType, StorySize } from "../types/story";
+import { StoryType, StorySize, StoryTypeConfig } from "../types/story";
 import { mondayOfCurrentWeek } from "../utils/dateUtils";
 
 const matter = require("gray-matter");
@@ -62,8 +62,12 @@ export interface ConfigData {
   taskPrefix: string;
   /** Mapping of task type ID to template filename (e.g., { code: 'code.template.md' }) */
   taskTypes: Record<string, string>;
-  /** Root folder for templates (story and task), relative to workspace root. Falls back to .devstories/templates */
-  templateRoot?: string;
+  /** Mapping of story type ID to type configuration */
+  storyTypes: Record<string, StoryTypeConfig>;
+  /** Root folder for story templates, relative to workspace root. Falls back to .devstories/templates */
+  storyTemplateRoot?: string;
+  /** Root folder for task templates, relative to workspace root. Falls back to .devstories/templates */
+  taskTemplateRoot?: string;
   /** Subdirectory name inside .devstories/ for soft-archived files (e.g. "archive") */
   archiveSoftDevstories?: string;
   /** Subdirectory name inside storydocs root for soft-archived docs (e.g. "archive") */
@@ -87,12 +91,21 @@ export const DEFAULT_TASK_TYPES: Record<string, string> = {
   validate: "validate.template.md",
 };
 
+export const DEFAULT_STORY_TYPES: Record<string, StoryTypeConfig> = {
+  feature: { template: "feature.template.md", description: "New functionality or capability", icon: "lightbulb", emoji: "✨" },
+  bug: { template: "bug.template.md", description: "Defect or issue to fix", icon: "bug", emoji: "🐛" },
+  task: { template: "task.template.md", description: "Work item or action", icon: "tasklist", emoji: "📋" },
+  chore: { template: "chore.template.md", description: "Maintenance or housekeeping", icon: "tools", emoji: "🔧" },
+  spike: { template: "spike.template.md", description: "Time-boxed investigation or research", icon: "beaker", emoji: "🔬" },
+};
+
 export const DEFAULT_CONFIG: ConfigData = {
   epicPrefix: "EPIC",
   storyPrefix: "STORY",
   themePrefix: "THEME",
   taskPrefix: "TASK",
   taskTypes: DEFAULT_TASK_TYPES,
+  storyTypes: DEFAULT_STORY_TYPES,
   sprintSequence: [],
   statuses: [
     { id: "todo", label: "To Do" },
@@ -233,8 +246,14 @@ export function parseConfigJsonContent(content: string): Partial<ConfigData> {
     if (typeof parsed.taskTypes === "object" && parsed.taskTypes !== null && !Array.isArray(parsed.taskTypes)) {
       result.taskTypes = parsed.taskTypes as Record<string, string>;
     }
-    if (typeof parsed.templateRoot === "string" && parsed.templateRoot.trim()) {
-      result.templateRoot = parsed.templateRoot.trim();
+    if (typeof parsed.storyTypes === "object" && parsed.storyTypes !== null && !Array.isArray(parsed.storyTypes)) {
+      result.storyTypes = parsed.storyTypes as Record<string, StoryTypeConfig>;
+    }
+    if (typeof parsed.storyTemplateRoot === "string" && parsed.storyTemplateRoot.trim()) {
+      result.storyTemplateRoot = parsed.storyTemplateRoot.trim();
+    }
+    if (typeof parsed.taskTemplateRoot === "string" && parsed.taskTemplateRoot.trim()) {
+      result.taskTemplateRoot = parsed.taskTemplateRoot.trim();
     }
 
     // Archive config
@@ -297,7 +316,9 @@ export function mergeConfigWithDefaults(parsed: Partial<ConfigData>): ConfigData
     storydocsRoot: parsed.storydocsRoot,
     taskPrefix: parsed.taskPrefix ?? DEFAULT_CONFIG.taskPrefix,
     taskTypes: parsed.taskTypes ?? DEFAULT_CONFIG.taskTypes,
-    templateRoot: parsed.templateRoot,
+    storyTypes: parsed.storyTypes ?? DEFAULT_CONFIG.storyTypes,
+    storyTemplateRoot: parsed.storyTemplateRoot,
+    taskTemplateRoot: parsed.taskTemplateRoot,
     archiveSoftDevstories: parsed.archiveSoftDevstories,
     archiveSoftStorydocs: parsed.archiveSoftStorydocs,
     archiveHardDevstories: parsed.archiveHardDevstories,
@@ -512,10 +533,34 @@ export function computeConfigUpgrade(raw: Record<string, unknown>, targetVersion
     fieldsAdded.push("taskTypes");
   }
 
-  // templateRoot (default to .devstories/templates)
-  if (upgraded.templateRoot === undefined) {
-    upgraded.templateRoot = ".devstories/templates";
-    fieldsAdded.push("templateRoot");
+  // storyTypes (default mapping)
+  if (upgraded.storyTypes === undefined) {
+    upgraded.storyTypes = JSON.parse(JSON.stringify(DEFAULT_STORY_TYPES));
+    fieldsAdded.push("storyTypes");
+  }
+
+  // templateRoot → storyTemplateRoot + taskTemplateRoot migration
+  if (upgraded.templateRoot !== undefined) {
+    // Migrate legacy templateRoot to both new fields
+    if (upgraded.taskTemplateRoot === undefined) {
+      upgraded.taskTemplateRoot = upgraded.templateRoot;
+      fieldsAdded.push("taskTemplateRoot");
+    }
+    if (upgraded.storyTemplateRoot === undefined) {
+      upgraded.storyTemplateRoot = upgraded.templateRoot;
+      fieldsAdded.push("storyTemplateRoot");
+    }
+    delete upgraded.templateRoot;
+    fieldsAdded.push("(removed templateRoot)");
+  } else {
+    if (upgraded.storyTemplateRoot === undefined) {
+      upgraded.storyTemplateRoot = ".devstories/templates";
+      fieldsAdded.push("storyTemplateRoot");
+    }
+    if (upgraded.taskTemplateRoot === undefined) {
+      upgraded.taskTemplateRoot = ".devstories/templates";
+      fieldsAdded.push("taskTemplateRoot");
+    }
   }
 
   // archive (soft + hard defaults)

@@ -4,11 +4,10 @@ import { ConfigService } from '../core/configService';
 import { ConfigData, parseConfigJsonContent, mergeConfigWithDefaults } from '../core/configServiceUtils';
 import { getLogger } from '../core/logger';
 import { StorydocsService } from '../core/storydocsService';
-import { StoryType, StorySize } from '../types/story';
+import { StorySize } from '../types/story';
 import { toKebabCase } from '../utils/filenameUtils';
 import {
   findNextStoryId,
-  getSuggestedSize,
   calculateTitleSimilarity,
   generateStoryMarkdown,
   generateStoryLink,
@@ -22,7 +21,6 @@ import { validateStoryTitle, validateSprintName } from '../utils/inputValidation
 // Re-export for convenience
 export {
   findNextStoryId,
-  getSuggestedSize,
   calculateTitleSimilarity,
   generateStoryMarkdown,
   generateStoryLink,
@@ -76,10 +74,12 @@ async function readConfigFallback(workspaceUri: vscode.Uri): Promise<ConfigData 
 }
 
 /**
- * Load custom templates from .devstories/templates/ folder
+ * Load custom templates from storyTemplateRoot folder (or default .devstories/templates/)
  */
-async function loadCustomTemplates(workspaceUri: vscode.Uri): Promise<CustomTemplate[]> {
-  const templatesUri = vscode.Uri.joinPath(workspaceUri, '.devstories', 'templates');
+async function loadCustomTemplates(workspaceUri: vscode.Uri, storyTemplateRoot?: string): Promise<CustomTemplate[]> {
+  const templatesUri = storyTemplateRoot
+    ? vscode.Uri.joinPath(workspaceUri, storyTemplateRoot)
+    : vscode.Uri.joinPath(workspaceUri, '.devstories', 'templates');
   const templates: CustomTemplate[] = [];
 
   try {
@@ -97,6 +97,28 @@ async function loadCustomTemplates(workspaceUri: vscode.Uri): Promise<CustomTemp
   }
 
   return templates;
+}
+
+/**
+ * Load a story template file from storyTemplateRoot.
+ * Falls back to the built-in DEFAULT_TEMPLATES content if file not found.
+ */
+async function loadStoryTemplate(workspaceUri: vscode.Uri, storyTemplateRoot: string | undefined, templateFilename: string): Promise<string> {
+  const baseUri = storyTemplateRoot
+    ? vscode.Uri.joinPath(workspaceUri, storyTemplateRoot)
+    : vscode.Uri.joinPath(workspaceUri, ".devstories", "templates");
+
+  const templateUri = vscode.Uri.joinPath(baseUri, templateFilename);
+  try {
+    const content = Buffer.from(await vscode.workspace.fs.readFile(templateUri)).toString("utf8");
+    const matter = require("gray-matter");
+    return matter(content).content.trim();
+  } catch {
+    getLogger().debug(`Story template ${templateFilename} not found, using built-in default`);
+    // Derive type key from filename (e.g., "feature.template.md" → "feature")
+    const typeKey = templateFilename.replace(/\.template\.md$/, "");
+    return DEFAULT_TEMPLATES[typeKey] ?? DEFAULT_TEMPLATES.task ?? '';
+  }
 }
 
 /**
@@ -134,7 +156,7 @@ function findSimilarStory(title: string, store: Store): { id: string; title: str
 }
 
 interface TypeQuickPickItem extends vscode.QuickPickItem {
-  value: StoryType;
+  value: string;
 }
 
 interface SizeQuickPickItem extends vscode.QuickPickItem {
@@ -142,7 +164,6 @@ interface SizeQuickPickItem extends vscode.QuickPickItem {
 }
 
 interface TemplateQuickPickItem extends vscode.QuickPickItem {
-  templateRef?: string; // @library/name or undefined for default
   customContent?: string; // Direct content for custom templates
 }
 
@@ -238,14 +259,19 @@ export async function executeCreateStory(store: Store, preselectedEpicId?: strin
     }
   }
 
-  // Type picker
-  const typeOptions: TypeQuickPickItem[] = [
-    { label: '$(lightbulb) Feature', description: 'New functionality', value: 'feature' },
-    { label: '$(bug) Bug', description: 'Something is broken', value: 'bug' },
-    { label: '$(tasklist) Task', description: 'Work to be done', value: 'task' },
-    { label: '$(tools) Chore', description: 'Maintenance work', value: 'chore' },
-    { label: '$(beaker) Spike', description: 'Time-boxed investigation', value: 'spike' },
-  ];
+  // Type picker — from config storyTypes
+  const storyTypes = config.storyTypes;
+  const typeKeys = Object.keys(storyTypes);
+  if (typeKeys.length === 0) {
+    void vscode.window.showErrorMessage("DevStories: No story types configured in config.json.");
+    return false;
+  }
+
+  const typeOptions: TypeQuickPickItem[] = typeKeys.map(key => ({
+    label: `$(${storyTypes[key].icon}) ${key.charAt(0).toUpperCase() + key.slice(1)}`,
+    description: storyTypes[key].description,
+    value: key,
+  }));
 
   const selectedType = await vscode.window.showQuickPick(typeOptions, {
     placeHolder: 'Select story type',
@@ -255,26 +281,13 @@ export async function executeCreateStory(store: Store, preselectedEpicId?: strin
     return false;
   }
 
-  // Template picker - offer to use library template, custom template, or default
+  // Template picker - offer to use a custom template or the configured/default template
   const templateOptions: TemplateQuickPickItem[] = [
     { label: '$(file-text) Default', description: `Use default ${selectedType.value} template` },
   ];
 
-  // Add relevant bundled library templates based on type
-  if (selectedType.value === 'feature') {
-    templateOptions.push(
-      { label: '$(cloud) API Endpoint', description: 'REST API implementation checklist', templateRef: '@library/api-endpoint' },
-      { label: '$(symbol-class) React Component', description: 'Component with props, tests, storybook', templateRef: '@library/react-component' },
-      { label: '$(database) DB Migration', description: 'Migration steps, rollback plan', templateRef: '@library/db-migration' },
-    );
-  } else if (selectedType.value === 'bug') {
-    templateOptions.push(
-      { label: '$(search) Bug Investigation', description: 'Deep investigation template', templateRef: '@library/bug-investigation' },
-    );
-  }
-
-  // Load and add custom templates from .devstories/templates/
-  const customTemplates = await loadCustomTemplates(workspaceUri);
+  // Load and add custom templates from storyTemplateRoot
+  const customTemplates = await loadCustomTemplates(workspaceUri, config.storyTemplateRoot);
   const relevantCustom = customTemplates.filter(t => {
     // Show template if no types specified (universal) or if types include selected type
     return !t.types || t.types.includes(selectedType.value);
@@ -296,7 +309,6 @@ export async function executeCreateStory(store: Store, preselectedEpicId?: strin
     }
   }
 
-  let selectedTemplateRef: string | undefined;
   let selectedCustomContent: string | undefined;
   if (templateOptions.length > 1) {
     const selectedTemplate = await vscode.window.showQuickPick(templateOptions, {
@@ -306,24 +318,14 @@ export async function executeCreateStory(store: Store, preselectedEpicId?: strin
     if (!selectedTemplate) {
       return false;
     }
-    selectedTemplateRef = selectedTemplate.templateRef;
     selectedCustomContent = selectedTemplate.customContent;
   }
 
-  // Size picker with suggestion
-  const suggestedSize = getSuggestedSize(selectedType.value, config.sizes);
+  // Size picker
   const sizeOptions: SizeQuickPickItem[] = config.sizes.map(s => ({
     label: s,
-    description: s === suggestedSize ? '(suggested)' : undefined,
     value: s,
   }));
-
-  // Move suggested size to top
-  const suggestedIndex = sizeOptions.findIndex(s => s.value === suggestedSize);
-  if (suggestedIndex > 0) {
-    const [suggested] = sizeOptions.splice(suggestedIndex, 1);
-    sizeOptions.unshift(suggested);
-  }
 
   const selectedSize = await vscode.window.showQuickPick(sizeOptions, {
     placeHolder: 'Select size',
@@ -401,10 +403,19 @@ export async function executeCreateStory(store: Store, preselectedEpicId?: strin
   const nextNum = findNextStoryId(existingIds, config.storyPrefix);
   const storyId = `${config.storyPrefix}-${String(nextNum).padStart(5, '0')}`;
 
-  // Get template - custom content > library reference > default
-  const template = selectedCustomContent
-    ?? selectedTemplateRef
-    ?? DEFAULT_TEMPLATES[selectedType.value];
+  // Get template - custom content > configured template file > built-in default
+  let template: string;
+  if (selectedCustomContent) {
+    template = selectedCustomContent;
+  } else {
+    // Try loading the template file specified in storyTypes config
+    const typeConfig = storyTypes[selectedType.value];
+    if (typeConfig?.template) {
+      template = await loadStoryTemplate(workspaceUri, config.storyTemplateRoot, typeConfig.template);
+    } else {
+      template = DEFAULT_TEMPLATES[selectedType.value] ?? DEFAULT_TEMPLATES.task ?? '';
+    }
+  }
 
   // Generate markdown
   const markdown = generateStoryMarkdown(

@@ -773,7 +773,9 @@ Some content`;
         ],
         storydocs: { enabled: false, root: "docs/storydocs" },
         taskTypes: { code: "code.template.md" },
-        templateRoot: ".devstories/templates",
+        storyTypes: { feature: { template: "feature.template.md", description: "New", icon: "lightbulb", emoji: "✨" } },
+        storyTemplateRoot: ".devstories/templates",
+        taskTemplateRoot: ".devstories/templates",
         archive: { soft: { devstories: "archive", storydocs: "archive" }, hard: { devstories: "glacier", storydocs: "glacier" } },
         sprints: { current: "sprint-1", sequence: ["sprint-1"], length: 14, firstSprintStartDate: "2026-01-05" },
       };
@@ -863,18 +865,40 @@ Some content`;
       expect(result!.fieldsAdded).not.toContain("taskTypes");
     });
 
-    it("adds templateRoot when missing", () => {
+    it("adds storyTemplateRoot and taskTemplateRoot when missing", () => {
       const raw = { version: 1 };
       const result = computeConfigUpgrade(raw, TARGET);
-      expect(result!.upgraded.templateRoot).toBe(".devstories/templates");
-      expect(result!.fieldsAdded).toContain("templateRoot");
+      expect(result!.upgraded.storyTemplateRoot).toBe(".devstories/templates");
+      expect(result!.upgraded.taskTemplateRoot).toBe(".devstories/templates");
+      expect(result!.fieldsAdded).toContain("storyTemplateRoot");
+      expect(result!.fieldsAdded).toContain("taskTemplateRoot");
     });
 
-    it("does not overwrite existing templateRoot", () => {
+    it("migrates legacy templateRoot to both new fields", () => {
       const raw = { version: 1, templateRoot: "docs/my-templates" };
       const result = computeConfigUpgrade(raw, TARGET);
-      expect(result!.upgraded.templateRoot).toBe("docs/my-templates");
-      expect(result!.fieldsAdded).not.toContain("templateRoot");
+      expect(result!.upgraded.storyTemplateRoot).toBe("docs/my-templates");
+      expect(result!.upgraded.taskTemplateRoot).toBe("docs/my-templates");
+      expect(result!.upgraded.templateRoot).toBeUndefined();
+      expect(result!.fieldsAdded).toContain("storyTemplateRoot");
+      expect(result!.fieldsAdded).toContain("taskTemplateRoot");
+      expect(result!.fieldsAdded).toContain("(removed templateRoot)");
+    });
+
+    it("adds storyTypes defaults when missing", () => {
+      const raw = { version: 1 };
+      const result = computeConfigUpgrade(raw, TARGET);
+      expect(result!.upgraded.storyTypes).toBeDefined();
+      expect(Object.keys(result!.upgraded.storyTypes as Record<string, unknown>)).toContain("feature");
+      expect(Object.keys(result!.upgraded.storyTypes as Record<string, unknown>)).toContain("bug");
+      expect(result!.fieldsAdded).toContain("storyTypes");
+    });
+
+    it("does not overwrite existing storyTypes", () => {
+      const raw = { version: 1, storyTypes: { custom: { template: "custom.md", description: "Custom", icon: "star", emoji: "⭐" } } };
+      const result = computeConfigUpgrade(raw, TARGET);
+      expect(Object.keys(result!.upgraded.storyTypes as Record<string, unknown>)).toEqual(["custom"]);
+      expect(result!.fieldsAdded).not.toContain("storyTypes");
     });
 
     it("adds archive with full defaults when missing", () => {

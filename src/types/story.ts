@@ -1,6 +1,20 @@
-export type StoryType = "feature" | "bug" | "task" | "chore" | "spike";
+export type StoryType = string; // Defined in config.json storyTypes
 export type StoryStatus = string; // Defined in config
 export type StorySize = string; // Defined in config (default: XS, S, M, L, XL)
+
+/**
+ * Configuration for a single story type (from config.json storyTypes)
+ */
+export interface StoryTypeConfig {
+  /** Template filename (with .template.md suffix) for this story type */
+  template: string;
+  /** Human-readable description shown in QuickPick and hover */
+  description: string;
+  /** VS Code codicon name for tree view (e.g., "lightbulb", "bug") */
+  icon: string;
+  /** Emoji for hover cards (e.g., "✨", "🐛") */
+  emoji: string;
+}
 
 export interface Story {
   id: string;

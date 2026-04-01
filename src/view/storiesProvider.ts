@@ -574,16 +574,12 @@ export class StoriesProvider implements vscode.TreeDataProvider<TreeElement> {
   }
 
   private getStoryIcon(type: StoryType): vscode.ThemeIcon | { light: vscode.Uri; dark: vscode.Uri } | undefined {
-    const iconMap: Record<StoryType, string> = {
-      feature: "feature",
-      bug: "bug",
-      task: "task",
-      chore: "chore",
-      spike: "task",
-    };
-
-    const iconName = iconMap[type] || "story";
-    return this.getIconPath(iconName);
+    const storyTypes = this.configService?.config?.storyTypes;
+    const iconName = storyTypes?.[type]?.icon;
+    if (iconName) {
+      return new vscode.ThemeIcon(iconName);
+    }
+    return this.getIconPath("story");
   }
 
   private getStatusIndicator(status: string): string {
