@@ -67,10 +67,10 @@ export async function executeSoftArchive(
     title: "DevStories: Soft Archive Sprint",
   });
 
-  if (!selected) return false;
+  if (!selected) {return false;}
 
   const cutoffIndex = computeArchiveCutoffIndex(selected.value, sprintSequence);
-  if (cutoffIndex === -1) return false;
+  if (cutoffIndex === -1) {return false;}
 
   // Step 2: Compute eligible items
   const allStories = store.getStories().filter((s) => !s.isArchived);
@@ -98,7 +98,7 @@ export async function executeSoftArchive(
 
   // Step 3: Confirmation
   const confirmed = await confirmArchive(plan, selected.value);
-  if (!confirmed) return false;
+  if (!confirmed) {return false;}
 
   // Step 4: Move files
   const archiveDevSeg = config.archiveSoftDevstories ?? "archive";
@@ -149,7 +149,7 @@ export async function executeRestoreFromArchive(
   // Collect unique sprints from archived stories, ordered by sprint sequence
   const sprintSet = new Set<string>();
   for (const story of archivedStories) {
-    if (story.sprint) sprintSet.add(story.sprint);
+    if (story.sprint) {sprintSet.add(story.sprint);}
   }
 
   const sprints = Array.from(sprintSet).sort((a, b) => {
@@ -171,11 +171,11 @@ export async function executeRestoreFromArchive(
     title: "DevStories: Restore From Archive",
   });
 
-  if (!selected) return false;
+  if (!selected) {return false;}
 
   // Use cutoff-based multi-sprint restore
   const cutoffIndex = sprintSequence.indexOf(selected.value);
-  if (cutoffIndex === -1) return false;
+  if (cutoffIndex === -1) {return false;}
 
   const sprintDateInfo =
     config.firstSprintStartDate && config.sprintLength
@@ -203,7 +203,7 @@ export async function executeRestoreFromArchive(
     { modal: true },
     "Restore",
   );
-  if (answer !== "Restore") return false;
+  if (answer !== "Restore") {return false;}
 
   const storydocsEnabled = isStorydocsEnabled(config);
   const folders = vscode.workspace.workspaceFolders;
@@ -250,7 +250,7 @@ export async function executeRestoreItem(
     filePath = store.getTheme(itemId)?.filePath;
   }
 
-  if (!filePath) return false;
+  if (!filePath) {return false;}
 
   const livePath = computeLiveDestination(filePath, archiveDevSeg);
   await ensureParentDir(vscode.Uri.file(livePath));
@@ -278,9 +278,9 @@ export async function executeRestoreItem(
 
 async function confirmArchive(plan: ArchivePlan, sprintLabel: string): Promise<boolean> {
   const parts: string[] = [];
-  if (plan.storyCount > 0) parts.push(`${plan.storyCount} stories`);
-  if (plan.epicCount > 0) parts.push(`${plan.epicCount} epics`);
-  if (plan.themeCount > 0) parts.push(`${plan.themeCount} themes`);
+  if (plan.storyCount > 0) {parts.push(`${plan.storyCount} stories`);}
+  if (plan.epicCount > 0) {parts.push(`${plan.epicCount} epics`);}
+  if (plan.themeCount > 0) {parts.push(`${plan.themeCount} themes`);}
 
   const answer = await vscode.window.showWarningMessage(`Archive ${parts.join(", ")} up to ${sprintLabel}?`, { modal: true }, "Archive");
   return answer === "Archive";
@@ -294,7 +294,7 @@ async function ensureParentDir(uri: vscode.Uri): Promise<void> {
 async function moveFilesToArchive(plan: ArchivePlan, archiveDevSeg: string, archiveDocsSeg: string, storydocsRoot?: string): Promise<void> {
   // Move stories first, then epics, then themes
   for (const story of plan.stories) {
-    if (!story.filePath) continue;
+    if (!story.filePath) {continue;}
     const dest = computeArchiveDestination(story.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(story.filePath), vscode.Uri.file(dest), { overwrite: false });
@@ -304,7 +304,7 @@ async function moveFilesToArchive(plan: ArchivePlan, archiveDevSeg: string, arch
   }
 
   for (const epic of plan.epics) {
-    if (!epic.filePath) continue;
+    if (!epic.filePath) {continue;}
     const dest = computeArchiveDestination(epic.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(epic.filePath), vscode.Uri.file(dest), { overwrite: false });
@@ -314,7 +314,7 @@ async function moveFilesToArchive(plan: ArchivePlan, archiveDevSeg: string, arch
   }
 
   for (const theme of plan.themes) {
-    if (!theme.filePath) continue;
+    if (!theme.filePath) {continue;}
     const dest = computeArchiveDestination(theme.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(theme.filePath), vscode.Uri.file(dest), { overwrite: false });
@@ -365,7 +365,7 @@ async function moveFilesFromArchive(
   storydocsRoot?: string,
 ): Promise<void> {
   for (const story of stories) {
-    if (!story.filePath) continue;
+    if (!story.filePath) {continue;}
     const dest = computeLiveDestination(story.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(story.filePath), vscode.Uri.file(dest), { overwrite: false });
@@ -375,7 +375,7 @@ async function moveFilesFromArchive(
   }
 
   for (const epic of epics) {
-    if (!epic.filePath) continue;
+    if (!epic.filePath) {continue;}
     const dest = computeLiveDestination(epic.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(epic.filePath), vscode.Uri.file(dest), { overwrite: false });
@@ -385,7 +385,7 @@ async function moveFilesFromArchive(
   }
 
   for (const theme of themes) {
-    if (!theme.filePath) continue;
+    if (!theme.filePath) {continue;}
     const dest = computeLiveDestination(theme.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(theme.filePath), vscode.Uri.file(dest), { overwrite: false });

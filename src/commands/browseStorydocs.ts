@@ -12,32 +12,9 @@ import { Store } from "../core/store";
 import { ConfigService } from "../core/configService";
 import { StorydocsService } from "../core/storydocsService";
 import { getLogger } from "../core/logger";
-import { isStorydocsEnabled, computeNodeFolderPath, type NodeType } from "../core/storydocsUtils";
+import { isStorydocsEnabled } from "../core/storydocsUtils";
 import { buildQuickPickItems, type StorydocEntry } from "./browseStorydocsUtils";
-import { isTask } from "../types/task";
-
-/**
- * Determine node type for an item clicked in the tree view.
- * Returns the ID and NodeType, or undefined if the item isn't a recognized node.
- * For tasks, resolves to the parent story so Browse StoryDocs opens the story folder.
- */
-function resolveNode(store: Store, item: Record<string, unknown>): { id: string; nodeType: NodeType } | undefined {
-  // Tasks resolve to their parent story's storydocs folder
-  if (isTask(item)) {
-    return { id: item.story, nodeType: "story" };
-  }
-  const id = item.id as string;
-  if (store.getStory(id)) {
-    return { id, nodeType: "story" };
-  }
-  if (store.getEpic(id)) {
-    return { id, nodeType: "epic" };
-  }
-  if (store.getTheme(id)) {
-    return { id, nodeType: "theme" };
-  }
-  return undefined;
-}
+import { resolveNode, computeStorydocsFolderPath } from "./storydocsCommandUtils";
 
 export async function executeBrowseStorydocs(
   store: Store,
@@ -66,7 +43,9 @@ export async function executeBrowseStorydocs(
   }
 
   const root = path.join(ws.uri.fsPath, config.storydocsRoot!);
-  const folderPath = computeNodeFolderPath(root, node.id, node.nodeType);
+  const archiveSegment = config.archiveSoftStorydocs ?? "archive";
+  const isArchived = (item as Record<string, unknown>).isArchived as boolean | undefined;
+  const folderPath = computeStorydocsFolderPath(root, archiveSegment, node.id, node.nodeType, isArchived);
   const folderUri = vscode.Uri.file(folderPath);
 
   // Check if folder exists; create it on-demand if missing

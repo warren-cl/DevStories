@@ -67,7 +67,7 @@ export function getEligibleStories(
   }
 
   return stories.filter((story) => {
-    if (story.isArchived) return false;
+    if (story.isArchived) {return false;}
 
     if (story.sprint) {
       const sprintIdx = sprintSequence.indexOf(story.sprint);
@@ -75,7 +75,7 @@ export function getEligibleStories(
     }
 
     // No sprint — require canArchive status + effective date before cutoff
-    if (!isCanArchiveStatus(story.status, statuses)) return false;
+    if (!isCanArchiveStatus(story.status, statuses)) {return false;}
     const effectiveDate = story.completedOn ?? story.updated;
     if (effectiveDate && cutoffEndDate) {
       return effectiveDate <= cutoffEndDate;
@@ -92,8 +92,8 @@ export function getEligibleStories(
  */
 export function getEligibleEpics(epics: Epic[], eligibleStoryIds: Set<string>, allStories: Story[], statuses: StatusDef[]): Epic[] {
   return epics.filter((epic) => {
-    if (epic.isArchived) return false;
-    if (!isCanArchiveStatus(epic.status, statuses)) return false;
+    if (epic.isArchived) {return false;}
+    if (!isCanArchiveStatus(epic.status, statuses)) {return false;}
     const children = allStories.filter((s) => s.epic === epic.id);
     return children.every((s) => eligibleStoryIds.has(s.id) || s.isArchived);
   });
@@ -106,8 +106,8 @@ export function getEligibleEpics(epics: Epic[], eligibleStoryIds: Set<string>, a
  */
 export function getEligibleThemes(themes: Theme[], eligibleEpicIds: Set<string>, allEpics: Epic[], statuses: StatusDef[]): Theme[] {
   return themes.filter((theme) => {
-    if (theme.isArchived) return false;
-    if (!isCanArchiveStatus(theme.status, statuses)) return false;
+    if (theme.isArchived) {return false;}
+    if (!isCanArchiveStatus(theme.status, statuses)) {return false;}
     const children = allEpics.filter((e) => e.theme === theme.id);
     return children.every((e) => eligibleEpicIds.has(e.id) || e.isArchived);
   });
@@ -137,7 +137,7 @@ export function getRestorableStories(
   }
 
   return stories.filter((story) => {
-    if (!story.isArchived) return false;
+    if (!story.isArchived) {return false;}
 
     if (story.sprint) {
       const sprintIdx = sprintSequence.indexOf(story.sprint);
@@ -161,7 +161,7 @@ export function getRestorableStories(
  */
 export function getRestorableEpics(epics: Epic[], restoreStoryIds: Set<string>, allStories: Story[]): Epic[] {
   return epics.filter((epic) => {
-    if (!epic.isArchived) return false;
+    if (!epic.isArchived) {return false;}
     const children = allStories.filter((s) => s.epic === epic.id);
     return children.every((s) => restoreStoryIds.has(s.id) || !s.isArchived);
   });
@@ -174,7 +174,7 @@ export function getRestorableEpics(epics: Epic[], restoreStoryIds: Set<string>, 
  */
 export function getRestorableThemes(themes: Theme[], restoreEpicIds: Set<string>, allEpics: Epic[]): Theme[] {
   return themes.filter((theme) => {
-    if (!theme.isArchived) return false;
+    if (!theme.isArchived) {return false;}
     const children = allEpics.filter((e) => e.theme === theme.id);
     return children.every((e) => restoreEpicIds.has(e.id) || !e.isArchived);
   });
@@ -211,7 +211,7 @@ export function computeArchiveDestination(sourcePath: string, archiveSegment: st
   const fwd = toFwd(sourcePath);
   const marker = ".devstories/";
   const idx = fwd.indexOf(marker);
-  if (idx === -1) return sourcePath;
+  if (idx === -1) {return sourcePath;}
 
   const afterMarker = idx + marker.length;
   return fwd.slice(0, afterMarker) + archiveSegment + "/" + fwd.slice(afterMarker);
@@ -226,7 +226,7 @@ export function computeArchiveDestination(sourcePath: string, archiveSegment: st
 export function computeStorydocsArchiveDestination(sourcePath: string, storydocsRoot: string, archiveSegment: string): string {
   const fwdSource = toFwd(sourcePath);
   const fwdRoot = toFwd(storydocsRoot);
-  if (!fwdSource.startsWith(fwdRoot)) return sourcePath;
+  if (!fwdSource.startsWith(fwdRoot)) {return sourcePath;}
 
   const relativePart = fwdSource.slice(fwdRoot.length); // starts with "/" e.g. "/stories/S1"
   return fwdRoot + "/" + archiveSegment + relativePart;

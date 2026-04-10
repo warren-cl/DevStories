@@ -79,7 +79,7 @@ describe("normalizeDatesInData", () => {
   });
 
   it("works with gray-matter round-trip", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
+     
     const matter = require("gray-matter");
     const input = `---
 id: DS-00001
