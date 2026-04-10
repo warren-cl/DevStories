@@ -15,6 +15,7 @@ import { executeSortStories } from "./commands/sortStories";
 import { executeTextFilter } from "./commands/textFilter";
 import { executeSoftArchive, executeRestoreFromArchive, executeRestoreItem } from "./commands/archiveSprint";
 import { executeBrowseStorydocs } from "./commands/browseStorydocs";
+import { executeOpenStorydocsFolder } from "./commands/openStorydocsFolder";
 import { applyAutoFilterSprint } from "./core/autoFilterSprint";
 import { AutoTimestamp } from "./core/autoTimestamp";
 import { ConfigService } from "./core/configService";
@@ -403,6 +404,14 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  // StoryDocs: Open folder command (reveals storydocs folder in file explorer)
+  const openStorydocsFolderCommand = vscode.commands.registerCommand(
+    "devstories.openStorydocsFolder",
+    wrapCommand("openStorydocsFolder", async (item) => {
+      await executeOpenStorydocsFolder(store, configService, item, storydocsService);
+    }),
+  );
+
   // StoryDocs: Reconcile command
   const reconcileStorydocsCommand = vscode.commands.registerCommand(
     "devstories.reconcileStorydocs",
@@ -498,6 +507,7 @@ export async function activate(context: vscode.ExtensionContext) {
     switchToBreakdownCommand,
     switchToBacklogCommand,
     browseStorydocsCommand,
+    openStorydocsFolderCommand,
     reconcileStorydocsCommand,
     createTaskCommand,
     softArchiveCommand,

@@ -8,6 +8,8 @@
 
 `npx vsce package`
 
+Run `npm run lint -- --fix` to fix fixable issues.
+
 ## Side load the extension
 
 Do not run the install from within code's terminal. Close VS Code and install from Windows Terminal or bash.
