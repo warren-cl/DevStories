@@ -14,4 +14,4 @@ Run `npm run lint -- --fix` to fix fixable issues.
 
 Do not run the install from within code's terminal. Close VS Code and install from Windows Terminal or bash.
 
-try `code --install-extension devstories-3.3.0.vsix --force`
+try `code --install-extension devstories-3.3.1.vsix --force`

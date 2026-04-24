@@ -11,6 +11,7 @@ import { Parser } from "./parser";
 import { Watcher } from "./watcher";
 import { getLogger } from "./logger";
 import { isArchivedPath } from "./storeUtils";
+import { normalizeDatesInData } from "../utils/dateUtils";
 import { sortEpicsBySprintOrder } from "../view/storiesProviderUtils";
 
 export class Store {
@@ -353,6 +354,7 @@ export class Store {
 
       // Auto-heal: write canonical frontmatter back if normalization changed anything
       if (changed) {
+        normalizeDatesInData(normalizedData);
         const newContent = matter.stringify(markdownBody, normalizedData);
         // Loop guard: only write if content actually changed on disk
         if (newContent !== content) {

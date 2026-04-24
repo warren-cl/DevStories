@@ -6,7 +6,7 @@
 const matter = require("gray-matter");
 
 import { StatusDef, isCompletedStatus } from "../core/configServiceUtils";
-import { localToday } from "../utils/dateUtils";
+import { localToday, normalizeDatesInData } from "../utils/dateUtils";
 
 const DEFAULT_STATUSES = ["todo", "in_progress", "review", "done"];
 
@@ -73,6 +73,9 @@ export function updateStoryStatus(content: string, newStatus: string, statuses?:
     }
   }
 
+  // Normalize Date objects back to YYYY-MM-DD strings before stringify
+  normalizeDatesInData(parsed.data);
+
   // Stringify back to markdown
   return matter.stringify(parsed.content, parsed.data);
 }
@@ -89,6 +92,9 @@ export function updateThemeStatus(content: string, newStatus: string): string {
   parsed.data.status = newStatus;
   parsed.data.updated = today;
 
+  // Normalize Date objects back to YYYY-MM-DD strings before stringify
+  normalizeDatesInData(parsed.data);
+
   // Stringify back to markdown
   return matter.stringify(parsed.content, parsed.data);
 }
@@ -104,6 +110,9 @@ export function updateEpicStatus(content: string, newStatus: string): string {
   // Update status and timestamp
   parsed.data.status = newStatus;
   parsed.data.updated = today;
+
+  // Normalize Date objects back to YYYY-MM-DD strings before stringify
+  normalizeDatesInData(parsed.data);
 
   // Stringify back to markdown
   return matter.stringify(parsed.content, parsed.data);
@@ -131,6 +140,8 @@ export function updateTaskStatus(content: string, newStatus: string, statuses?: 
     }
   }
 
+  normalizeDatesInData(parsed.data);
+
   return matter.stringify(parsed.content, parsed.data);
 }
 
@@ -145,6 +156,9 @@ export function updateStoryPriority(content: string, newPriority: number): strin
   // Update priority and timestamp
   parsed.data.priority = newPriority;
   parsed.data.updated = today;
+
+  // Normalize Date objects back to YYYY-MM-DD strings before stringify
+  normalizeDatesInData(parsed.data);
 
   // Stringify back to markdown
   return matter.stringify(parsed.content, parsed.data);

@@ -56,6 +56,23 @@
     "completed_on": {
       "$ref": "defs/common.schema.json#/$defs/dateString",
       "description": "Date task reached completion status (auto-managed by extension)"
+    },
+    "sip": {
+      "type": "string",
+      "description": "Relative path to the SIP or experiment plan"
+    },
+    "tdd_sequence": {
+      "type": "string",
+      "enum": ["pre", "post"],
+      "description": "Execution order relative to the TDD red/green cycle"
+    },
+    "separate_branch": {
+      "type": "boolean",
+      "description": "For experiment tasks: true if the experiment needs its own branch"
+    },
+    "validation_report": {
+      "type": "string",
+      "description": "For remediate tasks: relative path to the validation report"
     }
   },
   "additionalProperties": false

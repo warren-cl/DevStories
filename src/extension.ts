@@ -232,6 +232,27 @@ export async function activate(context: vscode.ExtensionContext) {
     await updateWelcomeContext(store.getEpics().length);
   });
 
+  // Shared helper: reload the entire store from disk (used by archive, refresh, focus handler)
+  const reloadStore = async () => {
+    const root = getAbsStorydocsRoot(configService.config);
+    await store.load(root, configService.config.archiveSoftDevstories, configService.config.archiveSoftStorydocs);
+  };
+
+  // Reconcile store from disk when VS Code regains focus — catches external writes
+  // (agents, scripts, git operations) that the FileSystemWatcher may have missed.
+  let lastFocusReloadTime = 0;
+  const FOCUS_RELOAD_COOLDOWN_MS = 5_000;
+  const focusDisposable = vscode.window.onDidChangeWindowState((state) => {
+    if (state.focused) {
+      const now = Date.now();
+      if (now - lastFocusReloadTime < FOCUS_RELOAD_COOLDOWN_MS) {
+        return;
+      }
+      lastFocusReloadTime = now;
+      void reloadStore();
+    }
+  });
+
   // Register Commands with error handling
   const initCommand = vscode.commands.registerCommand(
     "devstories.init",
@@ -436,11 +457,6 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   // Soft Archive command
-  const reloadStore = async () => {
-    const root = getAbsStorydocsRoot(configService.config);
-    await store.load(root, configService.config.archiveSoftDevstories, configService.config.archiveSoftStorydocs);
-  };
-
   const softArchiveCommand = vscode.commands.registerCommand(
     "devstories.softArchive",
     wrapCommand("softArchive", async () => {
@@ -469,6 +485,14 @@ export async function activate(context: vscode.ExtensionContext) {
       const theme = store.getTheme(item.id);
       const itemType = epic ? ("epic" as const) : theme ? ("theme" as const) : ("story" as const);
       await executeRestoreItem(store, configService, item.id, itemType, reloadStore, storydocsService);
+    }),
+  );
+
+  // Manual refresh command — safety valve for when watchers miss external changes
+  const refreshCommand = vscode.commands.registerCommand(
+    "devstories.refresh",
+    wrapCommand("refresh", async () => {
+      await reloadStore();
     }),
   );
 
@@ -513,6 +537,8 @@ export async function activate(context: vscode.ExtensionContext) {
     softArchiveCommand,
     restoreFromArchiveCommand,
     restoreItemCommand,
+    refreshCommand,
+    focusDisposable,
   );
   // TaskWatcher is managed by ensureTaskWatcher(); register a disposal wrapper
   context.subscriptions.push({

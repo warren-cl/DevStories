@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": "3.3.0",
   "project": "DevStories",
   "idMode": "manual",
   "idPrefix": {
@@ -11,19 +11,23 @@
   "statuses": [
     {
       "id": "todo",
-      "label": "To Do"
+      "label": "To Do",
+      "canArchive": false
     },
     {
       "id": "in_progress",
-      "label": "In Progress"
+      "label": "In Progress",
+      "canArchive": false
     },
     {
       "id": "review",
-      "label": "Review"
+      "label": "Review",
+      "canArchive": false
     },
     {
       "id": "done",
-      "label": "Done"
+      "label": "Done",
+      "canArchive": false
     }
   ],
   "sprints": {
@@ -47,7 +51,9 @@
       "1.1.0-intellisense",
       "1.2.0-mcp",
       "backlog"
-    ]
+    ],
+    "length": 7,
+    "firstSprintStartDate": "2026-03-30"
   },
   "sizes": [
     "XXS",
@@ -83,5 +89,15 @@
     "plan": "plan.template.md",
     "validate": "validate.template.md"
   },
-  "templateRoot": ".devstories/templates"
+  "templateRoot": ".devstories/templates",
+  "archive": {
+    "soft": {
+      "devstories": "archive",
+      "storydocs": "archive"
+    },
+    "hard": {
+      "devstories": "glacier",
+      "storydocs": "glacier"
+    }
+  }
 }

@@ -104,10 +104,11 @@ function makeSprintNode(sprintId: string, isBacklog = false): SprintNode {
   };
 }
 
-function makeStore(stories: Story[]): BacklogDropStore {
+function makeStore(stories: Story[]): BacklogDropStore & { reloadFile: ReturnType<typeof vi.fn> } {
   return {
     getStory: (id: string) => stories.find((s) => s.id === id),
     getStories: () => [...stories],
+    reloadFile: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -793,5 +794,72 @@ describe("edge cases", () => {
     const draggedWrite = new TextDecoder().decode(mockWriteFile.mock.calls[0][1]);
     expect(draggedWrite).toContain("sprint: backlog");
     expect(draggedWrite).toContain("priority: 9");
+  });
+});
+
+// ─── reloadFile calls ───────────────────────────────────────────────────────
+
+describe("reloadFile after writes", () => {
+  it("calls reloadFile for each file written on SprintNode drop", async () => {
+    const dragged = makeStory({ id: "DS-001", sprint: "sprint-1", priority: 500 });
+    const sib1 = makeStory({ id: "DS-002", sprint: "sprint-2", priority: 1 });
+    const sib2 = makeStory({ id: "DS-003", sprint: "sprint-2", priority: 2 });
+    const store = makeStore([dragged, sib1, sib2]);
+
+    mockReadFile.mockImplementation((uri: MockUri) => {
+      const path = uri.fsPath || uri.path || "";
+      if (path.includes("DS-001")) {
+        return Promise.resolve(storyFileContent("DS-001", "sprint-1", 500));
+      }
+      if (path.includes("DS-002")) {
+        return Promise.resolve(storyFileContent("DS-002", "sprint-2", 1));
+      }
+      if (path.includes("DS-003")) {
+        return Promise.resolve(storyFileContent("DS-003", "sprint-2", 2));
+      }
+      return Promise.resolve(storyFileContent("DEFAULT", "sprint-2", 500));
+    });
+
+    await handleBacklogDrop({
+      draggedStoryId: "DS-001",
+      target: makeSprintNode("sprint-2"),
+      store,
+      sortService: makeSortService(),
+      configService: makeConfigService(),
+    });
+
+    // 3 writes: dragged + 2 bumps (priority 1 and 2 with no gap)
+    expect(mockWriteFile).toHaveBeenCalledTimes(3);
+    // reloadFile should be called once per write
+    expect(store.reloadFile).toHaveBeenCalledTimes(3);
+  });
+
+  it("calls reloadFile for each file written on Story drop", async () => {
+    const dragged = makeStory({ id: "DS-001", sprint: "sprint-1", priority: 10 });
+    const target = makeStory({ id: "DS-002", sprint: "sprint-1", priority: 3 });
+    const store = makeStore([dragged, target]);
+
+    mockReadFile.mockImplementation((uri: MockUri) => {
+      const path = uri.fsPath || uri.path || "";
+      if (path.includes("DS-001")) {
+        return Promise.resolve(storyFileContent("DS-001", "sprint-1", 10));
+      }
+      if (path.includes("DS-002")) {
+        return Promise.resolve(storyFileContent("DS-002", "sprint-1", 3));
+      }
+      return Promise.resolve(storyFileContent("DEFAULT", "sprint-1", 500));
+    });
+
+    await handleBacklogDrop({
+      draggedStoryId: "DS-001",
+      target,
+      store,
+      sortService: makeSortService(),
+      configService: makeConfigService(),
+    });
+
+    // 1 write for dragged (no collision), 1 reloadFile call
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
+    expect(store.reloadFile).toHaveBeenCalledTimes(1);
   });
 });

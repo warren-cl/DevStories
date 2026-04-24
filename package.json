@@ -2,7 +2,7 @@
   "name": "devstories",
   "displayName": "DevStories",
   "description": "Stories as markdown files, version-controlled with your code. AI-readable. Git-tracked.",
-  "version": "3.3.0",
+  "version": "3.3.1",
   "publisher": "DhavalSavalia",
   "author": {
     "name": "Dhaval Savalia",
@@ -200,6 +200,12 @@
         "command": "devstories.restoreItem",
         "title": "Restore from Archive",
         "category": "DevStories"
+      },
+      {
+        "command": "devstories.refresh",
+        "title": "Refresh",
+        "category": "DevStories",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -258,6 +264,11 @@
           "command": "devstories.clearTextFilter",
           "when": "view == devstories.views.explorer && devstories:hasTextFilter",
           "group": "navigation@5"
+        },
+        {
+          "command": "devstories.refresh",
+          "when": "view == devstories.views.explorer",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [

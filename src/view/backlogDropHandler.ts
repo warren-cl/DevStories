@@ -40,6 +40,7 @@ import { getLogger } from "../core/logger";
 export interface BacklogDropStore {
   getStory(id: string): Story | undefined;
   getStories(): Story[];
+  reloadFile(uri: vscode.Uri): Promise<void>;
 }
 
 /** Minimal sort service surface needed by the backlog drop handler. */
@@ -118,7 +119,7 @@ function getStoriesInSprint(store: BacklogDropStore, targetSprint: string, sprin
 
 // ─── File write helpers ─────────────────────────────────────────────────────
 
-async function writeStorySprintAndPriority(story: Story, newSprint: string, newPriority: number): Promise<void> {
+async function writeStorySprintAndPriority(story: Story, newSprint: string, newPriority: number, store: BacklogDropStore): Promise<void> {
   if (!story.filePath) {
     return;
   }
@@ -128,12 +129,13 @@ async function writeStorySprintAndPriority(story: Story, newSprint: string, newP
     const content = new TextDecoder().decode(bytes);
     const updated = updateStorySprintAndPriority(content, newSprint, newPriority);
     await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(updated));
+    await store.reloadFile(uri);
   } catch (err) {
     getLogger().error(`Failed to set sprint/priority on story ${story.id}`, err);
   }
 }
 
-async function writeStoryPriority(story: Story, newPriority: number): Promise<void> {
+async function writeStoryPriority(story: Story, newPriority: number, store: BacklogDropStore): Promise<void> {
   if (!story.filePath) {
     return;
   }
@@ -143,6 +145,7 @@ async function writeStoryPriority(story: Story, newPriority: number): Promise<vo
     const content = new TextDecoder().decode(bytes);
     const updated = updateStoryPriorityOnly(content, newPriority);
     await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(updated));
+    await store.reloadFile(uri);
   } catch (err) {
     getLogger().error(`Failed to bump priority on story ${story.id}`, err);
   }
@@ -204,13 +207,13 @@ async function handleDropOnSprintNode(
   }
 
   // 1. Set dragged story to sprint + computed priority
-  await writeStorySprintAndPriority(draggedStory, targetSprint, draggedPriority);
+  await writeStorySprintAndPriority(draggedStory, targetSprint, draggedPriority, store);
 
   // 2. Apply only the cascade bumps (may be empty if there was room before min)
   for (const bump of bumps) {
     const sibling = siblings.find((s) => s.id === bump.id);
     if (sibling) {
-      await writeStoryPriority(sibling, bump.newPriority);
+      await writeStoryPriority(sibling, bump.newPriority, store);
     }
   }
 }
@@ -230,7 +233,7 @@ async function handleDropOnStory(
   const siblings = getStoriesInSprint(store, targetSprint, sprintSequence).filter((s) => s.id !== draggedStory.id);
 
   // 1. Set dragged story immediately below the target
-  await writeStorySprintAndPriority(draggedStory, targetSprint, insertPriority);
+  await writeStorySprintAndPriority(draggedStory, targetSprint, insertPriority, store);
 
   // 2. Cascade-bump only the siblings that actually collide
   const siblingData: PrioritySibling[] = siblings.map((s) => ({ id: s.id, priority: s.priority }));
@@ -238,7 +241,7 @@ async function handleDropOnStory(
   for (const bump of bumps) {
     const sibling = siblings.find((s) => s.id === bump.id);
     if (sibling) {
-      await writeStoryPriority(sibling, bump.newPriority);
+      await writeStoryPriority(sibling, bump.newPriority, store);
     }
   }
 }

@@ -5,7 +5,7 @@
 
 const matter = require("gray-matter");
 
-import { localToday } from "../utils/dateUtils";
+import { localToday, normalizeDatesInData } from "../utils/dateUtils";
 
 /**
  * Update the `epic` field in a story's YAML frontmatter.
@@ -17,6 +17,8 @@ export function updateStoryEpic(content: string, newEpicId: string): string {
 
   parsed.data.epic = newEpicId;
   parsed.data.updated = today;
+
+  normalizeDatesInData(parsed.data);
 
   return matter.stringify(parsed.content, parsed.data);
 }
@@ -32,6 +34,8 @@ export function clearStoryEpic(content: string): string {
 
   delete parsed.data.epic;
   parsed.data.updated = today;
+
+  normalizeDatesInData(parsed.data);
 
   return matter.stringify(parsed.content, parsed.data);
 }
@@ -55,6 +59,8 @@ export function updateEpicTheme(content: string, newThemeId: string | undefined)
 
   parsed.data.updated = today;
 
+  normalizeDatesInData(parsed.data);
+
   return matter.stringify(parsed.content, parsed.data);
 }
 
@@ -71,6 +77,8 @@ export function updateStorySprintAndPriority(content: string, newSprint: string,
   parsed.data.priority = newPriority;
   parsed.data.updated = today;
 
+  normalizeDatesInData(parsed.data);
+
   return matter.stringify(parsed.content, parsed.data);
 }
 
@@ -86,6 +94,8 @@ export function updateStoryPriorityOnly(content: string, newPriority: number): s
   parsed.data.priority = newPriority;
   parsed.data.updated = today;
 
+  normalizeDatesInData(parsed.data);
+
   return matter.stringify(parsed.content, parsed.data);
 }
 
@@ -100,6 +110,8 @@ export function updateTaskPriorityOnly(content: string, newPriority: number): st
 
   parsed.data.priority = newPriority;
   parsed.data.updated = today;
+
+  normalizeDatesInData(parsed.data);
 
   return matter.stringify(parsed.content, parsed.data);
 }

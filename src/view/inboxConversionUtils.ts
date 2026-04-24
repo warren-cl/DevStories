@@ -5,7 +5,7 @@
 
 const matter = require("gray-matter");
 
-import { localToday } from "../utils/dateUtils";
+import { localToday, normalizeDatesInData } from "../utils/dateUtils";
 
 /**
  * Strip a leading YYYY-MM-DD- date prefix from a filename (without extension).
@@ -144,6 +144,7 @@ export function fillMissingEpicFrontmatter(existingData: Record<string, unknown>
  */
 export function buildConvertedFileContent(originalContent: string, mergedData: Record<string, unknown>): string {
   const parsed = matter(originalContent);
+  normalizeDatesInData(mergedData);
   return matter.stringify(parsed.content, mergedData);
 }
 
