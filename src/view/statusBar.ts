@@ -1,7 +1,7 @@
-import * as vscode from 'vscode';
-import { ConfigService } from '../core/configService';
-import { SprintFilterService } from '../core/sprintFilterService';
-import { Store } from '../core/store';
+import * as vscode from "vscode";
+import { ConfigService } from "../core/configService";
+import { SprintFilterService } from "../core/sprintFilterService";
+import { Store } from "../core/store";
 import {
   StatusBarStats,
   getStatsFromStories,
@@ -9,7 +9,7 @@ import {
   buildProgressBar,
   collectAvailableSprints,
   formatTooltipLines,
-} from './statusBarUtils';
+} from "./statusBarUtils";
 
 export { StatusBarStats };
 
@@ -17,36 +17,28 @@ export class StatusBarController implements vscode.Disposable {
   private statusBarItem: vscode.StatusBarItem;
   private disposables: vscode.Disposable[] = [];
   private visible: boolean = false;
+  private _progressMode: boolean = false;
 
   constructor(
     private store: Store,
     private configService?: ConfigService,
-    private sprintFilterService?: SprintFilterService
+    private sprintFilterService?: SprintFilterService,
   ) {
-    this.statusBarItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Left,
-      100
-    );
-    this.statusBarItem.name = 'DevStories Progress';
+    this.statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    this.statusBarItem.name = "DevStories Progress";
     // DS-153: Status bar is display-only, use filter icon in tree view title bar
 
     // Listen for store updates
-    this.disposables.push(
-      this.store.onDidUpdate(() => this.update())
-    );
+    this.disposables.push(this.store.onDidUpdate(() => this.update()));
 
     // Listen for config changes (sprint config)
     if (this.configService) {
-      this.disposables.push(
-        this.configService.onDidConfigChange(() => this.update())
-      );
+      this.disposables.push(this.configService.onDidConfigChange(() => this.update()));
     }
 
     // Listen for sprint filter changes
     if (this.sprintFilterService) {
-      this.disposables.push(
-        this.sprintFilterService.onDidSprintChange(() => this.update())
-      );
+      this.disposables.push(this.sprintFilterService.onDidSprintChange(() => this.update()));
     }
 
     this.update();
@@ -75,9 +67,7 @@ export class StatusBarController implements vscode.Disposable {
    * Get formatted text for display
    */
   getFormattedText(sprint?: string): string {
-    const sprintFilter = sprint !== undefined
-      ? (sprint || null)
-      : this.getCurrentSprintFilter();
+    const sprintFilter = sprint !== undefined ? sprint || null : this.getCurrentSprintFilter();
     const statuses = this.configService?.config.statuses ?? [];
     const sizes = this.configService?.config.sizes ?? [];
     const storypoints = this.configService?.config.storypoints ?? [];
@@ -96,10 +86,7 @@ export class StatusBarController implements vscode.Disposable {
    * Get available sprints for picker
    */
   getAvailableSprints(): string[] {
-    return collectAvailableSprints(
-      this.store.getStories(),
-      this.configService?.config.currentSprint
-    );
+    return collectAvailableSprints(this.store.getStories(), this.configService?.config.currentSprint);
   }
 
   /**
@@ -112,12 +99,15 @@ export class StatusBarController implements vscode.Disposable {
     const storypoints = this.configService?.config.storypoints ?? [];
     const stats = getStatsFromStories(this.store.getStories(), sprint, statuses, sizes, storypoints);
     const lines = formatTooltipLines(stats.donePoints, stats.totalPoints, sprint);
-    const md = new vscode.MarkdownString(lines.join('\n'));
+    const md = new vscode.MarkdownString(lines.join("\n"));
     md.isTrusted = true;
     return md;
   }
 
   private update(): void {
+    if (this._progressMode) {
+      return;
+    }
     this.statusBarItem.text = this.getFormattedText();
     this.statusBarItem.tooltip = this.getTooltip();
   }
@@ -150,6 +140,33 @@ export class StatusBarController implements vscode.Disposable {
   hide(): void {
     this.statusBarItem.hide();
     this.visible = false;
+  }
+
+  /**
+   * Show archive/restore progress in the status bar, suppressing normal updates.
+   */
+  showProgress(label: string, current: number, total: number): void {
+    this._progressMode = true;
+    const bar = total > 0 ? ` ${buildProgressBar(current, total)} ${current}/${total} items` : "";
+    this.statusBarItem.text = `$(sync~spin) ${label}${bar}`;
+    const md = new vscode.MarkdownString(`**DevStories: ${label}**\n\n${current} of ${total} items processed`);
+    md.isTrusted = true;
+    this.statusBarItem.tooltip = md;
+  }
+
+  /**
+   * Clear progress mode and restore normal sprint progress display.
+   */
+  clearProgress(): void {
+    this._progressMode = false;
+    this.update();
+  }
+
+  /**
+   * Whether the status bar is currently in progress mode.
+   */
+  isProgressMode(): boolean {
+    return this._progressMode;
   }
 
   dispose(): void {

@@ -46,6 +46,9 @@ export async function executeSoftArchive(
   configService: ConfigService,
   reloadStore: () => Promise<void>,
   storydocsService?: StorydocsService,
+  progress?: (current: number, total: number) => void,
+  onPause?: () => void,
+  onResume?: () => void,
 ): Promise<boolean> {
   const config = configService.config;
   const sprintSequence = config.sprintSequence;
@@ -67,10 +70,14 @@ export async function executeSoftArchive(
     title: "DevStories: Soft Archive Sprint",
   });
 
-  if (!selected) {return false;}
+  if (!selected) {
+    return false;
+  }
 
   const cutoffIndex = computeArchiveCutoffIndex(selected.value, sprintSequence);
-  if (cutoffIndex === -1) {return false;}
+  if (cutoffIndex === -1) {
+    return false;
+  }
 
   // Step 2: Compute eligible items
   const allStories = store.getStories().filter((s) => !s.isArchived);
@@ -98,7 +105,9 @@ export async function executeSoftArchive(
 
   // Step 3: Confirmation
   const confirmed = await confirmArchive(plan, selected.value);
-  if (!confirmed) {return false;}
+  if (!confirmed) {
+    return false;
+  }
 
   // Step 4: Move files
   const archiveDevSeg = config.archiveSoftDevstories ?? "archive";
@@ -112,7 +121,12 @@ export async function executeSoftArchive(
     `[Archive] storydocsRoot resolution: enabled=${storydocsEnabled}, configRoot=${config.storydocsRoot ?? "(undefined)"}, hasFolders=${!!folders}, resolved=${storydocsRoot ?? "(undefined)"}`,
   );
 
-  await moveFilesToArchive(plan, archiveDevSeg, archiveDocsSeg, storydocsRoot);
+  onPause?.();
+  try {
+    await moveFilesToArchive(plan, archiveDevSeg, archiveDocsSeg, storydocsRoot, progress);
+  } finally {
+    onResume?.();
+  }
 
   // Step 5: Reload store and reconcile storydocs folders
   await reloadStore();
@@ -133,6 +147,9 @@ export async function executeRestoreFromArchive(
   configService: ConfigService,
   reloadStore: () => Promise<void>,
   storydocsService?: StorydocsService,
+  progress?: (current: number, total: number) => void,
+  onPause?: () => void,
+  onResume?: () => void,
 ): Promise<boolean> {
   const config = configService.config;
   const archiveDevSeg = config.archiveSoftDevstories ?? "archive";
@@ -149,7 +166,9 @@ export async function executeRestoreFromArchive(
   // Collect unique sprints from archived stories, ordered by sprint sequence
   const sprintSet = new Set<string>();
   for (const story of archivedStories) {
-    if (story.sprint) {sprintSet.add(story.sprint);}
+    if (story.sprint) {
+      sprintSet.add(story.sprint);
+    }
   }
 
   const sprints = Array.from(sprintSet).sort((a, b) => {
@@ -171,11 +190,15 @@ export async function executeRestoreFromArchive(
     title: "DevStories: Restore From Archive",
   });
 
-  if (!selected) {return false;}
+  if (!selected) {
+    return false;
+  }
 
   // Use cutoff-based multi-sprint restore
   const cutoffIndex = sprintSequence.indexOf(selected.value);
-  if (cutoffIndex === -1) {return false;}
+  if (cutoffIndex === -1) {
+    return false;
+  }
 
   const sprintDateInfo =
     config.firstSprintStartDate && config.sprintLength
@@ -203,7 +226,9 @@ export async function executeRestoreFromArchive(
     { modal: true },
     "Restore",
   );
-  if (answer !== "Restore") {return false;}
+  if (answer !== "Restore") {
+    return false;
+  }
 
   const storydocsEnabled = isStorydocsEnabled(config);
   const folders = vscode.workspace.workspaceFolders;
@@ -213,7 +238,12 @@ export async function executeRestoreFromArchive(
     `[Restore] storydocsRoot resolution: enabled=${storydocsEnabled}, configRoot=${config.storydocsRoot ?? "(undefined)"}, hasFolders=${!!folders}, resolved=${storydocsRoot ?? "(undefined)"}`,
   );
 
-  await moveFilesFromArchive(storiesToRestore, epicsToRestore, themesToRestore, archiveDevSeg, archiveDocsSeg, storydocsRoot);
+  onPause?.();
+  try {
+    await moveFilesFromArchive(storiesToRestore, epicsToRestore, themesToRestore, archiveDevSeg, archiveDocsSeg, storydocsRoot, progress);
+  } finally {
+    onResume?.();
+  }
 
   await reloadStore();
   if (storydocsService) {
@@ -236,6 +266,9 @@ export async function executeRestoreItem(
   itemType: "story" | "epic" | "theme",
   reloadStore: () => Promise<void>,
   storydocsService?: StorydocsService,
+  progress?: (current: number, total: number) => void,
+  onPause?: () => void,
+  onResume?: () => void,
 ): Promise<boolean> {
   const config = configService.config;
   const archiveDevSeg = config.archiveSoftDevstories ?? "archive";
@@ -250,23 +283,32 @@ export async function executeRestoreItem(
     filePath = store.getTheme(itemId)?.filePath;
   }
 
-  if (!filePath) {return false;}
-
-  const livePath = computeLiveDestination(filePath, archiveDevSeg);
-  await ensureParentDir(vscode.Uri.file(livePath));
-  await vscode.workspace.fs.rename(vscode.Uri.file(filePath), vscode.Uri.file(livePath), { overwrite: false });
-
-  // Also restore storydocs folder if applicable
-  const storydocsEnabled = isStorydocsEnabled(config);
-  const folders = vscode.workspace.workspaceFolders;
-  getLogger().info(
-    `[RestoreItem] storydocsRoot resolution: enabled=${storydocsEnabled}, configRoot=${config.storydocsRoot ?? "(undefined)"}, hasFolders=${!!folders}`,
-  );
-  if (storydocsEnabled && folders) {
-    const storydocsRoot = vscode.Uri.joinPath(folders[0].uri, config.storydocsRoot!).fsPath;
-    await restoreStorydocsFolder(itemId, itemType, storydocsRoot, archiveDocsSeg);
+  if (!filePath) {
+    return false;
   }
 
+  progress?.(0, 1);
+  onPause?.();
+  try {
+    const livePath = computeLiveDestination(filePath, archiveDevSeg);
+    await ensureParentDir(vscode.Uri.file(livePath));
+    await vscode.workspace.fs.rename(vscode.Uri.file(filePath), vscode.Uri.file(livePath), { overwrite: false });
+
+    // Also restore storydocs folder if applicable
+    const storydocsEnabled = isStorydocsEnabled(config);
+    const folders = vscode.workspace.workspaceFolders;
+    getLogger().info(
+      `[RestoreItem] storydocsRoot resolution: enabled=${storydocsEnabled}, configRoot=${config.storydocsRoot ?? "(undefined)"}, hasFolders=${!!folders}`,
+    );
+    if (storydocsEnabled && folders) {
+      const storydocsRoot = vscode.Uri.joinPath(folders[0].uri, config.storydocsRoot!).fsPath;
+      await restoreStorydocsFolder(itemId, itemType, storydocsRoot, archiveDocsSeg);
+    }
+  } finally {
+    onResume?.();
+  }
+
+  progress?.(1, 1);
   await reloadStore();
   if (storydocsService) {
     void storydocsService.reconcileAll();
@@ -276,11 +318,65 @@ export async function executeRestoreItem(
 
 // ─── Internal helpers ───────────────────────────────────────────────────────
 
+/**
+ * Retry-capable folder move. Retries on EPERM/NoPermissions with exponential
+ * backoff (200ms, 500ms), then falls back to copy-then-delete.
+ */
+async function moveFolderWithRetry(src: vscode.Uri, dest: vscode.Uri, overwrite: boolean): Promise<void> {
+  const delays = [200, 500];
+  let lastErr: unknown;
+  // First attempt + retries
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      await vscode.workspace.fs.rename(src, dest, { overwrite });
+      return;
+    } catch (err: unknown) {
+      if (!isEpermError(err)) {
+        throw err;
+      }
+      lastErr = err;
+      if (attempt < delays.length) {
+        getLogger().warn(`[Archive] EPERM on rename, retry ${attempt + 1} in ${delays[attempt]}ms: ${src.fsPath}`);
+        await delay(delays[attempt]);
+      }
+    }
+  }
+  // Phase 3 fallback: copy-then-delete
+  getLogger().warn(`[Archive] Retries exhausted, falling back to copy+delete: ${src.fsPath}`);
+  try {
+    await vscode.workspace.fs.copy(src, dest, { overwrite });
+    await vscode.workspace.fs.delete(src, { recursive: true, useTrash: false });
+  } catch (copyErr: unknown) {
+    // If copy+delete also fails, throw the original EPERM for a clear message
+    getLogger().error(`[Archive] copy+delete fallback also failed: ${copyErr instanceof Error ? copyErr.message : String(copyErr)}`);
+    throw lastErr;
+  }
+}
+
+function isEpermError(err: unknown): boolean {
+  if (err instanceof vscode.FileSystemError) {
+    // VS Code wraps EPERM as FileSystemError.NoPermissions
+    return err.code === "NoPermissions";
+  }
+  const code = (err as NodeJS.ErrnoException)?.code;
+  return code === "EPERM" || code === "EACCES";
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function confirmArchive(plan: ArchivePlan, sprintLabel: string): Promise<boolean> {
   const parts: string[] = [];
-  if (plan.storyCount > 0) {parts.push(`${plan.storyCount} stories`);}
-  if (plan.epicCount > 0) {parts.push(`${plan.epicCount} epics`);}
-  if (plan.themeCount > 0) {parts.push(`${plan.themeCount} themes`);}
+  if (plan.storyCount > 0) {
+    parts.push(`${plan.storyCount} stories`);
+  }
+  if (plan.epicCount > 0) {
+    parts.push(`${plan.epicCount} epics`);
+  }
+  if (plan.themeCount > 0) {
+    parts.push(`${plan.themeCount} themes`);
+  }
 
   const answer = await vscode.window.showWarningMessage(`Archive ${parts.join(", ")} up to ${sprintLabel}?`, { modal: true }, "Archive");
   return answer === "Archive";
@@ -291,36 +387,53 @@ async function ensureParentDir(uri: vscode.Uri): Promise<void> {
   await vscode.workspace.fs.createDirectory(parent);
 }
 
-async function moveFilesToArchive(plan: ArchivePlan, archiveDevSeg: string, archiveDocsSeg: string, storydocsRoot?: string): Promise<void> {
+async function moveFilesToArchive(
+  plan: ArchivePlan,
+  archiveDevSeg: string,
+  archiveDocsSeg: string,
+  storydocsRoot?: string,
+  progress?: (current: number, total: number) => void,
+): Promise<void> {
+  const total = plan.storyCount + plan.epicCount + plan.themeCount;
+  let processed = 0;
   // Move stories first, then epics, then themes
   for (const story of plan.stories) {
-    if (!story.filePath) {continue;}
+    if (!story.filePath) {
+      continue;
+    }
     const dest = computeArchiveDestination(story.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(story.filePath), vscode.Uri.file(dest), { overwrite: false });
     if (storydocsRoot) {
       await archiveStorydocsFolder(story.id, "story", storydocsRoot, archiveDocsSeg);
     }
+    progress?.(++processed, total);
   }
 
   for (const epic of plan.epics) {
-    if (!epic.filePath) {continue;}
+    if (!epic.filePath) {
+      continue;
+    }
     const dest = computeArchiveDestination(epic.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(epic.filePath), vscode.Uri.file(dest), { overwrite: false });
     if (storydocsRoot) {
       await archiveStorydocsFolder(epic.id, "epic", storydocsRoot, archiveDocsSeg);
     }
+    progress?.(++processed, total);
   }
 
   for (const theme of plan.themes) {
-    if (!theme.filePath) {continue;}
+    if (!theme.filePath) {
+      continue;
+    }
     const dest = computeArchiveDestination(theme.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(theme.filePath), vscode.Uri.file(dest), { overwrite: false });
     if (storydocsRoot) {
       await archiveStorydocsFolder(theme.id, "theme", storydocsRoot, archiveDocsSeg);
     }
+    progress?.(++processed, total);
   }
 }
 
@@ -346,7 +459,7 @@ async function archiveStorydocsFolder(
   try {
     await ensureParentDir(vscode.Uri.file(destPath));
     getLogger().info(`[Archive] storydocs: ensureParentDir done, calling rename`);
-    await vscode.workspace.fs.rename(sourceUri, vscode.Uri.file(destPath), { overwrite: false });
+    await moveFolderWithRetry(sourceUri, vscode.Uri.file(destPath), false);
     getLogger().info(`[Archive] storydocs: rename succeeded for ${nodeId}`);
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException)?.code ?? "unknown";
@@ -363,35 +476,47 @@ async function moveFilesFromArchive(
   archiveDevSeg: string,
   archiveDocsSeg: string,
   storydocsRoot?: string,
+  progress?: (current: number, total: number) => void,
 ): Promise<void> {
+  const total = stories.length + epics.length + themes.length;
+  let processed = 0;
   for (const story of stories) {
-    if (!story.filePath) {continue;}
+    if (!story.filePath) {
+      continue;
+    }
     const dest = computeLiveDestination(story.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(story.filePath), vscode.Uri.file(dest), { overwrite: false });
     if (storydocsRoot) {
       await restoreStorydocsFolder(story.id, "story", storydocsRoot, archiveDocsSeg);
     }
+    progress?.(++processed, total);
   }
 
   for (const epic of epics) {
-    if (!epic.filePath) {continue;}
+    if (!epic.filePath) {
+      continue;
+    }
     const dest = computeLiveDestination(epic.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(epic.filePath), vscode.Uri.file(dest), { overwrite: false });
     if (storydocsRoot) {
       await restoreStorydocsFolder(epic.id, "epic", storydocsRoot, archiveDocsSeg);
     }
+    progress?.(++processed, total);
   }
 
   for (const theme of themes) {
-    if (!theme.filePath) {continue;}
+    if (!theme.filePath) {
+      continue;
+    }
     const dest = computeLiveDestination(theme.filePath, archiveDevSeg);
     await ensureParentDir(vscode.Uri.file(dest));
     await vscode.workspace.fs.rename(vscode.Uri.file(theme.filePath), vscode.Uri.file(dest), { overwrite: false });
     if (storydocsRoot) {
       await restoreStorydocsFolder(theme.id, "theme", storydocsRoot, archiveDocsSeg);
     }
+    progress?.(++processed, total);
   }
 }
 
@@ -417,7 +542,7 @@ async function restoreStorydocsFolder(
   try {
     await ensureParentDir(vscode.Uri.file(livePath));
     getLogger().info(`[Archive] storydocs restore: ensureParentDir done, calling rename`);
-    await vscode.workspace.fs.rename(archivedUri, vscode.Uri.file(livePath), { overwrite: true });
+    await moveFolderWithRetry(archivedUri, vscode.Uri.file(livePath), true);
     getLogger().info(`[Archive] storydocs restore: rename succeeded for ${nodeId}`);
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException)?.code ?? "unknown";

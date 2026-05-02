@@ -20,4 +20,5 @@ Sprint management backlog:
 - [[DS-129]] Sprint dates in config
 - [[DS-130]] Sprint planning view
 - [[DS-131]] Archive completed sprints
+- [[DS-00186]] Fix soft Archive issues
 

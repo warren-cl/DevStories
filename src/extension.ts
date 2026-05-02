@@ -456,11 +456,34 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  // Pause/resume TaskWatchers during archive folder moves (defense-in-depth for Windows EPERM)
+  const pauseTaskWatchers = () => {
+    taskWatcher?.pause();
+    archiveTaskWatcher?.pause();
+  };
+  const resumeTaskWatchers = () => {
+    taskWatcher?.resume();
+    archiveTaskWatcher?.resume();
+  };
+
   // Soft Archive command
   const softArchiveCommand = vscode.commands.registerCommand(
     "devstories.softArchive",
     wrapCommand("softArchive", async () => {
-      await executeSoftArchive(store, configService, reloadStore, storydocsService);
+      statusBarController.showProgress("Archiving...", 0, 0);
+      try {
+        await executeSoftArchive(
+          store,
+          configService,
+          reloadStore,
+          storydocsService,
+          (current, total) => statusBarController.showProgress("Archiving", current, total),
+          pauseTaskWatchers,
+          resumeTaskWatchers,
+        );
+      } finally {
+        statusBarController.clearProgress();
+      }
     }),
   );
 
@@ -468,7 +491,20 @@ export async function activate(context: vscode.ExtensionContext) {
   const restoreFromArchiveCommand = vscode.commands.registerCommand(
     "devstories.restoreFromArchive",
     wrapCommand("restoreFromArchive", async () => {
-      await executeRestoreFromArchive(store, configService, reloadStore, storydocsService);
+      statusBarController.showProgress("Restoring...", 0, 0);
+      try {
+        await executeRestoreFromArchive(
+          store,
+          configService,
+          reloadStore,
+          storydocsService,
+          (current, total) => statusBarController.showProgress("Restoring", current, total),
+          pauseTaskWatchers,
+          resumeTaskWatchers,
+        );
+      } finally {
+        statusBarController.clearProgress();
+      }
     }),
   );
 
@@ -484,7 +520,22 @@ export async function activate(context: vscode.ExtensionContext) {
       const epic = store.getEpic(item.id);
       const theme = store.getTheme(item.id);
       const itemType = epic ? ("epic" as const) : theme ? ("theme" as const) : ("story" as const);
-      await executeRestoreItem(store, configService, item.id, itemType, reloadStore, storydocsService);
+      statusBarController.showProgress("Restoring...", 0, 1);
+      try {
+        await executeRestoreItem(
+          store,
+          configService,
+          item.id,
+          itemType,
+          reloadStore,
+          storydocsService,
+          (current, total) => statusBarController.showProgress("Restoring", current, total),
+          pauseTaskWatchers,
+          resumeTaskWatchers,
+        );
+      } finally {
+        statusBarController.clearProgress();
+      }
     }),
   );
 

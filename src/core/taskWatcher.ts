@@ -5,7 +5,7 @@
  * Lifecycle: created after ConfigService.initialize(), recreated if storydocsRoot changes.
  */
 
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
 export class TaskWatcher {
   private watcher: vscode.FileSystemWatcher | undefined;
@@ -19,30 +19,51 @@ export class TaskWatcher {
   readonly onDidDelete = this._onDidDelete.event;
 
   constructor(storydocsRoot: string) {
+    this.lastRoot = storydocsRoot;
     this.startWatching(storydocsRoot);
   }
 
+  private lastRoot: string;
+
   private startWatching(storydocsRoot: string): void {
-    const pattern = new vscode.RelativePattern(
-      storydocsRoot,
-      'stories/*/tasks/*.md'
-    );
+    this.lastRoot = storydocsRoot;
+    const pattern = new vscode.RelativePattern(storydocsRoot, "stories/*/tasks/*.md");
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
-    this.watcher.onDidCreate(uri => this._onDidCreate.fire(uri));
+    this.watcher.onDidCreate((uri) => this._onDidCreate.fire(uri));
 
-    this.watcher.onDidChange(uri => {
+    this.watcher.onDidChange((uri) => {
       const key = uri.toString();
       if (this.debounceTimers.has(key)) {
         clearTimeout(this.debounceTimers.get(key)!);
       }
-      this.debounceTimers.set(key, setTimeout(() => {
-        this.debounceTimers.delete(key);
-        this._onDidChange.fire(uri);
-      }, 100));
+      this.debounceTimers.set(
+        key,
+        setTimeout(() => {
+          this.debounceTimers.delete(key);
+          this._onDidChange.fire(uri);
+        }, 100),
+      );
     });
 
-    this.watcher.onDidDelete(uri => this._onDidDelete.fire(uri));
+    this.watcher.onDidDelete((uri) => this._onDidDelete.fire(uri));
+  }
+
+  /**
+   * Pause the watcher by disposing the underlying FileSystemWatcher.
+   * Events, emitters, and debounce state are preserved.
+   */
+  pause(): void {
+    this.watcher?.dispose();
+    this.watcher = undefined;
+  }
+
+  /**
+   * Resume watching. Optionally pass a new root; defaults to the last known root.
+   */
+  resume(storydocsRoot?: string): void {
+    const root = storydocsRoot ?? this.lastRoot;
+    this.startWatching(root);
   }
 
   dispose(): void {
@@ -50,7 +71,7 @@ export class TaskWatcher {
     this._onDidCreate.dispose();
     this._onDidChange.dispose();
     this._onDidDelete.dispose();
-    this.debounceTimers.forEach(timer => clearTimeout(timer));
+    this.debounceTimers.forEach((timer) => clearTimeout(timer));
     this.debounceTimers.clear();
   }
 }
